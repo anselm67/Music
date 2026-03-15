@@ -11,7 +11,7 @@ DeviceType = Union[str, torch.device]
 
 def iterable_from_file(path: str | Path) -> Iterable[str]:
     with open(path, 'r') as file:
-        yield from file
+        yield from (line.rstrip() for line in file)
 
 
 def current_commit() -> str:

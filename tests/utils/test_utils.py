@@ -3,10 +3,20 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from utils import from_json, path_substract
+from utils import from_json, iterable_from_file, path_substract
+
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 class TestUtils(unittest.TestCase):
+
+    def test_reads_lines(self):
+        path = FIXTURES / "sample.txt"
+        lines = list(iterable_from_file(path))
+        self.assertEqual(len(lines), 3)
+        self.assertEqual(lines[0], "Line 1")
+        self.assertEqual(lines[1], "Line 2")
+        self.assertEqual(lines[2], "Line 3")
 
     def test_path_substract(self):
         shorter = Path("/home/user/project")
@@ -38,7 +48,4 @@ if __name__ == '__main__':
     unittest.main()
 
 if __name__ == '__main__':
-    unittest.main()
-if __name__ == '__main__':
-    unittest.main()
     unittest.main()
