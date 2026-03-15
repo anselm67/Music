@@ -25,3 +25,6 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[project.scripts]
+kern = "cli.kern:main"
