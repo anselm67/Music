@@ -4,5 +4,5 @@ __all__ = [
     "iterable_from_file",
     "current_commit",
     "path_substract",
-    "from_json"
+    "from_json",
 ]
