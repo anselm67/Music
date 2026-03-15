@@ -2,6 +2,7 @@ import array
 import shutil
 import unittest
 from pathlib import Path
+from typing import cast
 
 from midi.input import MidiInput
 from midi.output import MidiOutput
@@ -99,7 +100,7 @@ class TestMidiParser(unittest.TestCase):
         events = parser.events
         # Check Header
         self.assertIsInstance(events[0], HeaderDataEvent)
-        # self.assertEqual(events[0].format.value, 0)
+        self.assertEqual(cast(HeaderDataEvent, events[0]).format.value, 0)
 
         # Find NoteOn
         note_ons = [e for e in events if isinstance(e, NoteOnEvent)]
@@ -118,7 +119,7 @@ class TestMidiParser(unittest.TestCase):
         events = parser.events
         # Check Header
         self.assertIsInstance(events[0], HeaderDataEvent)
-        # self.assertEqual(events[0].value, 1)
+        self.assertEqual(cast(HeaderDataEvent, events[0]).format.value, 1)
 
         # Find NoteOns
         note_ons = [e for e in events if isinstance(e, NoteOnEvent)]
@@ -129,4 +130,5 @@ class TestMidiParser(unittest.TestCase):
 
 
 if __name__ == '__main__':
+    unittest.main()
     unittest.main()
