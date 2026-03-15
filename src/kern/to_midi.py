@@ -17,27 +17,19 @@ TO_TWELVE = {
     6: 10,
     7: 12,
 }
-# F C G D A E B in [1, 12]
-SHARPS = [6, 1, 5, 2, 6, 3, 12]
-# B E L D G C F
-FLATS = [12, 3, 6, 2, 5, 1, 4]
 
 
 def note_to_midi(note: Note) -> Notes:
     (octave, number) = note.pitch.value
     number = TO_TWELVE[number]
-    if number in SHARPS[0:note.sharps]:
-        if number + 1 <= 12:
-            number = number + 1
-        else:
-            number = 1
-            octave += 1
-    if number in FLATS[0:note.flats]:
-        if number - 1 > 0:
-            number = number - 1
-        else:
-            number = 12
-            octave -= 1
+    number += note.sharps
+    number -= note.flats
+    if number < 1:
+        number = 12
+        octave -= 1
+    elif number > 12:
+        number -= 12
+        octave += 1
     return Notes(octave * 12 + number - 1)
 
 
@@ -171,7 +163,7 @@ class Emitter:
         self.output.save(file)
 
 
-def kern2mid(kern_file: Path, midi_file: Path):
+def to_midi(kern_file: Path, midi_file: Path):
     handler = MidiHandler()
     parser = Parser.from_file(kern_file, handler)
     parser.parse()

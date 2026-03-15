@@ -5,8 +5,7 @@ from pathlib import Path
 
 import click
 
-from kern import EmptyHandler, Parser
-from utils.kern2mid import kern2mid
+from kern import EmptyHandler, Parser, to_midi
 
 
 @dataclass
@@ -53,7 +52,7 @@ def validate(ctx: ClickContext, files: list[Path]):
                 required=True)
 @click.pass_obj
 def midi(ctx: ClickContext, kern_file: Path):
-    kern2mid(kern_file, Path("anselm.mid"))
+    to_midi(kern_file, Path("anselm.mid"))
 
 
 cli.add_command(validate)
