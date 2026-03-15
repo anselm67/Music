@@ -1,4 +1,5 @@
 
+from .empty import EmptyHandler, EmptySpine
 from .kern_reader import KernReader
 from .parser import Parser
 from .typing import (
@@ -19,6 +20,8 @@ from .typing import (
 )
 
 __all__ = [
+    "EmptyHandler",
+    "EmptySpine",
     "KernReader",
     "Parser",
     "Bar",
