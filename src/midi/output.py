@@ -1,6 +1,7 @@
 import array
 from math import log2
-from typing import Iterable, List, Literal
+from pathlib import Path
+from typing import Iterable, Literal
 
 from midi.typing import Channel, Velocity
 
@@ -16,7 +17,7 @@ class MidiOutput():
         self.buf.extend(bytes)
 
     def varlen(self, value: int):
-        buffer: List[int] = [value & 0x7f]
+        buffer: list[int] = [value & 0x7f]
         value >>= 7
         while value > 0:
             buffer.append(0x80 | (value & 0x7f))
@@ -118,6 +119,7 @@ class MidiOutput():
         self.delta_time(dt)
         self.append([0xFF, 0x2F, 0x00])
 
-    def save(self, filename: str):
-        with open(filename, "wb+") as f:
+    def save(self, path: Path):
+        with open(path, "wb+") as f:
+            f.write(self.buf)
             f.write(self.buf)

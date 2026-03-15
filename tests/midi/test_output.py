@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from pathlib import Path
 
 from midi.output import MidiOutput
 from midi.typing import Channel, Velocity
@@ -98,7 +99,7 @@ class TestMidiOutput(unittest.TestCase):
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             tmp.close()
             try:
-                output.save(tmp.name)
+                output.save(Path(tmp.name))
                 with open(tmp.name, 'rb') as f:
                     content = f.read()
                 self.assertEqual(list(content), [0x90, 60, 64])

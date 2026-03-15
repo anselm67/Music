@@ -53,7 +53,7 @@ class TestMidiParser(unittest.TestCase):
         output.track_end(0)
         output.close_chunk(trk)
 
-        output.save(str(TEST_IODIR / "mono.mid"))
+        output.save(TEST_IODIR / "mono.mid")
 
     @classmethod
     def create_multi_file(cls):
@@ -86,7 +86,7 @@ class TestMidiParser(unittest.TestCase):
         output.track_end(0)
         output.close_chunk(trk2)
 
-        output.save(str(TEST_IODIR / "multi.mid"))
+        output.save(TEST_IODIR / "multi.mid")
 
     def test_parse_mono(self):
         path = TEST_IODIR / "mono.mid"
