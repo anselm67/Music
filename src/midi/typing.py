@@ -309,7 +309,7 @@ class EventType(Enum):
         return min <= code <= max
 
     def is_meta(self) -> bool:
-        return self == EventType.Meta
+        return isinstance(self.value, tuple) and self.is_meta_code(self.value[0])
 
     def is_sysex(self) -> bool:
         return self == EventType.SysExclusiveFirst or self == EventType.SysExclusiveNext
