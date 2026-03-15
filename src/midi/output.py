@@ -122,4 +122,3 @@ class MidiOutput():
     def save(self, path: Path):
         with open(path, "wb+") as f:
             f.write(self.buf)
-            f.write(self.buf)
