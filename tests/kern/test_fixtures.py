@@ -1,8 +1,7 @@
 import unittest
 from pathlib import Path
 
-from kern.empty import EmptyHandler
-from kern.parser import Parser
+from kern import EmptyHandler, Parser
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

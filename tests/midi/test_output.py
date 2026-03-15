@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from midi.output import MidiOutput
+from midi import MidiOutput
 from midi.typing import Channel, Velocity
 
 

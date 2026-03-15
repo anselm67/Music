@@ -1,8 +1,7 @@
 import unittest
 from unittest.mock import Mock, call
 
-from kern.empty import EmptyHandler
-from kern.parser import Parser
+from kern import EmptyHandler, Parser
 from kern.typing import Bar, Duration, Note, Pitch, Rest, Token
 
 
