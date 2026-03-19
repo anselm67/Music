@@ -7,17 +7,7 @@
 import re
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import (
-    Generic,
-    Iterable,
-    Iterator,
-    List,
-    Optional,
-    Tuple,
-    TypeVar,
-    Union,
-    cast,
-)
+from typing import Generic, Iterable, Iterator, Optional, TypeVar, cast
 
 from kern.typing import (
     Bar,
@@ -251,26 +241,26 @@ class Parser(Generic[T]):
             pass
 
         @abstractmethod
-        def append(self, tokens: List[Tuple[T, Token]]):
+        def append(self, tokens: list[tuple[T, Token]]):
             pass
 
         @abstractmethod
         def done(self):
             pass
 
-    path: Union[str, Path]
+    path: str | Path
     records: Iterator[str]
     lineno: int = 0
     verbose: bool = False
 
-    spines: List[SpineHolder]
+    spines: list[SpineHolder]
     handler: Handler
 
     enable_warnings: bool
 
     def __init__(
         self,
-        path: Union[str, Path],
+        path: str | Path,
         records: Iterable[str],
         handler: Handler,
         enable_warnings: bool = False
@@ -282,7 +272,7 @@ class Parser(Generic[T]):
         self.enable_warnings = enable_warnings
 
     @staticmethod
-    def from_file(path: Union[str, Path], handler: Handler) -> 'Parser':
+    def from_file(path: str | Path, handler: Handler) -> 'Parser':
         return Parser(path, iterable_from_file(path), handler)
 
     @staticmethod
@@ -352,7 +342,7 @@ class Parser(Generic[T]):
         self,
         spine_holder: SpineHolder,
         indicator: str,
-        tokens_iterator: Iterator[Tuple[SpineHolder, str]]
+        tokens_iterator: Iterator[tuple[SpineHolder, str]]
     ) -> Token:
         match indicator:
             case '*-':
