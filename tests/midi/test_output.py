@@ -3,8 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from midi import MidiOutput
-from midi.typing import Channel, Velocity
+from midi import Channel, MidiOutput, Pitch, Velocity
 
 
 class TestMidiOutput(unittest.TestCase):
@@ -76,12 +75,12 @@ class TestMidiOutput(unittest.TestCase):
 
     def test_note_events(self):
         output = MidiOutput()
-        output.note_on(Channel.Chan1, 60, Velocity.Standard)
+        output.note_on(Channel.Chan1, Pitch.C4, Velocity.Standard)
         # dt=0 (0x00), NoteOn Ch1 (0x90 | 1 = 0x91), Note 60, Vel 64
         self.assertEqual(output.buf.tolist(), [0x00, 0x91, 60, 64])
 
         output = MidiOutput()
-        output.note_off(Channel.Chan1, 60)
+        output.note_off(Channel.Chan1, Pitch.C4)
         # dt=0 (0x00), NoteOff Ch1 (0x80 | 1 = 0x81), Note 60, Vel 64 (default)
         self.assertEqual(output.buf.tolist(), [0x00, 0x81, 60, 64])
 

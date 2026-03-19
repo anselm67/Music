@@ -71,13 +71,11 @@ class TestToMidi(unittest.TestCase):
         # 4c is Middle C (C3 in this system per tests, 48)
         # 4d is D3 (50)
         # Duration 4 -> 480 ticks
-        c3, d3 = 48, 50
-
         expected_calls = [
-            call.note_on(Channel.Chan0, c3, Velocity.Forte, 0),
-            call.note_off(Channel.Chan0, c3, Velocity.Forte, 480),
-            call.note_on(Channel.Chan0, d3, Velocity.Forte, 0),
-            call.note_off(Channel.Chan0, d3, Velocity.Forte, 480),
+            call.note_on(Channel.Chan0, MidiPitch.C3, Velocity.Forte, 0),
+            call.note_off(Channel.Chan0, MidiPitch.C3, Velocity.Forte, 480),
+            call.note_on(Channel.Chan0, MidiPitch.D3, Velocity.Forte, 0),
+            call.note_off(Channel.Chan0, MidiPitch.D3, Velocity.Forte, 480),
         ]
         mock_midi_output.return_value.assert_has_calls(
             expected_calls, any_order=False)
@@ -88,14 +86,13 @@ class TestToMidi(unittest.TestCase):
         # Chord C E G
         parser = Parser.from_text("**kern\n4c 4e 4g\n*-", handler)
         parser.parse()
-        c3, e3, g3 = 48, 52, 55
         expected_calls = [
-            call.note_on(Channel.Chan0, c3, Velocity.Forte, 0),
-            call.note_on(Channel.Chan0, e3, Velocity.Forte, 0),
-            call.note_on(Channel.Chan0, g3, Velocity.Forte, 0),
-            call.note_off(Channel.Chan0, c3, Velocity.Forte, 480),
-            call.note_off(Channel.Chan0, e3, Velocity.Forte, 0),
-            call.note_off(Channel.Chan0, g3, Velocity.Forte, 0),
+            call.note_on(Channel.Chan0, MidiPitch.C3, Velocity.Forte, 0),
+            call.note_on(Channel.Chan0, MidiPitch.E3, Velocity.Forte, 0),
+            call.note_on(Channel.Chan0, MidiPitch.G3, Velocity.Forte, 0),
+            call.note_off(Channel.Chan0, MidiPitch.C3, Velocity.Forte, 480),
+            call.note_off(Channel.Chan0, MidiPitch.E3, Velocity.Forte, 0),
+            call.note_off(Channel.Chan0, MidiPitch.G3, Velocity.Forte, 0),
         ]
         mock_midi_output.return_value.assert_has_calls(
             expected_calls, any_order=False)

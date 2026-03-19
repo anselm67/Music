@@ -3,7 +3,7 @@ from math import log2
 from pathlib import Path
 from typing import Iterable, Literal
 
-from midi.typing import Channel, Velocity
+from midi.typing import Channel, Pitch, Velocity
 
 
 class MidiOutput():
@@ -102,19 +102,19 @@ class MidiOutput():
             prog_number} must be < 128."
         self.append([0xC0 | chan.value, prog_number])
 
-    def note_on(self, chan: Channel, note: int, v: Velocity = Velocity.Standard, dt: int = 0):
+    def note_on(self, chan: Channel, pitch: Pitch, v: Velocity = Velocity.Standard, dt: int = 0):
         self.delta_time(dt)
-        assert note >= 0 and note < 128, f"Invalid note {
-            note} must be >= 0 amd < 128."
+        assert pitch.value >= 0 and pitch.value < 128, f"Invalid note {
+            pitch} must be >= 0 amd < 128."
         assert v.value >= 0 and v.value < 128, f"Invalid velocity {
             v} must be >= 0 and < 128."
-        self.append([0x90 | chan.value, note, v.value])
+        self.append([0x90 | chan.value, pitch.value, v.value])
 
-    def note_off(self, chan: Channel, note: int, v: Velocity = Velocity.Standard, dt: int = 0):
-        assert note >= 0 and note < 128, f"Invalid note {
-            note} must be >= 0 amd < 128."
+    def note_off(self, chan: Channel, pitch: Pitch, v: Velocity = Velocity.Standard, dt: int = 0):
+        assert pitch.value >= 0 and pitch.value < 128, f"Invalid note {
+            pitch.value} must be >= 0 amd < 128."
         self.delta_time(dt)
-        self.append([0x80 | chan.value, note, v.value])
+        self.append([0x80 | chan.value, pitch.value, v.value])
 
     def track_end(self, dt: int = 0):
         self.delta_time(dt)

@@ -4,9 +4,16 @@ import unittest
 from pathlib import Path
 from typing import cast
 
-from midi.input import MidiInput
-from midi.output import MidiOutput
-from midi.typing import Channel, Event, HeaderDataEvent, NoteOnEvent, Velocity
+from midi import (
+    Channel,
+    Event,
+    HeaderDataEvent,
+    MidiInput,
+    MidiOutput,
+    NoteOnEvent,
+    Pitch,
+    Velocity,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 TEST_IODIR = FIXTURES / "midi"
@@ -49,8 +56,8 @@ class TestMidiParser(unittest.TestCase):
         trk = output.open_chunk('MTrk')
         output.time_signature((4, 4))
         output.tempo(120)
-        output.note_on(Channel.Chan1, 60, Velocity.Standard, 0)
-        output.note_off(Channel.Chan1, 60, Velocity.Standard, 480)
+        output.note_on(Channel.Chan1, Pitch.C4, Velocity.Standard, 0)
+        output.note_off(Channel.Chan1, Pitch.C4, Velocity.Standard, 480)
         output.track_end(0)
         output.close_chunk(trk)
 
@@ -76,13 +83,13 @@ class TestMidiParser(unittest.TestCase):
         # Track 2: Notes
         trk2 = output.open_chunk('MTrk')
         # Channel 1 Note
-        output.note_on(Channel.Chan1, 60, Velocity.Standard, 0)
+        output.note_on(Channel.Chan1, Pitch.C4, Velocity.Standard, 0)
         # Channel 2 Note (Simultaneous start, dt=0)
-        output.note_on(Channel.Chan2, 64, Velocity.Standard, 0)
+        output.note_on(Channel.Chan2, Pitch.C4, Velocity.Standard, 0)
 
         # Note Offs
-        output.note_off(Channel.Chan1, 60, Velocity.Standard, 480)
-        output.note_off(Channel.Chan2, 64, Velocity.Standard, 0)
+        output.note_off(Channel.Chan1, Pitch.C4, Velocity.Standard, 480)
+        output.note_off(Channel.Chan2, Pitch.C4, Velocity.Standard, 0)
 
         output.track_end(0)
         output.close_chunk(trk2)
@@ -130,5 +137,4 @@ class TestMidiParser(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main()
     unittest.main()

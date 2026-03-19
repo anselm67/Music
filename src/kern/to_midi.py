@@ -102,7 +102,7 @@ class MidiSpine(Spine):
 
     def emit_note(self, note: Note, delta_time: int) -> int:
         ticks = self.note_duration_to_ticks(note)
-        midi_note = note_to_midi(note).value
+        midi_note = note_to_midi(note)
         self.track.note_on(self.channel, midi_note, Velocity.Forte, delta_time)
         self.track.note_off(self.channel, midi_note, Velocity.Forte, ticks)
         return delta_time + ticks
@@ -110,19 +110,19 @@ class MidiSpine(Spine):
     def emit_chord(self, chord: list[Note], delta_time: int) -> int:
         first, *rest = chord
         # Emits the first note on, then the rest.
-        midi_note = note_to_midi(first).value
+        midi_note = note_to_midi(first)
         self.track.note_on(self.channel, midi_note,
                            Velocity.Forte, delta_time)
         for note in rest:
-            midi_note = note_to_midi(note).value
+            midi_note = note_to_midi(note)
             self.track.note_on(self.channel, midi_note, Velocity.Forte, 0)
         # Emits the first note off, then the rest.
         assert first.duration is not None, "First note of Chord must have a duration."
         ticks = self.note_duration_to_ticks(first)
-        midi_note = note_to_midi(first).value
+        midi_note = note_to_midi(first)
         self.track.note_off(self.channel, midi_note, Velocity.Forte, ticks)
         for note in rest:
-            midi_note = note_to_midi(note).value
+            midi_note = note_to_midi(note)
             self.track.note_off(self.channel, midi_note, Velocity.Forte, 0)
         return delta_time + ticks
 
