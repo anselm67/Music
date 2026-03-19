@@ -74,7 +74,8 @@ class MidiOutput():
     def delta_time(self, duration: int = 0):
         self.varlen(duration)
 
-    def time_signature(self, num: int, den: int, dt: int = 0):
+    def time_signature(self, signature: tuple[int, int], dt: int = 0):
+        (num, den) = signature
         self.delta_time(dt)
         # Derive cc / bb from the time signature.
         # cc is the number of midi-clocks per metronome tick, 24 per quarter => 36 per quarter dot.
@@ -118,6 +119,9 @@ class MidiOutput():
     def track_end(self, dt: int = 0):
         self.delta_time(dt)
         self.append([0xFF, 0x2F, 0x00])
+
+    def append_track(self, other: "MidiOutput"):
+        self.buf.extend(other.buf)
 
     def save(self, path: Path):
         with open(path, "wb+") as f:
