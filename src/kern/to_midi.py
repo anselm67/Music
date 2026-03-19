@@ -173,7 +173,6 @@ class MidiHandler(Parser[Spine].Handler):
                 channel = self.allocate_channel()
                 spine = MidiSpine(channel, self.ticks_per_quarter,
                                   self.time_signature, self.tempo)
-                print(f"midi-spine {id(spine):#x} on {channel}")
         self.spines.append(spine)
         return spine
 
@@ -182,8 +181,6 @@ class MidiHandler(Parser[Spine].Handler):
             case MidiSpine():
                 self.free_channel(spine.channel)
                 if track := spine.close():
-                    print(
-                        f"close midi-spine {id(spine):#x} on {spine.channel}")
                     self.tracks.append(track)
         self.spines.remove(spine)
 
