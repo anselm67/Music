@@ -13,7 +13,7 @@
             "python": "${workspaceFolder}/.venv/bin/python",
             "args": [
                 "midi",
-                "/home/anselm/datasets/kern-sheet/bach/inventions/inven01.krn"
+                "/home/anselm/datasets/kern-sheet/haydn/keyboard/uesonatas/sonata45-3a.krn"
             ]
         }
     ]
