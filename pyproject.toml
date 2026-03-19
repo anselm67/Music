@@ -7,6 +7,8 @@ requires-python = ">=3.13"
 dependencies = [
     "click>=8.3.1",
     "numpy>=2.4.3",
+    "opencv-python>=4.13.0.92",
+    "pandas>=3.0.1",
     "pytest-cov>=7.0.0",
     "torch>=2.10.0",
 ]
@@ -28,3 +30,5 @@ testpaths = ["tests"]
 
 [project.scripts]
 kern = "cli.kern:main"
+verovio = "cli.verovio:main"
+pdmx = "cli.pdmx:main"
