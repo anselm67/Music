@@ -119,8 +119,10 @@ class MidiSpine(Spine):
         # Emits the first note off, then the rest.
         assert first.duration is not None, "First note of Chord must have a duration."
         ticks = self.note_duration_to_ticks(first)
+        midi_note = note_to_midi(first).value
         self.track.note_off(self.channel, midi_note, Velocity.Forte, ticks)
         for note in rest:
+            midi_note = note_to_midi(note).value
             self.track.note_off(self.channel, midi_note, Velocity.Forte, 0)
         return delta_time + ticks
 
