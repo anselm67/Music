@@ -47,7 +47,7 @@ class TestMidiParser(unittest.TestCase):
 
         # Track
         trk = output.open_chunk('MTrk')
-        output.time_signature(4, 4)
+        output.time_signature((4, 4))
         output.tempo(120)
         output.note_on(Channel.Chan1, 60, Velocity.Standard, 0)
         output.note_off(Channel.Chan1, 60, Velocity.Standard, 480)
@@ -68,7 +68,7 @@ class TestMidiParser(unittest.TestCase):
 
         # Track 1: Meta
         trk1 = output.open_chunk('MTrk')
-        output.time_signature(4, 4)
+        output.time_signature((4, 4))
         output.tempo(120)
         output.track_end(0)
         output.close_chunk(trk1)

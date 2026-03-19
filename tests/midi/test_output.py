@@ -62,14 +62,14 @@ class TestMidiOutput(unittest.TestCase):
 
     def test_time_signature(self):
         output = MidiOutput()
-        output.time_signature(4, 4)
+        output.time_signature((4, 4))
         # Expect: delta_time(0) + Meta Event (FF 58 04) + 4/4 params
         # 4/4: nn=4, dd=2 (2^2=4), cc=24 clocks/beat, bb=8 32nd/quarter
         expected_4_4 = [0x00, 0xFF, 0x58, 0x04, 0x04, 0x02, 24, 8]
         self.assertEqual(output.buf.tolist(), expected_4_4)
 
         output = MidiOutput()
-        output.time_signature(6, 8)
+        output.time_signature((6, 8))
         # 6/8: nn=6, dd=3 (2^3=8), cc=36 clocks/beat (1.5 * 24), bb=8
         expected_6_8 = [0x00, 0xFF, 0x58, 0x04, 0x06, 0x03, 36, 8]
         self.assertEqual(output.buf.tolist(), expected_6_8)
@@ -105,6 +105,16 @@ class TestMidiOutput(unittest.TestCase):
                 self.assertEqual(list(content), [0x90, 60, 64])
             finally:
                 os.unlink(tmp.name)
+
+    def test_append_track(self):
+        output1 = MidiOutput()
+        output1.append([0x01, 0x02])
+
+        output2 = MidiOutput()
+        output2.append([0x03, 0x04])
+
+        output1.append_track(output2)
+        self.assertEqual(output1.buf.tolist(), [1, 2, 3, 4])
 
 
 if __name__ == '__main__':

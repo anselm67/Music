@@ -2,7 +2,8 @@ import unittest
 
 from kern import Duration, Note
 from kern import Pitch as KernPitch
-from kern.to_midi import note_to_midi
+from kern.to_midi import MidiHandler, note_to_midi
+from midi import Channel
 from midi import Pitch as MidiPitch
 
 
@@ -38,3 +39,19 @@ class TestToMidi(unittest.TestCase):
         midi = note_to_midi(note)
         self.assertEqual(midi, MidiPitch.C5)
         self.assertEqual(midi, MidiPitch.C5)
+
+    def test_handler_channel(self):
+        handler = MidiHandler(480, 120)
+        self.assertEqual(handler.allocate_channel(), Channel.Chan0)
+        self.assertEqual(handler.allocate_channel(), Channel.Chan1)
+        self.assertEqual(handler.allocate_channel(), Channel.Chan2)
+        self.assertEqual(handler.allocate_channel(), Channel.Chan3)
+        self.assertEqual(handler.allocate_channel(), Channel.Chan4)
+        handler.free_channel(Channel.Chan4)
+        self.assertEqual(handler.allocate_channel(), Channel.Chan4)
+        handler.free_channel(Channel.Chan4)
+        handler.free_channel(Channel.Chan3)
+        handler.free_channel(Channel.Chan3)
+        handler.free_channel(Channel.Chan1)
+        handler.free_channel(Channel.Chan0)
+        self.assertEqual(handler.allocate_channel(), Channel.Chan0)
