@@ -1,7 +1,7 @@
 import unittest
 
 # from midi.typing import EventType, Notes, Velocity
-from midi.typing import EventType, Notes, Velocity
+from midi.typing import EventType, Pitch, Velocity
 
 
 class TestMidiTyping(unittest.TestCase):
@@ -28,8 +28,8 @@ class TestMidiTyping(unittest.TestCase):
 
     def test_notes_enum(self):
         # Spot check note values
-        self.assertEqual(Notes.C4.value, 60)
-        self.assertEqual(Notes.A4.value, 69)
+        self.assertEqual(Pitch.C4.value, 60)
+        self.assertEqual(Pitch.A4.value, 69)
 
     def test_velocity_enum(self):
         self.assertEqual(Velocity.Standard.value, 64)

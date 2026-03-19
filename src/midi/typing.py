@@ -25,7 +25,7 @@ class Channel(Enum):
     Chan15 = 15
 
 
-class Notes(Enum):
+class Pitch(Enum):
     CX, CXSharp = 0, 1
     DX, DXSharp = 2, 3
     EX = 4
@@ -445,10 +445,10 @@ class ControlChangeEvent(ChannelEvent):
 
 @dataclass
 class NoteEvent(ChannelEvent):
-    note: Notes
+    note: Pitch
     velocity: int
 
-    def __init__(self, dt: int, event_type: EventType, channel: Channel, note: Notes, velocity: int):
+    def __init__(self, dt: int, event_type: EventType, channel: Channel, note: Pitch, velocity: int):
         super(NoteEvent, self).__init__(dt, event_type, channel)
         self.note = note
         self.velocity = velocity
@@ -457,7 +457,7 @@ class NoteEvent(ChannelEvent):
 @dataclass
 class NoteOnEvent(NoteEvent):
 
-    def __init__(self, dt: int, channel: Channel, note: Notes, velocity: int):
+    def __init__(self, dt: int, channel: Channel, note: Pitch, velocity: int):
         super(NoteOnEvent, self).__init__(
             dt, EventType.NoteOn, channel, note, velocity)
 
@@ -465,6 +465,6 @@ class NoteOnEvent(NoteEvent):
 @dataclass
 class NoteOffEvent(NoteEvent):
 
-    def __init__(self, dt: int, channel: Channel, note: Notes, velocity: int):
+    def __init__(self, dt: int, channel: Channel, note: Pitch, velocity: int):
         super(NoteOffEvent, self).__init__(
             dt, EventType.NoteOff, channel, note, velocity)

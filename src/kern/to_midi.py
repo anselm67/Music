@@ -3,7 +3,9 @@ from typing import cast
 
 from kern.parser import Parser
 from kern.typing import Chord, Duration, Meter, Note, Rest, Token
-from midi import Channel, MidiOutput, Notes, Velocity
+from midi import Channel, MidiOutput
+from midi import Pitch as MidiPitch
+from midi import Velocity
 
 # Convert
 # C D E F G A B                     from 1 to 7
@@ -19,7 +21,7 @@ TO_TWELVE = {
 }
 
 
-def note_to_midi(note: Note) -> Notes:
+def note_to_midi(note: Note) -> MidiPitch:
     (octave, number) = note.pitch.value
     number = TO_TWELVE[number]
     number += note.sharps
@@ -30,7 +32,7 @@ def note_to_midi(note: Note) -> Notes:
     elif number > 12:
         number -= 12
         octave += 1
-    return Notes(octave * 12 + number - 1)
+    return MidiPitch(octave * 12 + number - 1)
 
 
 class Spine:
@@ -168,5 +170,7 @@ def to_midi(kern_file: Path, midi_file: Path):
     parser = Parser.from_file(kern_file, handler)
     parser.parse()
     emitter = Emitter()
+    emitter.emit([spine.notes for spine in handler.spines])
+    emitter.save(midi_file)
     emitter.emit([spine.notes for spine in handler.spines])
     emitter.save(midi_file)

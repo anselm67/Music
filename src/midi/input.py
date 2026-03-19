@@ -15,8 +15,8 @@ from midi.typing import (
     KeySignatureEvent,
     NoteOffEvent,
     NoteOnEvent,
-    Notes,
     OpenTrackEvent,
+    Pitch,
     ProgramChangeEvent,
     SequenceNumberEvent,
     TempoEvent,
@@ -175,15 +175,15 @@ class MidiInput(ABC):
                 NoteOnEvent(
                     dt,
                     Channel(channel),
-                    Notes(key), vel) if vel > 0 else NoteOffEvent
-                (dt, Channel(channel), Notes(key), vel))
+                    Pitch(key), vel) if vel > 0 else NoteOffEvent
+                (dt, Channel(channel), Pitch(key), vel))
         elif (event_type & 0xF0) == EventType.NoteOff.code():
             # Note on event, supports running status.
             self.last_status = event_type
             channel = (event_type & 0x7)
             key = self.next()
             vel = self.next()
-            self.handle(NoteOffEvent(dt, Channel(channel), Notes(key), vel))
+            self.handle(NoteOffEvent(dt, Channel(channel), Pitch(key), vel))
         elif (event_type & 0xF0) == EventType.ControlChange.code():
             self.last_status = event_type
             # Todo this includes pedal settings (controller number 64 or 91)
