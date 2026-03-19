@@ -50,9 +50,10 @@ def validate(ctx: ClickContext, files: list[Path]):
                 type=click.Path(dir_okay=False, file_okay=True,
                                 exists=True, readable=True, path_type=Path),
                 required=True)
+@click.option("--tempo", "-t", type=click.IntRange(1, 279), default=60)
 @click.pass_obj
-def midi(ctx: ClickContext, kern_file: Path):
-    to_midi(kern_file, Path("anselm.mid"))
+def midi(ctx: ClickContext, kern_file: Path, tempo: int):
+    to_midi(kern_file, Path("anselm.mid"), tempo=tempo)
 
 
 cli.add_command(validate)
