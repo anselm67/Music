@@ -5,7 +5,7 @@ from pathlib import Path
 
 import click
 
-from pdmx import PDMX
+from dataset import PDMX
 
 HOME = Path("/home/anselm/datasets/PDMX")
 

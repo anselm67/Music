@@ -28,7 +28,9 @@ def scrape(svg_file: Path, output: Path):
     """Scrapes an verovio generated .svg file for page layout info.
     """
     json_file = output or svg_file.with_suffix(".json")
-    extract_layout(svg_file, json_file)
+    page = extract_layout(svg_file)
+    with open(json_file, "w") as f:
+        json.dump(page.asdict(), f, indent=2)
 
 
 @click.command()
@@ -63,31 +65,25 @@ def show(svg_file):
         img = cv2.imread(png_file)
         assert img is not None, f"Failed to read {png_file}"
 
-        with open(svg_file.with_suffix(".json")) as f:
-            boxes = json.load(f)
+        page = extract_layout(svg_file)
+        print(json.dumps(page.asdict(), indent=2))
+        # Renders the page layout on top of the image.
+        box_color = (155, 0, 0)
+        bar_color = (0, 255, 0)
+        for staff in page.staves:
+            (top_left, bot_right) = staff.box()
+            cv2.rectangle(img, top_left, bot_right, box_color, 2)
+            for bar in staff.bars:
+                cv2.line(img, (bar, staff.rh_top),
+                         (bar, staff.lh_bot), bar_color, 2)
 
-            # Get all the bars at the same height.
-            ones = [box for box in boxes if box['top'] == 124]
-            obj = {
-                'rh_top': ones[0]['top'],
-                'rh_bottom': ones[0]['bottom'],
-                'bars': [
-                    ones[0]['left'],
-                    *[box['right'] for box in ones]
-                ]
-            }
-            print(json.dumps(obj, indent=2))
+        cv2.imshow("layout", img)
+        cv2.setMouseCallback("layout", mouse_positon_handler)
+        while True:
+            if cv2.waitKey() == ord('q'):
+                break
 
-            for box in boxes:
-                cv2.rectangle(img, (box['left'], box['top']),
-                              (box['right'], box['bottom']), (0, 255, 0), 2)
-            cv2.imshow("layout", img)
-            cv2.setMouseCallback("layout", mouse_positon_handler)
-            while True:
-                if cv2.waitKey() == ord('q'):
-                    break
-
-            cv2.destroyAllWindows()
+        cv2.destroyAllWindows()
 
 
 cli.add_command(render)
