@@ -1,21 +1,16 @@
 import subprocess
 from pathlib import Path
 
-VEROVIO_HOME = Path("/home/anselm/projects/verovio")
+VEROVIO_BIN = "/usr/local/bin/verovio"
 
 
-def mxl_to_kern(file: Path, refresh: bool = False) -> bool:
-    assert file.suffix == ".musicxml", "Expected suffix .musicxml"
-    if file.with_suffix(".krn").exists() and not refresh:
-        return False
-    print(f"Translating {str(file)} to .krn")
+def mxl_to_kern(mxl_file: Path, krn_file: Path) -> bool:
     subprocess.run([
-        f"{VEROVIO_HOME}/tools/verovio",
-        "-r", f"{VEROVIO_HOME}/data",
+        VEROVIO_BIN,
         "-l", "off",
         "-f", "musicxml-hum", "-t", "hum",
-        str(file),
-        "-o", str(file.with_suffix(".krn"))
+        mxl_file.as_posix(),
+        "-o", krn_file.as_posix()
     ])
     return True
 
@@ -25,8 +20,8 @@ def render(src_file: Path, dst_file: Path) -> list[Path]:
         # verovio likes to go infinite on file it doesn't like.
         # The timeout prevents it from running hamoc.
         result = subprocess.run([
-            f"{VEROVIO_HOME}/tools/verovio",
-            "-r", f"{VEROVIO_HOME}/data",
+            VEROVIO_BIN,
+            "-l", "off",
             "-a",
             src_file.as_posix(),
             "-o", dst_file.as_posix()
@@ -62,4 +57,5 @@ def svg_to_png(svg_file: Path, png_file: Path):
         print(f"{svg_file}: timeout expired.")
         return list()
     if result.returncode != 0:
+        raise ValueError(f"Error running verovio: {result.returncode}")
         raise ValueError(f"Error running verovio: {result.returncode}")

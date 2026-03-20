@@ -7,7 +7,7 @@ from pathlib import Path
 import click
 import cv2
 
-from verovio import extract_layout
+from verovio import extract_layout, mxl_to_kern
 from verovio import render as verovio_render
 from verovio import svg_to_png
 
@@ -86,9 +86,23 @@ def show(svg_file):
         cv2.destroyAllWindows()
 
 
+@click.command()
+@click.argument("mxl_file",
+                type=click.Path(dir_okay=False, file_okay=True,
+                                exists=True, readable=True, path_type=Path),
+                required=True)
+@click.option("--output", "-o",
+              type=click.Path(dir_okay=False, file_okay=True, path_type=Path))
+def kern(mxl_file: Path, output: Path):
+    """Converts ab mxl file into a kern file."""
+    output = output or mxl_file.with_suffix(".krn")
+    mxl_to_kern(mxl_file, output)
+
+
 cli.add_command(render)
 cli.add_command(scrape)
 cli.add_command(show)
+cli.add_command(kern)
 
 
 def main():
@@ -96,5 +110,7 @@ def main():
     cli()
 
 
+if __name__ == "__main__":
+    main()
 if __name__ == "__main__":
     main()
