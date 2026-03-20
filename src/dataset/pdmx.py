@@ -10,7 +10,5 @@ class PDMX:
         self.home = home
         self.df = pd.read_csv(home / "PDMX.csv")
 
-    def filter(self):
-        multitrack = self.df[self.df["n_tracks"] > 2]
-        print(f"{len(multitrack)} scroes with more than 2 tracks...")
-        print(multitrack[["title", "n_tracks", "path"]].head(20))
+    def query(self, query_string) -> pd.DataFrame:
+        return self.df.query(query_string)

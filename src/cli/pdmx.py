@@ -28,12 +28,19 @@ def cli(ctx, home: Path):
 
 
 @click.command()
+@click.argument("query_string")
+@click.option("--columns", "-c", multiple=True, help="Columns to display")
+@click.option("--limit", "-n", default=20, show_default=True)
 @click.pass_obj
-def filter(ctx: ClickContext):
-    ctx.pdmx.filter()
+def query(ctx: ClickContext, query_string: str, columns: tuple[str], limit: int):
+    """Query the underlying PDMX.csv database as a DataFrame."""
+    result = ctx.pdmx.query(query_string)
+    if columns:
+        result = result[list(columns)]
+    print(result.head(limit).to_string())
 
 
-cli.add_command(filter)
+cli.add_command(query)
 
 
 def main():
