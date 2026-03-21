@@ -32,5 +32,4 @@ asyncio_mode = "auto"
 
 [project.scripts]
 kern = "cli.kern:main"
-verovio = "cli.verovio:main"
 pdmx = "cli.pdmx:main"

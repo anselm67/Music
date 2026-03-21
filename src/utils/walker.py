@@ -10,9 +10,14 @@ from asyncio import (
     to_thread,
 )
 from pathlib import Path
+from typing import Callable
 
 
 class Walker:
+    type CommandBuilder = Callable[
+        [Path],
+        None | tuple[str | bytes | Path, list[str]]
+    ]
     root: Path
     limit: int
 
@@ -20,32 +25,34 @@ class Walker:
         self.root = root
         self.limit = limit
 
-    async def process(self, file: Path):
+    async def process(self, cmd_builder: CommandBuilder, file: Path):
         proc = None
         try:
-            logging.info(f"Processing file: {file}")
+            if (command := cmd_builder(file)) is None:
+                return
+            (binary, args) = command
             proc = await create_subprocess_exec(
-                "/usr/bin/ls", file.as_posix(),
+                binary, *args,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
             returncode = await proc.wait()
             if returncode != 0:
-                logging.info(f"Failed to process {file}.")
+                logging.error(f"Failed to process {file}.")
         except CancelledError:
             if proc is not None:
                 proc.kill()
             raise
 
-    async def worker(self, queue: Queue[Path]):
+    async def worker(self, queue: Queue[Path], cmd_builder: CommandBuilder):
         while True:
             try:
                 file = queue.get_nowait()
             except QueueEmpty:
                 break
-            await self.process(file)
+            await self.process(cmd_builder, file)
 
-    async def run(self, glob: str):
+    async def run(self, glob: str, cmd_builder: CommandBuilder):
         # Queues all files to be processed.
         files = await to_thread(lambda: list(self.root.rglob(glob)))
         queue: Queue[Path] = Queue()
@@ -55,10 +62,4 @@ class Walker:
         # Processes all files within limit.
         async with TaskGroup() as tg:
             for _ in range(self.limit):
-                tg.create_task(self.worker(queue))
-
-        # Processes all files within limit.
-        async with TaskGroup() as tg:
-            for _ in range(self.limit):
-                tg.create_task(self.worker(queue))
-                tg.create_task(self.worker(queue))
+                tg.create_task(self.worker(queue, cmd_builder))

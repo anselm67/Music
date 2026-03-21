@@ -6,5 +6,5 @@ __all__ = [
     "current_commit",
     "path_substract",
     "from_json",
-    "Walker"
+    "Walker",
 ]

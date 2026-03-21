@@ -31,7 +31,7 @@ def current_commit() -> str:
 def path_substract(shorter: Path, longer: Path) -> Path:
     """Substract the shorter path from the longer to obtain a relative path.
 
-        This function asserts that there is a common prefix to noth paths.
+        This function asserts that there is a common prefix to both paths.
 
     Args:
         shorter (Path): The short path to remove.
