@@ -14,7 +14,7 @@ def safe_run(command: list[Path | str], timeout=60):
 
 
 def mxl_to_kern_command(mxl_file: Path, krn_file: Path) -> tuple[Path, list[str]]:
-    return verovio_binary, [
+    return verovio_binary(), [
         "-l", "off",
         "-f", "musicxml-hum", "-t", "hum",
         mxl_file.as_posix(),
@@ -29,7 +29,7 @@ def mxl_to_kern(mxl_file: Path, krn_file: Path) -> bool:
 
 
 def render_command(src_file: Path, dst_file: Path) -> tuple[Path, list[str]]:
-    return verovio_binary, [
+    return verovio_binary(), [
         "-l", "off",
         "-a",
         src_file.as_posix(),
@@ -56,7 +56,7 @@ def render(src_file: Path, dst_file: Path) -> list[Path]:
 
 
 def svg_to_png_command(svg_file: Path, png_file: Path) -> tuple[Path, list[str]]:
-    return rsvgconvert_binary, [
+    return rsvgconvert_binary(), [
         "-f", "png", "-b", "white",
         "-o", png_file.as_posix(),
         svg_file.as_posix()
