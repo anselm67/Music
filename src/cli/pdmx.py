@@ -53,8 +53,24 @@ def query(ctx: ClickContext, query_string: str, columns: tuple[str], limit: int)
 def to_svg(ctx: ClickContext, force: bool, dry_run: bool):
     """Converts all .mxl files into .svg files.
 
-    --force will enforce the conversion even if the .svg file exists and is more recent than its source."""
+    --force will enforce the conversion even if the .svg file exists and is more recent than its source.
+    --dry-run tells what's to be done without doing it.
+    """
     count = ctx.pdmx.to_svg(force, dry_run)
+    print(f"Processed {count} mxl files.")
+
+
+@click.command()
+@click.option("--force", "-f", default=False, is_flag=True, show_default=True)
+@click.option("--dry-run", "-n", default=False, is_flag=True, show_default=True)
+@click.pass_obj
+def to_kern(ctx: ClickContext, force: bool, dry_run: bool):
+    """Converts all .mxl files into .krn files.
+
+    --force will enforce the conversion even if the .svg file exists and is more recent than its source.
+    --dry-run tells what's to be done without doing it.
+    """
+    count = ctx.pdmx.to_kern(force, dry_run)
     print(f"Processed {count} mxl files.")
 
 
@@ -144,6 +160,7 @@ def show(svg_file):
 
 cli.add_command(query)
 cli.add_command(to_svg)
+cli.add_command(to_kern)
 cli.add_command(scrape)
 cli.add_command(render)
 cli.add_command(from_mxl)

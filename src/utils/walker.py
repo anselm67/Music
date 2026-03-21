@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Callable
 
 
+# TODO Integrate with option tqdm progress report.
 class Walker:
     type CommandBuilder = Callable[
         [Path],
@@ -53,6 +54,15 @@ class Walker:
             await self.process(cmd_builder, file)
 
     async def run(self, glob: str, cmd_builder: CommandBuilder) -> int:
+        """Runs a shell command on all files matching the glob pattern in this walker's root directory.
+
+        Args:
+            glob (str): The shell-like filename filter, e,g "*.krn"
+            cmd_builder (CommandBuilder): Function that returns the command to run for a given matching file.
+
+        Returns:
+            int: _description_
+        """
         # Queues all files to be processed.
         files = await to_thread(lambda: list(self.root.rglob(glob)))
         queue: Queue[Path] = Queue()

@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from utils import Walker
-from verovio import render_command
+from verovio import mxl_to_kern_command, render_command
 
 
 def newer(src_file: Path, dst_file: Path) -> bool:
@@ -60,5 +60,40 @@ class PDMX:
 
         def builder(file: Path) -> None | tuple[Path, list[str]]:
             return self.verovio_mxl_to_svg(file, force, dry_run)
+
+        return asyncio.run(walker.run("*.mxl", builder))
+
+    def verovio_mxl_to_krn(self, mxl_file: Path, force: bool, dry_run: bool) -> None | tuple[Path, list[str]]:
+        relative = mxl_file.relative_to(self.home / "mxl")
+        krn_file = (self.home / "krn" / relative).with_suffix(".krn")
+        # Do we need to do the work?
+        if not force:
+            # Checks against a one pager svg target.
+            if krn_file.exists() and newer(mxl_file, krn_file):
+                logging.info(f"Ok: {mxl_file}")
+                return None
+        (binary, args) = mxl_to_kern_command(mxl_file, krn_file)
+        if dry_run:
+            logging.info(f"{binary} {' '.join(args)}")
+            return None
+        logging.info(f"Do: {mxl_file}")
+        krn_file.parent.mkdir(parents=True, exist_ok=True)
+        return (binary, args)
+
+    def to_kern(self, force: bool = False, dry_run: bool = False) -> int:
+        """Converts PDMX mxl files into krn humdrum files using verovio.
+
+        Args:
+            force (bool, optional): Always convert mxl file even if a newer svg file exists. Defaults to False.
+            dry_run (bool, optional): Say what you'd do, but don't do it. Defaults to False.
+
+        Returns:
+            int: Total count of files processed.
+        """
+        walker = Walker(self.home / "mxl")
+        (self.home / "krn").mkdir(exist_ok=True)
+
+        def builder(file: Path) -> None | tuple[Path, list[str]]:
+            return self.verovio_mxl_to_krn(file, force, dry_run)
 
         return asyncio.run(walker.run("*.mxl", builder))
