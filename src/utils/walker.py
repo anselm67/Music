@@ -52,7 +52,7 @@ class Walker:
                 break
             await self.process(cmd_builder, file)
 
-    async def run(self, glob: str, cmd_builder: CommandBuilder):
+    async def run(self, glob: str, cmd_builder: CommandBuilder) -> int:
         # Queues all files to be processed.
         files = await to_thread(lambda: list(self.root.rglob(glob)))
         queue: Queue[Path] = Queue()
@@ -63,3 +63,5 @@ class Walker:
         async with TaskGroup() as tg:
             for _ in range(self.limit):
                 tg.create_task(self.worker(queue, cmd_builder))
+
+        return len(files)

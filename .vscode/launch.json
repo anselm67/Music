@@ -15,6 +15,17 @@
                 "midi",
                 "/home/anselm/datasets/kern-sheet/haydn/keyboard/uesonatas/sonata45-3a.krn"
             ]
+        },
+        {
+            "name": "pdmx to-svg",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "cli.pdmx",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "args": [
+                "to-svg"
+            ]
         }
     ]
 }

@@ -47,13 +47,15 @@ def query(ctx: ClickContext, query_string: str, columns: tuple[str], limit: int)
 
 
 @click.command()
-@click.option("--force", "-f", default=False, show_default=True)
+@click.option("--force", "-f", default=False, is_flag=True, show_default=True)
+@click.option("--dry-run", "-n", default=False, is_flag=True, show_default=True)
 @click.pass_obj
-def to_svg(ctx: ClickContext, force: bool):
+def to_svg(ctx: ClickContext, force: bool, dry_run: bool):
     """Converts all .mxl files into .svg files.
 
     --force will enforce the conversion even if the .svg file exists and is more recent than its source."""
-    ctx.pdmx.to_svg()
+    count = ctx.pdmx.to_svg(force, dry_run)
+    print(f"Processed {count} mxl files.")
 
 
 @click.command()
@@ -83,6 +85,7 @@ def render(mxl_file: Path, output: Path):
     """Renders the mxl file into .svg files, one per page."""
     svg_file = output or mxl_file.with_suffix(".svg")
     verovio_render(mxl_file, svg_file)
+    print(f"Output written to {svg_file}.")
 
 
 @click.command()
@@ -96,6 +99,7 @@ def from_mxl(mxl_file: Path, output: Path):
     """Converts ab mxl file into a kern file."""
     output = output or mxl_file.with_suffix(".krn")
     mxl_to_kern(mxl_file, output)
+    print(f"Output written to {output}.")
 
 
 def mouse_positon_handler(event, x, y, flags, param):
