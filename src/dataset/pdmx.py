@@ -58,18 +58,15 @@ class PDMX:
             path.parent.mkdir(parents=True, exist_ok=True)
         return path
 
-    def get_page_path(self, some: Path, dir_class: DirClass, score: Score, page: Page) -> Path:
+    def get_page_path(self, some: Path, dir_class: DirClass, page_number: int) -> Path:
         relative = self.relative(some)
         if len(relative.parts) <= 1:
             raise ValueError(f"Unexpected path structure: {some}")
         relative = Path(*relative.parts[1:])
         path = (self.home / dir_class /
                 relative).with_suffix(PDMX.EXTENSIONS[dir_class])
-        if len(score.pages) == 1:
-            return path
-        else:
-            stem = f"{path.stem}_{page.page_number:03d}"
-            return path.with_stem(stem)
+        stem = f"{path.stem}_{page_number:03d}"
+        return path.with_stem(stem)
 
     def query(self, query_string, parts_count: int = -1) -> pd.DataFrame:
         df = self.df.query(query_string)

@@ -8,7 +8,7 @@ from typing import cast
 import click
 import cv2
 
-from dataset import PDMX, Score
+from dataset import PDMX, Prepare, Score
 from utils import from_json
 from verovio import LayoutExtractor, mxl_to_kern
 from verovio import render as verovio_render
@@ -150,8 +150,10 @@ def show(ctx: ClickContext, any_file: Path):
     page_index = 0
     while True:
         page = score.pages[page_index]
-        img_path = pdmx.get_page_path(
-            any_file, 'png', score, page)
+        if len(score.pages) > 1:
+            img_path = pdmx.get_page_path(any_file, 'png', page.page_number)
+        else:
+            img_path = pdmx.get_path(any_file, 'png')
         img = cv2.imread(img_path)
         assert img is not None, f"Can't read image {img_path}"
         print(
@@ -184,6 +186,19 @@ def show(ctx: ClickContext, any_file: Path):
     cv2.destroyAllWindows()
 
 
+@click.command()
+@click.option("--force", "-f", default=False, is_flag=True, show_default=True)
+@click.option("--dry-run", "-n", default=False, is_flag=True, show_default=True)
+@click.argument("mxl_file",
+                type=click.Path(dir_okay=False, file_okay=True,
+                                exists=True, readable=True, path_type=Path),
+                required=False, default=None)
+@click.pass_obj
+def prepare(ctx: ClickContext, mxl_file: Path | None, force: bool, dry_run: bool):
+    p = Prepare(ctx.pdmx, force, dry_run)
+    p.prepare(mxl_file, num_worker=1)
+
+
 cli.add_command(query)
 cli.add_command(to_svg)
 cli.add_command(to_kern)
@@ -192,6 +207,7 @@ cli.add_command(to_png)
 cli.add_command(render)
 cli.add_command(from_mxl)
 cli.add_command(show)
+cli.add_command(prepare)
 
 
 def main():

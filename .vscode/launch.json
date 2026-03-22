@@ -74,6 +74,19 @@
                 "--parts",
                 "2"
             ]
+        },
+        {
+            "name": "pdmx prepare",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "cli.pdmx",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "args": [
+                "prepare",
+                "--dry-run",
+                "/home/anselm/datasets/PDMX/mxl/1/11/Qmbb6xiNcSyfz6CMss3B6orrHaHiqRT5ZknTtW5XFu4mkd.mxl"
+            ]
         }
     ]
 }

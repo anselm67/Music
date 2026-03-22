@@ -1,5 +1,6 @@
 from .layout import Box, Page, Score, Staff, System
 from .pdmx import PDMX
+from .prepare import Prepare
 
 __all__ = [
     "PDMX",
@@ -7,5 +8,6 @@ __all__ = [
     "Box",
     "System",
     "Staff",
-    "Score"
+    "Score",
+    "Prepare"
 ]
