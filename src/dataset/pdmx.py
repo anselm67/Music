@@ -7,7 +7,12 @@ from typing import Literal
 import pandas as pd
 
 from utils import Walker
-from verovio import LayoutExtractor, mxl_to_kern_command, render_command
+from verovio import (
+    LayoutExtractor,
+    mxl_to_kern_command,
+    render_command,
+    svg_to_png_command,
+)
 
 from .layout import Page, Score
 
@@ -18,7 +23,7 @@ def newer(src_file: Path, dst_file: Path) -> bool:
 
 type DirClass = Literal[
     'data', 'krn',
-    'layout', 'metadata', 'mxl', 'pdf', 'svg'
+    'layout', 'metadata', 'mxl', 'pdf', 'svg', 'png'
 ]
 
 
@@ -30,7 +35,8 @@ class PDMX:
         'metadata': '.json',
         'mxl': '.mxl',
         'pdf': '.pdf',
-        'svg': '.svg'
+        'svg': '.svg',
+        'png': '.png'
     }
     home: Path
 
@@ -51,6 +57,19 @@ class PDMX:
         if mkdirs:
             path.parent.mkdir(parents=True, exist_ok=True)
         return path
+
+    def get_page_path(self, some: Path, dir_class: DirClass, score: Score, page_number: int) -> Path:
+        relative = self.relative(some)
+        if len(relative.parts) <= 1:
+            raise ValueError(f"Unexpected path structure: {some}")
+        relative = Path(*relative.parts[1:])
+        path = (self.home / dir_class /
+                relative).with_suffix(PDMX.EXTENSIONS[dir_class])
+        if len(score.pages) == 1:
+            return path
+        else:
+            stem = f"{path.stem}_{page.page_number:03d}"
+            return path.with_stem(stem)
 
     def query(self, query_string, parts_count: int = -1) -> pd.DataFrame:
         df = self.df.query(query_string)
@@ -104,6 +123,38 @@ class PDMX:
             return self.verovio_mxl_to_svg(file, force, dry_run)
 
         return asyncio.run(walker.run("*.mxl", builder))
+
+    def svg_to_png(self, svg_file: Path, force: bool, dry_run: bool) -> None | tuple[Path, list[str]]:
+        png_file = self.get_path(svg_file, 'png', mkdirs=True)
+        # Do we need to do the work?
+        if not force:
+            # Checks against a one pager svg target.
+            if newer(svg_file, png_file):
+                logging.info(f"Ok: {png_file}")
+                return None
+        (binary, args) = svg_to_png_command(svg_file, png_file)
+        if dry_run:
+            logging.info(f"{binary} {' '.join(args)}")
+            return None
+        logging.info(f"Do: {svg_file}")
+        return (binary, args)
+
+    def to_png(self, force: bool = False, dry_run: bool = False) -> tuple[int, int]:
+        """Renders verovio svg files into png files using rsvg-convert.
+
+        Args:
+            force (bool, optional): Always re-render svg file even if a newer png file exists. Defaults to False.
+            dry_run (bool, optional): Say what you'd do, but don't do it. Defaults to False.
+
+        Returns:
+            int, int: Total and failed count of files processed.
+        """
+        walker = Walker(self.home / "svg")
+
+        def builder(file: Path) -> None | tuple[Path, list[str]]:
+            return self.svg_to_png(file, force, dry_run)
+
+        return asyncio.run(walker.run("*.svg", builder))
 
     def verovio_mxl_to_krn(self, mxl_file: Path, force: bool, dry_run: bool) -> None | tuple[Path, list[str]]:
         krn_file = self.get_path(mxl_file, 'krn', mkdirs=True)

@@ -1,4 +1,4 @@
-from .layout import Box, Page, Staff, System
+from .layout import Box, Page, Score, Staff, System
 from .pdmx import PDMX
 
 __all__ = [
@@ -7,4 +7,5 @@ __all__ = [
     "Box",
     "System",
     "Staff",
+    "Score"
 ]

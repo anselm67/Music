@@ -86,6 +86,11 @@ class System:
     def bar_count(self):
         return len(self.staves[0].bars) - 1
 
+    def asdict(self) -> dict:
+        obj = asdict(self)
+        obj.pop("box", None)
+        return obj
+
 
 @dataclass(frozen=True)
 class Page:
@@ -106,21 +111,16 @@ class Page:
     def bar_count(self):
         return sum([x.bar_count for x in self.systems])
 
-    def asdict(self):
-        return asdict(self)
-
 
 @dataclass(frozen=True)
 class Score:
     id: str
     pages: list[Page]
 
-    @staticmethod
-    def from_dict(obj: Any):
-        return replace(
-            Page(**obj),
-            staves=[Staff(**x) for x in obj["staves"]]
-        )
-
     def asdict(self):
-        return asdict(self)
+        obj = asdict(self)
+        # Hack out the 'box' attribute from all systems.
+        for page in obj['pages']:
+            for system in page['systems']:
+                system.pop('box', None)
+        return obj

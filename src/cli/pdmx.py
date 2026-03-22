@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 import json
 import logging
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import click
 import cv2
 
-from dataset import PDMX
+from dataset import PDMX, Score
+from utils import from_json
 from verovio import LayoutExtractor, mxl_to_kern
 from verovio import render as verovio_render
 from verovio import svg_to_png
@@ -88,6 +89,20 @@ def to_layout(ctx: ClickContext, force: bool):
 
 
 @click.command()
+@click.option("--force", "-f", default=False, is_flag=True, show_default=True)
+@click.option("--dry-run", "-n", default=False, is_flag=True, show_default=True)
+@click.pass_obj
+def to_png(ctx: ClickContext, force: bool, dry_run: bool):
+    """Renders all .svg files into .png files.
+
+    --force will enforce the conversion even if the .svg file exists and is more recent than its source.
+    --dry-run tells what's to be done without doing it.
+    """
+    total, failed = ctx.pdmx.to_png(force, dry_run)
+    print(f"{total} svg files processed, {failed} failed.")
+
+
+@click.command()
 @click.argument("svg_file",
                 type=click.Path(dir_okay=False, file_okay=True,
                                 exists=True, readable=True, path_type=Path),
@@ -134,22 +149,24 @@ def mouse_positon_handler(event, x, y, flags, param):
 
 
 @click.command()
-@click.argument("svg_file",
+@click.argument("any_file",
                 type=click.Path(dir_okay=False, file_okay=True,
                                 exists=True, readable=True, path_type=Path),
                 required=True)
-def show(svg_file):
+@click.pass_obj
+def show(ctx: ClickContext, any_file: Path):
     """Displays the provided image and layout info when available."""
-    with tempfile.NamedTemporaryFile(suffix=".png", delete=True) as tmp:
-        png_file = Path(tmp.name)
-        svg_to_png(svg_file, png_file)
+    pdmx = ctx.pdmx
+    with open(pdmx.get_path(any_file, 'layout'), 'r') as f:
+        obj = json.load(f)
+    score = cast(Score, from_json(Score, obj))
 
-        img = cv2.imread(png_file)
-        assert img is not None, f"Failed to read {png_file}"
+    page_index = 0
+    while True:
+        page = score.pages[page_index]
+        img = cv2.imread(pdmx.get_page_path(
+            any_file, 'png', score, page_index))
 
-        extractor = LayoutExtractor(svg_file)
-        page = extractor.parse()
-        print(json.dumps(page.asdict(), indent=2))
         print(
             f"{len(page.systems)} systems, first system {len(page.systems[0].staves)} staves.")
         # Renders the page layout on top of the image.
@@ -169,17 +186,22 @@ def show(svg_file):
         (width, height) = tuple(map(lambda x: int(x * scale), img.shape[:2]))
         cv2.imshow("layout", cv2.resize(img, (height, width)))
         cv2.setMouseCallback("layout", mouse_positon_handler)
-        while True:
-            if cv2.waitKey() == ord('q'):
-                break
 
-        cv2.destroyAllWindows()
+        if (key := cv2.waitKey()) == ord('q'):
+            break
+        elif key == ord('p'):
+            page_index = max(0, page_index - 1)
+        elif key == ord('n'):
+            page_index = min(len(score.pages), page_index + 1)
+
+    cv2.destroyAllWindows()
 
 
 cli.add_command(query)
 cli.add_command(to_svg)
 cli.add_command(to_kern)
 cli.add_command(to_layout)
+cli.add_command(to_png)
 cli.add_command(scrape)
 cli.add_command(render)
 cli.add_command(from_mxl)

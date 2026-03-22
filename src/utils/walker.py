@@ -65,7 +65,7 @@ class Walker:
             cmd_builder (CommandBuilder): Function that returns the command to run for a given matching file.
 
         Returns:
-            int: _description_
+            int, int: Total count and failed count.
         """
         self.total_count = 0
         self.failed_count = 0

@@ -28,6 +28,28 @@
             ]
         },
         {
+            "name": "pdmx to-layout",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "cli.pdmx",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "args": [
+                "to-layout",
+            ]
+        },
+        {
+            "name": "pdmx to-png",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "cli.pdmx",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "args": [
+                "to-png",
+            ]
+        },
+        {
             "name": "pdmx show",
             "type": "debugpy",
             "request": "launch",
@@ -36,7 +58,7 @@
             "python": "${workspaceFolder}/.venv/bin/python",
             "args": [
                 "show",
-                "/home/anselm/datasets/PDMX/svg/6/34/QmNNMfHzKdXsaUyFoL5LdLqDC1sYQAznnCZDuDWmKfm8ik_086.svg"
+                "/home/anselm/datasets/PDMX/mxl/1/11/Qmbb6xiNcSyfz6CMss3B6orrHaHiqRT5ZknTtW5XFu4mkd.mxl"
             ]
         },
         {
@@ -51,17 +73,6 @@
                 "index == index",
                 "--parts",
                 "2"
-            ]
-        },
-        {
-            "name": "pdmx layout",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "cli.pdmx",
-            "console": "integratedTerminal",
-            "python": "${workspaceFolder}/.venv/bin/python",
-            "args": [
-                "to-layout",
             ]
         }
     ]
