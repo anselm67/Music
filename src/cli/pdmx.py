@@ -102,19 +102,6 @@ def to_png(ctx: ClickContext, force: bool, dry_run: bool):
 
 
 @click.command()
-@click.argument("svg_file",
-                type=click.Path(dir_okay=False, file_okay=True,
-                                exists=True, readable=True, path_type=Path),
-                required=True)
-def scrape(svg_file: Path):
-    """Scrapes a verovio generated .svg file for page layout info.
-    """
-    extractor = LayoutExtractor(svg_file)
-    page = extractor.parse()
-    print(json.dumps(page.asdict(), indent=2))
-
-
-@click.command()
 @click.argument("mxl_file",
                 type=click.Path(dir_okay=False, file_okay=True,
                                 exists=True, readable=True, path_type=Path),
@@ -202,7 +189,6 @@ cli.add_command(to_svg)
 cli.add_command(to_kern)
 cli.add_command(to_layout)
 cli.add_command(to_png)
-cli.add_command(scrape)
 cli.add_command(render)
 cli.add_command(from_mxl)
 cli.add_command(show)
