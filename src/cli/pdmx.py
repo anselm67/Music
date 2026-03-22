@@ -56,8 +56,8 @@ def to_svg(ctx: ClickContext, force: bool, dry_run: bool):
     --force will enforce the conversion even if the .svg file exists and is more recent than its source.
     --dry-run tells what's to be done without doing it.
     """
-    count = ctx.pdmx.to_svg(force, dry_run)
-    print(f"Processed {count} mxl files.")
+    total, failed = ctx.pdmx.to_svg(force, dry_run)
+    print(f"{total} mxl files processed, {failed} failed.")
 
 
 @click.command()
@@ -70,8 +70,8 @@ def to_kern(ctx: ClickContext, force: bool, dry_run: bool):
     --force will enforce the conversion even if the .svg file exists and is more recent than its source.
     --dry-run tells what's to be done without doing it.
     """
-    count = ctx.pdmx.to_kern(force, dry_run)
-    print(f"Processed {count} mxl files.")
+    total, failed = ctx.pdmx.to_kern(force, dry_run)
+    print(f"{total} mxl files processed, {failed} failed.")
 
 
 @click.command()

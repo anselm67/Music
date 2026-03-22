@@ -45,7 +45,7 @@ class PDMX:
         svg_file.parent.mkdir(parents=True, exist_ok=True)
         return (binary, args)
 
-    def to_svg(self, force: bool = False, dry_run: bool = False) -> int:
+    def to_svg(self, force: bool = False, dry_run: bool = False) -> tuple[int, int]:
         """Renders PDMX mxl files into svg files using verovio.
 
         Args:
@@ -53,7 +53,7 @@ class PDMX:
             dry_run (bool, optional): Say what you'd do, but don't do it. Defaults to False.
 
         Returns:
-            int: Total count of files processed.
+            int, int: Total and failed count of files processed.
         """
         walker = Walker(self.home / "mxl")
         (self.home / "svg").mkdir(exist_ok=True)
@@ -80,7 +80,7 @@ class PDMX:
         krn_file.parent.mkdir(parents=True, exist_ok=True)
         return (binary, args)
 
-    def to_kern(self, force: bool = False, dry_run: bool = False) -> int:
+    def to_kern(self, force: bool = False, dry_run: bool = False) -> tuple[int, int]:
         """Converts PDMX mxl files into krn humdrum files using verovio.
 
         Args:
@@ -88,7 +88,7 @@ class PDMX:
             dry_run (bool, optional): Say what you'd do, but don't do it. Defaults to False.
 
         Returns:
-            int: Total count of files processed.
+            int, int: Total and failed count of files processed.
         """
         walker = Walker(self.home / "mxl")
         (self.home / "krn").mkdir(exist_ok=True)

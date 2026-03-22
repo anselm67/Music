@@ -21,6 +21,8 @@ class Walker:
     ]
     root: Path
     limit: int
+    total_count: int
+    failed_count: int
 
     def __init__(self, root: Path, limit: int = os.cpu_count() or 4):
         self.root = root
@@ -28,6 +30,7 @@ class Walker:
 
     async def process(self, cmd_builder: CommandBuilder, file: Path):
         proc = None
+        self.total_count += 1
         try:
             if (command := cmd_builder(file)) is None:
                 return
@@ -39,6 +42,7 @@ class Walker:
             )
             returncode = await proc.wait()
             if returncode != 0:
+                self.failed_count += 1
                 logging.error(f"Failed to process {file}.")
         except CancelledError:
             if proc is not None:
@@ -53,7 +57,7 @@ class Walker:
                 break
             await self.process(cmd_builder, file)
 
-    async def run(self, glob: str, cmd_builder: CommandBuilder) -> int:
+    async def run(self, glob: str, cmd_builder: CommandBuilder) -> tuple[int, int]:
         """Runs a shell command on all files matching the glob pattern in this walker's root directory.
 
         Args:
@@ -63,6 +67,8 @@ class Walker:
         Returns:
             int: _description_
         """
+        self.total_count = 0
+        self.failed_count = 0
         # Queues all files to be processed.
         files = await to_thread(lambda: list(self.root.rglob(glob)))
         queue: Queue[Path] = Queue()
@@ -74,4 +80,4 @@ class Walker:
             for _ in range(self.limit):
                 tg.create_task(self.worker(queue, cmd_builder))
 
-        return len(files)
+        return self.total_count, self.failed_count
