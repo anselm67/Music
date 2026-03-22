@@ -110,4 +110,3 @@ class PDMX:
             return self.verovio_mxl_to_krn(file, force, dry_run)
 
         return asyncio.run(walker.run("*.mxl", builder))
-        return asyncio.run(walker.run("*.mxl", builder))
