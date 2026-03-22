@@ -49,7 +49,7 @@ class Staff:
 
 @dataclass(frozen=True)
 class System:
-    """Describes a system - or gropu of staves - layout.
+    """Describes a system - or group of staves - layout.
 
     Some constraints:
     - All staves in a System have the same number of bars,

@@ -58,7 +58,7 @@ class PDMX:
             path.parent.mkdir(parents=True, exist_ok=True)
         return path
 
-    def get_page_path(self, some: Path, dir_class: DirClass, score: Score, page_number: int) -> Path:
+    def get_page_path(self, some: Path, dir_class: DirClass, score: Score, page: Page) -> Path:
         relative = self.relative(some)
         if len(relative.parts) <= 1:
             raise ValueError(f"Unexpected path structure: {some}")

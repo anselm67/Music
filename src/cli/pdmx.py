@@ -12,7 +12,6 @@ from dataset import PDMX, Score
 from utils import from_json
 from verovio import LayoutExtractor, mxl_to_kern
 from verovio import render as verovio_render
-from verovio import svg_to_png
 
 HOME = Path("/home/anselm/datasets/PDMX")
 
@@ -164,9 +163,10 @@ def show(ctx: ClickContext, any_file: Path):
     page_index = 0
     while True:
         page = score.pages[page_index]
-        img = cv2.imread(pdmx.get_page_path(
-            any_file, 'png', score, page_index))
-
+        img_path = pdmx.get_page_path(
+            any_file, 'png', score, page)
+        img = cv2.imread(img_path)
+        assert img is not None, f"Can't read image {img_path}"
         print(
             f"{len(page.systems)} systems, first system {len(page.systems[0].staves)} staves.")
         # Renders the page layout on top of the image.
