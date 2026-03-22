@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "kern2midi",
+            "name": "kern midi",
             "type": "debugpy",
             "request": "launch",
             "module": "cli.kern",
