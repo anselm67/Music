@@ -26,6 +26,32 @@
             "args": [
                 "to-svg"
             ]
+        },
+        {
+            "name": "pdmx show",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "cli.pdmx",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "args": [
+                "show",
+                "/home/anselm/datasets/PDMX/svg/6/34/QmNNMfHzKdXsaUyFoL5LdLqDC1sYQAznnCZDuDWmKfm8ik_086.svg"
+            ]
+        },
+        {
+            "name": "pdmx query",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "cli.pdmx",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "args": [
+                "query",
+                "index == index",
+                "--parts",
+                "2"
+            ]
         }
     ]
 }

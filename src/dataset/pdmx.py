@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from pathlib import Path
 
@@ -19,8 +20,20 @@ class PDMX:
         self.home = home
         self.df = pd.read_csv(home / "PDMX.csv")
 
-    def query(self, query_string) -> pd.DataFrame:
-        return self.df.query(query_string)
+    def query(self, query_string, parts_count: int = -1) -> pd.DataFrame:
+        df = self.df.query(query_string)
+        if parts_count > 0:
+
+            def filter_part_count(row):
+                try:
+                    meta = json.loads(
+                        (self.home / row["metadata"]).read_text())
+                    return meta.get("data", {}).get("score", {}).get("parts") == parts_count
+                except (FileNotFoundError, json.JSONDecodeError):
+                    return False
+
+            df = df[df.apply(filter_part_count, axis=1)]
+        return df
 
     def verovio_mxl_to_svg(self, mxl_file: Path, force: bool, dry_run: bool) -> None | tuple[Path, list[str]]:
         relative = mxl_file.relative_to(self.home / "mxl")
@@ -96,4 +109,5 @@ class PDMX:
         def builder(file: Path) -> None | tuple[Path, list[str]]:
             return self.verovio_mxl_to_krn(file, force, dry_run)
 
+        return asyncio.run(walker.run("*.mxl", builder))
         return asyncio.run(walker.run("*.mxl", builder))

@@ -1,5 +1,5 @@
 from .binaries import rsvgconvert_binary, verovio_binary
-from .scraper import extract_layout
+from .scraper import LayoutExtractor
 from .wrapper import (
     mxl_to_kern,
     mxl_to_kern_command,
@@ -10,7 +10,7 @@ from .wrapper import (
 )
 
 __all__ = [
-    "extract_layout",
+    "LayoutExtractor",
     "render",
     "render_command",
     "mxl_to_kern",
