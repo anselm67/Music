@@ -49,7 +49,7 @@ class LayoutExtractor:
             right = to_x if right < 0 else max(right, to_x)
         return Box((left, top), (right, bottom))
 
-    def parse_system(self, system_group, bar_number: int = 1) -> System:
+    def parse_system(self, system_group, bar_number: int = 1) -> tuple[int, System]:
         # Collects the bounding box for all bars within that system.
         boxes: dict[int, list[Box]] = dict()
         for group in system_group.findall(".//svg:g[@class='staff']", self.namespaces):
@@ -58,14 +58,21 @@ class LayoutExtractor:
 
         # Transform bars bounding boxes into a list of staves.
         staves: list[Staff] = list()
+        bar_count = -1
         for _, bars in sorted(boxes.items()):
+            if bar_count < 0:
+                bar_count = len(bars)
+            elif bar_count != len(bars):
+                raise ValueError("Bar count mismatch.")
             staves.append(Staff(
                 box=Box(bars[0].top_left, bars[-1].bot_right),
                 bars=[bars[0].left, bars[0].right,
                       *[x.right for x in bars[1:]]]
             ))
 
-        return System(bar_number, staves)
+        if not staves:
+            raise ValueError(f"{self.svg_file} has a system with no staff.")
+        return bar_count, System(staves=staves, bar_number=bar_number)
 
     def parse(self, page_number: int = 1, bar_number: int = 1) -> Page:
         root = self.tree.getroot()
@@ -81,9 +88,9 @@ class LayoutExtractor:
         # Collects the bounding box for all bars on that page.
         systems: list[System] = list()
         for group in root.findall(".//svg:g[@class='system']", self.namespaces):
-            system = self.parse_system(group, bar_number)
+            bar_count, system = self.parse_system(group, bar_number)
             systems.append(system)
-            bar_number += system.bar_count
+            bar_number += bar_count
 
         return Page(
             page_number=page_number,

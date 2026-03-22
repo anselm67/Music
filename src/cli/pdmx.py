@@ -76,19 +76,28 @@ def to_kern(ctx: ClickContext, force: bool, dry_run: bool):
 
 
 @click.command()
+@click.option("--force", "-f", default=False, is_flag=True, show_default=True)
+@click.pass_obj
+def to_layout(ctx: ClickContext, force: bool):
+    """Extracts layout structure from .svg files into json.
+
+    --force will enforce the conversion even if the .svg file exists and is more recent than its source.
+    """
+    total, failed = ctx.pdmx.to_layout(force)
+    print(f"{total} svg files processed, {failed} failed.")
+
+
+@click.command()
 @click.argument("svg_file",
                 type=click.Path(dir_okay=False, file_okay=True,
                                 exists=True, readable=True, path_type=Path),
                 required=True)
-@click.option("--output", "-o",
-              type=click.Path(dir_okay=False, file_okay=True, path_type=Path))
-def scrape(svg_file: Path, output: Path):
+def scrape(svg_file: Path):
     """Scrapes a verovio generated .svg file for page layout info.
     """
-    json_file = output or svg_file.with_suffix(".json")
     extractor = LayoutExtractor(svg_file)
-    with open(json_file, "w") as f:
-        json.dump(extractor.parse().asdict(), f, indent=2)
+    page = extractor.parse()
+    print(json.dumps(page.asdict(), indent=2))
 
 
 @click.command()
@@ -170,6 +179,7 @@ def show(svg_file):
 cli.add_command(query)
 cli.add_command(to_svg)
 cli.add_command(to_kern)
+cli.add_command(to_layout)
 cli.add_command(scrape)
 cli.add_command(render)
 cli.add_command(from_mxl)

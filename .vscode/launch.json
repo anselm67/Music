@@ -52,6 +52,17 @@
                 "--parts",
                 "2"
             ]
+        },
+        {
+            "name": "pdmx layout",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "cli.pdmx",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "args": [
+                "to-layout",
+            ]
         }
     ]
 }

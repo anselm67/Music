@@ -1,4 +1,5 @@
 from dataclasses import asdict, dataclass, field, replace
+from pathlib import Path
 from typing import Any
 
 
@@ -100,6 +101,19 @@ class Page:
     validated: bool
 
     image_rotation: float = 0.0
+
+    @property
+    def bar_count(self):
+        return sum([x.bar_count for x in self.systems])
+
+    def asdict(self):
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class Score:
+    id: str
+    pages: list[Page]
 
     @staticmethod
     def from_dict(obj: Any):
