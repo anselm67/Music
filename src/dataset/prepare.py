@@ -11,7 +11,6 @@ from asyncio import (
 )
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
 
 import aiofiles
 
@@ -116,7 +115,7 @@ class Prepare:
         if self.force:
             return True
         # Checks against a one pager svg target.
-        if all(lambda svg_file: newer(svg_file, json_file) for svg_file in svg_files):
+        if all(newer(svg_file, json_file) for svg_file in svg_files):
             return False
         return True
 
@@ -125,7 +124,7 @@ class Prepare:
         if not self.should_refresh_layout(svg_files, json_file):
             logging.debug(f"-> {json_file}")
         elif self.dry_run:
-            logging.info(f"layout {svg_files}")
+            logging.info(f"-> {json_file}")
         else:
             logging.info(f"=> {json_file}")
             pages: list[Page] = list()
@@ -173,13 +172,13 @@ class Prepare:
             try:
                 match task:
                     case MxlTask():
-                        await self.mxl_task(cast(MxlTask, task).mxl_file)
+                        await self.mxl_task(task.mxl_file)
                     case SvgTask():
-                        await self.svg_task(cast(SvgTask, task).svg_files)
+                        await self.svg_task(task.svg_files)
             except Exception as e:
-                logging.error(e)
+                logging.error(f"Task {task}: {e}", exc_info=e)
 
-    async def run(self, xml_path: Path | None = None, num_worker: int = 5):
+    async def async_run(self, xml_path: Path | None, num_worker: int):
         if xml_path is None:
             for index, row in self.pdmx.df.iterrows():
                 mxl_str = row['mxl']
@@ -195,5 +194,5 @@ class Prepare:
             for _ in range(num_worker):
                 tg.create_task(self.worker())
 
-    def prepare(self, xml_path, num_worker: int = 5):
-        return run(self.run(xml_path, num_worker))
+    def run(self, xml_path: Path | None, num_worker: int):
+        return run(self.async_run(xml_path, num_worker))

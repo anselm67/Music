@@ -48,60 +48,6 @@ def query(ctx: ClickContext, query_string: str, parts: int, columns: tuple[str],
 
 
 @click.command()
-@click.option("--force", "-f", default=False, is_flag=True, show_default=True)
-@click.option("--dry-run", "-n", default=False, is_flag=True, show_default=True)
-@click.pass_obj
-def to_svg(ctx: ClickContext, force: bool, dry_run: bool):
-    """Converts all .mxl files into .svg files.
-
-    --force will enforce the conversion even if the .svg file exists and is more recent than its source.
-    --dry-run tells what's to be done without doing it.
-    """
-    total, failed = ctx.pdmx.to_svg(force, dry_run)
-    print(f"{total} mxl files processed, {failed} failed.")
-
-
-@click.command()
-@click.option("--force", "-f", default=False, is_flag=True, show_default=True)
-@click.option("--dry-run", "-n", default=False, is_flag=True, show_default=True)
-@click.pass_obj
-def to_kern(ctx: ClickContext, force: bool, dry_run: bool):
-    """Converts all .mxl files into .krn files.
-
-    --force will enforce the conversion even if the .svg file exists and is more recent than its source.
-    --dry-run tells what's to be done without doing it.
-    """
-    total, failed = ctx.pdmx.to_kern(force, dry_run)
-    print(f"{total} mxl files processed, {failed} failed.")
-
-
-@click.command()
-@click.option("--force", "-f", default=False, is_flag=True, show_default=True)
-@click.pass_obj
-def to_layout(ctx: ClickContext, force: bool):
-    """Extracts layout structure from .svg files into json.
-
-    --force will enforce the conversion even if the .svg file exists and is more recent than its source.
-    """
-    total, failed = ctx.pdmx.to_layout(force)
-    print(f"{total} svg files processed, {failed} failed.")
-
-
-@click.command()
-@click.option("--force", "-f", default=False, is_flag=True, show_default=True)
-@click.option("--dry-run", "-n", default=False, is_flag=True, show_default=True)
-@click.pass_obj
-def to_png(ctx: ClickContext, force: bool, dry_run: bool):
-    """Renders all .svg files into .png files.
-
-    --force will enforce the conversion even if the .svg file exists and is more recent than its source.
-    --dry-run tells what's to be done without doing it.
-    """
-    total, failed = ctx.pdmx.to_png(force, dry_run)
-    print(f"{total} svg files processed, {failed} failed.")
-
-
-@click.command()
 @click.argument("mxl_file",
                 type=click.Path(dir_okay=False, file_okay=True,
                                 exists=True, readable=True, path_type=Path),
@@ -194,20 +140,15 @@ def show(ctx: ClickContext, any_file: Path):
                                 exists=True, readable=True, path_type=Path),
                 required=False, default=None)
 @click.pass_obj
-def prepare(ctx: ClickContext, mxl_file: Path | None, force: bool, dry_run: bool):
-    p = Prepare(ctx.pdmx, force, dry_run)
-    p.prepare(mxl_file, num_worker=1)
+def make(ctx: ClickContext, mxl_file: Path | None, force: bool, dry_run: bool):
+    ctx.pdmx.make(mxl_file, force=force, dry_run=dry_run)
 
 
 cli.add_command(query)
-cli.add_command(to_svg)
-cli.add_command(to_kern)
-cli.add_command(to_layout)
-cli.add_command(to_png)
 cli.add_command(render)
 cli.add_command(from_mxl)
 cli.add_command(show)
-cli.add_command(prepare)
+cli.add_command(make)
 
 
 def main():
