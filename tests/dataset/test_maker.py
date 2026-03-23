@@ -11,6 +11,7 @@ import pytest
 
 from dataset import PDMX
 from dataset.pdmx_maker import MxlSvgTask, PDMXMaker
+from verovio import rsvgconvert_binary, verovio_binary
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -52,6 +53,10 @@ def touch(path: Path, mtime: float | None = None):
 # ---------------------------------------------------------------------------
 
 class TestNewer:
+    def test_binaries(self):
+        assert verovio_binary() == Path("/usr/bin/true")
+        assert rsvgconvert_binary() == Path("/usr/bin/true")
+
     def test_dst_does_not_exist(self, tmp_path):
         src = tmp_path / "src.mxl"
         dst = tmp_path / "dst.svg"
@@ -268,7 +273,7 @@ class TestDryRun:
         mxl = tmp_path / "mxl/1/aa/score.mxl"
         touch(mxl)
 
-        with patch("verovio.render_command",
+        with patch("dataset.pdmx_maker.render_command",
                    return_value=(Path("/usr/bin/verovio"), ["--arg"])):
             with patch.object(p, "collect_svg_files", return_value=[]):
                 with caplog.at_level(logging.INFO):
@@ -284,9 +289,10 @@ class TestDryRun:
         touch(svg)
 
         with patch.object(p, "exec", new_callable=AsyncMock) as mock_exec:
-            with patch("verovio.svg_to_png_command",
+            with patch("dataset.pdmx_maker.svg_to_png_command",
                        return_value=(Path("/usr/bin/rsvg"), ["--arg"])):
                 with patch.object(p, "make_layout", new_callable=AsyncMock):
                     await p.svg_layout_task([svg], json_file)
 
+        mock_exec.assert_not_called()
         mock_exec.assert_not_called()
