@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 
 from dataset import PDMX
-from dataset.pdmx_maker import MxlTask, PDMXMaker
+from dataset.pdmx_maker import MxlSvgTask, PDMXMaker
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -224,9 +224,9 @@ class TestRun:
                 except asyncio.QueueEmpty:
                     break
 
-        await p.async_run(xml_path=None, num_worker=1)
+        await p.async_run(mxl_file=None, num_worker=1)
         # 2 valid rows (row 3 has missing mxl)
-        assert len([t for t in queued if isinstance(t, MxlTask)]) == 0
+        assert len([t for t in queued if isinstance(t, MxlSvgTask)]) == 0
         # tasks were put in queue before workers ran
         assert p.queue.empty()
 
@@ -237,10 +237,10 @@ class TestRun:
         touch(mxl)
 
         with patch.object(p, 'worker', new_callable=AsyncMock):
-            await p.async_run(xml_path=mxl, num_worker=1)
+            await p.async_run(mxl_file=mxl, num_worker=1)
 
         task = p.queue.get_nowait()
-        assert isinstance(task, MxlTask)
+        assert isinstance(task, MxlSvgTask)
         assert task.mxl_file == mxl
 
     @pytest.mark.asyncio
@@ -250,7 +250,7 @@ class TestRun:
 
         with caplog.at_level(logging.INFO):
             with patch.object(p, 'worker', new_callable=AsyncMock):
-                await p.async_run(xml_path=None, num_worker=1)
+                await p.async_run(mxl_file=None, num_worker=1)
 
         # row 3 with empty mxl should be logged
         assert any("invalid mxl" in r.message for r in caplog.records)
@@ -272,7 +272,7 @@ class TestDryRun:
                    return_value=(Path("/usr/bin/verovio"), ["--arg"])):
             with patch.object(p, "collect_svg_files", return_value=[]):
                 with caplog.at_level(logging.INFO):
-                    await p.mxl_task(mxl)
+                    await p.mxl_svg_task(mxl)
 
         assert any("verovio" in r.message for r in caplog.records)
 
@@ -287,6 +287,6 @@ class TestDryRun:
             with patch("verovio.svg_to_png_command",
                        return_value=(Path("/usr/bin/rsvg"), ["--arg"])):
                 with patch.object(p, "make_layout", new_callable=AsyncMock):
-                    await p.svg_task([svg], json_file)
+                    await p.svg_layout_task([svg], json_file)
 
         mock_exec.assert_not_called()

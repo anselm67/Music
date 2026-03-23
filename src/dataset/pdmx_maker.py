@@ -15,7 +15,12 @@ from pathlib import Path
 import aiofiles
 
 from dataset import Page, Score
-from verovio import LayoutExtractor, render_command, svg_to_png_command
+from verovio import (
+    LayoutExtractor,
+    mxl_to_kern_command,
+    render_command,
+    svg_to_png_command,
+)
 
 from .pdmx import PDMX
 
@@ -30,12 +35,17 @@ class Task:
 
 
 @dataclass(frozen=True)
-class MxlTask(Task):
+class MxlSvgTask(Task):
     mxl_file: Path
 
 
 @dataclass(frozen=True)
-class SvgTask(Task):
+class MxlKrnTask(Task):
+    mxl_file: Path
+
+
+@dataclass(frozen=True)
+class SvgLayoutTask(Task):
     svg_files: list[Path]
     json_file: Path
 
@@ -98,8 +108,7 @@ class PDMXMaker:
                     return files
             raise ValueError("Too many pages in score!")
 
-    async def mxl_task(self, mxl_file: Path):
-        # Converts the mxl file to kern with verovio.
+    async def mxl_svg_task(self, mxl_file: Path):
         # Converts the mxl file to svg by rendering it with verovio.
         svg_file = self.pdmx.get_path(mxl_file, 'svg')
         if not self.should_refresh_svg(mxl_file, svg_file):
@@ -113,7 +122,20 @@ class PDMXMaker:
                 await self.exec(binary, args)
         svg_files = self.collect_svg_files(svg_file)
         json_file = self.pdmx.get_path(mxl_file, 'layout')
-        self.queue.put_nowait(SvgTask(svg_files, json_file))
+        self.queue.put_nowait(SvgLayoutTask(svg_files, json_file))
+
+    async def mxl_krn_task(self, mxl_file: Path):
+        # Converts the mxl file to svg by rendering it with verovio.
+        krn_file = self.pdmx.get_path(mxl_file, 'krn')
+        if not self.force and newer(mxl_file, krn_file):
+            logging.debug(f"-> {krn_file}")
+        else:
+            (binary, args) = mxl_to_kern_command(mxl_file, krn_file)
+            if self.dry_run:
+                logging.info(f"{binary} {' '.join(args)}")
+            else:
+                logging.info(f"=> {krn_file}")
+                await self.exec(binary, args)
 
     def should_refresh_layout(self, svg_files: list[Path], json_file: Path) -> bool:
         if self.force:
@@ -161,7 +183,7 @@ class PDMXMaker:
                 logging.info(f"=> {png_file}")
                 await self.exec(binary, args)
 
-    async def svg_task(self, svg_files: list[Path], json_file: Path):
+    async def svg_layout_task(self, svg_files: list[Path], json_file: Path):
         await self.make_layout(svg_files, json_file)
         for svg_file in svg_files:
             await self.make_png(svg_file)
@@ -174,24 +196,28 @@ class PDMXMaker:
                 break
             try:
                 match task:
-                    case MxlTask():
-                        await self.mxl_task(task.mxl_file)
-                    case SvgTask():
-                        await self.svg_task(task.svg_files, task.json_file)
+                    case MxlSvgTask():
+                        await self.mxl_svg_task(task.mxl_file)
+                    case MxlKrnTask():
+                        await self.mxl_krn_task(task.mxl_file)
+                    case SvgLayoutTask():
+                        await self.svg_layout_task(task.svg_files, task.json_file)
             except Exception as e:
                 logging.error(f"Task {task}: {e}", exc_info=e)
 
-    async def async_run(self, xml_path: Path | None, num_worker: int):
-        if xml_path is None:
+    async def async_run(self, mxl_file: Path | None, num_worker: int):
+        if mxl_file is None:
             for index, row in self.pdmx.df.iterrows():
                 mxl_str = row['mxl']
                 if not isinstance(mxl_str, str):
                     logging.info(
                         f"PDMX.csv@{index}: invalid mxl path {mxl_str}")
                 else:
-                    self.queue.put_nowait(MxlTask(self.pdmx.home / mxl_str))
+                    self.queue.put_nowait(MxlSvgTask(self.pdmx.home / mxl_str))
+                    self.queue.put_nowait(MxlKrnTask(self.pdmx.home / mxl_str))
         else:
-            self.queue.put_nowait(MxlTask(xml_path))
+            self.queue.put_nowait(MxlSvgTask(mxl_file))
+            self.queue.put_nowait(MxlKrnTask(mxl_file))
 
         async with TaskGroup() as tg:
             for _ in range(num_worker):
