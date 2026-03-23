@@ -8,7 +8,7 @@ from typing import cast
 import click
 import cv2
 
-from dataset import PDMX, Prepare, Score
+from dataset import PDMX, PDMXMaker, Score
 from utils import from_json
 from verovio import LayoutExtractor, mxl_to_kern
 from verovio import render as verovio_render

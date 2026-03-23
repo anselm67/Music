@@ -73,6 +73,6 @@ class PDMX:
         return df
 
     def make(self, mxl_file: Path | None = None, num_workers: int = os.cpu_count() or 4, force: bool = False, dry_run: bool = False):
-        from .prepare import Prepare
-        maker = Prepare(self, force=force, dry_run=dry_run)
+        from .pdmx_maker import PDMXMaker
+        maker = PDMXMaker(self, force=force, dry_run=dry_run)
         maker.run(mxl_file, num_workers)

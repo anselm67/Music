@@ -1,6 +1,6 @@
 from .layout import Box, Page, Score, Staff, System
 from .pdmx import PDMX
-from .prepare import Prepare
+from .pdmx_maker import PDMXMaker
 
 __all__ = [
     "PDMX",
@@ -9,5 +9,5 @@ __all__ = [
     "System",
     "Staff",
     "Score",
-    "Prepare"
+    "PDMXMaker"
 ]

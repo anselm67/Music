@@ -37,9 +37,10 @@ class MxlTask(Task):
 @dataclass(frozen=True)
 class SvgTask(Task):
     svg_files: list[Path]
+    json_file: Path
 
 
-class Prepare:
+class PDMXMaker:
     pdmx: PDMX
 
     queue: Queue[Task]
@@ -98,6 +99,8 @@ class Prepare:
             raise ValueError("Too many pages in score!")
 
     async def mxl_task(self, mxl_file: Path):
+        # Converts the mxl file to kern with verovio.
+        # Converts the mxl file to svg by rendering it with verovio.
         svg_file = self.pdmx.get_path(mxl_file, 'svg')
         if not self.should_refresh_svg(mxl_file, svg_file):
             logging.debug(f"-> {svg_file}")
@@ -109,7 +112,8 @@ class Prepare:
                 logging.info(f"=> {svg_file}")
                 await self.exec(binary, args)
         svg_files = self.collect_svg_files(svg_file)
-        self.queue.put_nowait(SvgTask(svg_files))
+        json_file = self.pdmx.get_path(mxl_file, 'layout')
+        self.queue.put_nowait(SvgTask(svg_files, json_file))
 
     def should_refresh_layout(self, svg_files: list[Path], json_file: Path) -> bool:
         if self.force:
@@ -119,8 +123,7 @@ class Prepare:
             return False
         return True
 
-    async def make_layout(self, svg_files: list[Path]):
-        json_file = self.pdmx.get_path(svg_files[0], 'layout')
+    async def make_layout(self, svg_files: list[Path], json_file: Path):
         if not self.should_refresh_layout(svg_files, json_file):
             logging.debug(f"-> {json_file}")
         elif self.dry_run:
@@ -158,8 +161,8 @@ class Prepare:
                 logging.info(f"=> {png_file}")
                 await self.exec(binary, args)
 
-    async def svg_task(self, svg_files: list[Path]):
-        await self.make_layout(svg_files)
+    async def svg_task(self, svg_files: list[Path], json_file: Path):
+        await self.make_layout(svg_files, json_file)
         for svg_file in svg_files:
             await self.make_png(svg_file)
 
@@ -174,7 +177,7 @@ class Prepare:
                     case MxlTask():
                         await self.mxl_task(task.mxl_file)
                     case SvgTask():
-                        await self.svg_task(task.svg_files)
+                        await self.svg_task(task.svg_files, task.json_file)
             except Exception as e:
                 logging.error(f"Task {task}: {e}", exc_info=e)
 
