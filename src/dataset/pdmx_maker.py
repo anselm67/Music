@@ -110,7 +110,7 @@ class PDMXMaker:
 
     async def mxl_svg_task(self, mxl_file: Path):
         # Converts the mxl file to svg by rendering it with verovio.
-        svg_file = self.pdmx.get_path(mxl_file, 'svg')
+        svg_file = self.pdmx.get_path(mxl_file, 'svg', mkdirs=True)
         if not self.should_refresh_svg(mxl_file, svg_file):
             logging.debug(f"-> {svg_file}")
         else:
@@ -121,12 +121,12 @@ class PDMXMaker:
                 logging.info(f"=> {svg_file}")
                 await self.exec(binary, args)
         svg_files = self.collect_svg_files(svg_file)
-        json_file = self.pdmx.get_path(mxl_file, 'layout')
+        json_file = self.pdmx.get_path(mxl_file, 'layout', mkdirs=True)
         self.queue.put_nowait(SvgLayoutTask(svg_files, json_file))
 
     async def mxl_krn_task(self, mxl_file: Path):
         # Converts the mxl file to svg by rendering it with verovio.
-        krn_file = self.pdmx.get_path(mxl_file, 'krn')
+        krn_file = self.pdmx.get_path(mxl_file, 'krn', mkdirs=True)
         if not self.force and newer(mxl_file, krn_file):
             logging.debug(f"-> {krn_file}")
         else:
@@ -172,7 +172,7 @@ class PDMXMaker:
                 logging.error(f"make_layout {svg_file}: {e}")
 
     async def make_png(self, svg_file: Path):
-        png_file = self.pdmx.get_path(svg_file, 'png')
+        png_file = self.pdmx.get_path(svg_file, 'png', mkdirs=True)
         if not self.force and newer(svg_file, png_file):
             logging.debug(f"-> {png_file}")
         else:
