@@ -102,8 +102,9 @@ def show(ctx: ClickContext, any_file: Path):
             img_path = pdmx.get_path(any_file, 'png')
         img = cv2.imread(img_path)
         assert img is not None, f"Can't read image {img_path}"
-        print(
-            f"{len(page.systems)} systems, first system {len(page.systems[0].staves)} staves.")
+        print(f"Page {page_index+1}: {len(page.systems)} systems...")
+        for index, system in enumerate(page.systems):
+            print(f"\tsystem {index+1}: {len(page.systems[0].staves)} staves.")
         # Renders the page layout on top of the image.
         system_color = (255, 0, 0)
         staff_color = (0, 255, 0)
@@ -125,9 +126,11 @@ def show(ctx: ClickContext, any_file: Path):
         if (key := cv2.waitKey()) == ord('q'):
             break
         elif key == ord('p'):
-            page_index = max(0, page_index - 1)
+            if (page_index := page_index - 1) < 0:
+                page_index = len(score.pages) - 1
         elif key == ord('n'):
-            page_index = min(len(score.pages), page_index + 1)
+            if (page_index := page_index + 1) >= len(score.pages):
+                page_index = 0
 
     cv2.destroyAllWindows()
 
