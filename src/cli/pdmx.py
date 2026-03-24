@@ -3,14 +3,13 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
 
 import click
 import cv2
 
-from dataset import PDMX, PDMXMaker, Score
-from utils import from_json
-from verovio import LayoutExtractor, mxl_to_kern
+from dataset import PDMX, Score
+from utils import print_histogram
+from verovio import mxl_to_kern
 from verovio import render as verovio_render
 
 HOME = Path("/home/anselm/datasets/PDMX")
@@ -27,8 +26,11 @@ class ClickContext:
                                               exists=True, readable=True,
                                               path_type=Path),
               default=HOME, show_default=True)
+@click.option("--log-level", default="INFO",
+              type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"], case_sensitive=False))
 @click.pass_context
-def cli(ctx, home: Path):
+def cli(ctx, home: Path, log_level: str):
+    logging.basicConfig(level=getattr(logging, log_level.upper()))
     pdmx = PDMX(home)
     ctx.obj = ClickContext(home=home, pdmx=pdmx)
 
@@ -91,12 +93,12 @@ def show(ctx: ClickContext, any_file: Path):
     pdmx = ctx.pdmx
     with open(pdmx.get_path(any_file, 'layout'), 'r') as f:
         obj = json.load(f)
-    score = cast(Score, from_json(Score, obj))
+    score = Score.from_json(obj)
 
     page_index = 0
     while True:
         page = score.pages[page_index]
-        if len(score.pages) > 1:
+        if score.page_count > 1:
             img_path = pdmx.get_page_path(any_file, 'png', page.page_number)
         else:
             img_path = pdmx.get_path(any_file, 'png')
@@ -129,22 +131,49 @@ def show(ctx: ClickContext, any_file: Path):
             if (page_index := page_index - 1) < 0:
                 page_index = len(score.pages) - 1
         elif key == ord('n'):
-            if (page_index := page_index + 1) >= len(score.pages):
+            if (page_index := page_index + 1) >= score.page_count:
                 page_index = 0
 
     cv2.destroyAllWindows()
 
 
 @click.command()
-@click.option("--force", "-f", default=False, is_flag=True, show_default=True)
-@click.option("--dry-run", "-n", default=False, is_flag=True, show_default=True)
+@click.option("--force", "-f", default=False, is_flag=True, show_default=True,
+              help="Recomputes all dependent files even if they're newer than their mxl source.")
+@click.option("--dry-run", "-n", default=False, is_flag=True, show_default=True,
+              help="Say what you'd do but don't do it.")
 @click.argument("mxl_file",
                 type=click.Path(dir_okay=False, file_okay=True,
                                 exists=True, readable=True, path_type=Path),
                 required=False, default=None)
 @click.pass_obj
 def make(ctx: ClickContext, mxl_file: Path | None, force: bool, dry_run: bool):
+    """Computes all dependent files from PDMX mxl files.
+
+    \b
+    For a given mxl file, this includes:
+    - The corresponding humdrum kern file,
+    - Verovio rendering of the mxl file as a set of svg files - one per page.
+    - For each svg file, the corresponding png file.
+    - For each mxl file, it's layout infos as page, system, staves and bars.
+    """
     ctx.pdmx.make(mxl_file, force=force, dry_run=dry_run)
+
+
+@click.command()
+@click.pass_obj
+def stats(ctx: ClickContext):
+    """Computes layout statistics for the PDMX dataset.
+    """
+    stats = ctx.pdmx.stats()
+    print(f"{stats.layout_count:,} layout files, {stats.score_count:,} scores:")
+    print(f"  Page count: {stats.page_count:,}")
+    print(f"System count: {stats.system_count:,}")
+    print(f" Staff count: {stats.staff_count:,}")
+    print(f"   Bar count: {stats.bar_count}:,")
+
+    print_histogram(stats.system_histo, title="Systems per page:")
+    print_histogram(stats.staff_histo, title="Staves per page:")
 
 
 cli.add_command(query)
@@ -152,10 +181,10 @@ cli.add_command(render)
 cli.add_command(from_mxl)
 cli.add_command(show)
 cli.add_command(make)
+cli.add_command(stats)
 
 
 def main():
-    logging.basicConfig(level=logging.INFO)
     cli()
 
 

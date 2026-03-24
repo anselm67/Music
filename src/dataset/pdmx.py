@@ -76,3 +76,8 @@ class PDMX:
         from .pdmx_maker import PDMXMaker
         maker = PDMXMaker(self, force=force, dry_run=dry_run)
         maker.run(mxl_file, num_workers)
+
+    def stats(self, num_worker: int = os.cpu_count() or 4):
+        from .pdmx_stater import PDMXStater
+        stater = PDMXStater(self)
+        return stater.run(num_worker)
