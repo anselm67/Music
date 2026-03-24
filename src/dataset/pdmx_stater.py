@@ -46,10 +46,6 @@ class PDMXStats:
         for p in score.pages:
             self.system_histo[p.system_count] += 1
             self.staff_histo[p.staff_count] += 1
-            if p.system_count > 8:
-                print(f"{score.id}:{p.page_number}: {p.system_count} systems.")
-            elif p.staff_count > 16:
-                print(f"{score.id}:{p.page_number}: {p.staff_count} staves.")
 
     def collect(self, other: 'PDMXStats'):
         self.score_count += other.score_count
