@@ -1,6 +1,7 @@
-from dataclasses import asdict, dataclass, field, replace
-from pathlib import Path
-from typing import Any
+from dataclasses import asdict, dataclass, field
+from typing import Any, cast
+
+from utils import from_json
 
 
 @dataclass(frozen=True)
@@ -83,6 +84,10 @@ class System:
         return self.box.right
 
     @property
+    def staff_count(self) -> int:
+        return len(self.staves)
+
+    @property
     def bar_count(self):
         return len(self.staves[0].bars) - 1
 
@@ -108,14 +113,38 @@ class Page:
     image_rotation: float = 0.0
 
     @property
+    def system_count(self) -> int:
+        return len(self.systems)
+
+    @property
+    def staff_count(self) -> int:
+        return sum(s.staff_count for s in self.systems)
+
+    @property
     def bar_count(self):
-        return sum([x.bar_count for x in self.systems])
+        return sum(x.bar_count for x in self.systems)
 
 
 @dataclass(frozen=True)
 class Score:
     id: str
     pages: list[Page]
+
+    @property
+    def page_count(self) -> int:
+        return len(self.pages)
+
+    @property
+    def system_count(self) -> int:
+        return sum(p.system_count for p in self.pages)
+
+    @property
+    def staff_count(self) -> int:
+        return sum(p.staff_count for p in self.pages)
+
+    @property
+    def bar_count(self) -> int:
+        return sum(p.bar_count for p in self.pages)
 
     def asdict(self):
         obj = asdict(self)
@@ -124,3 +153,7 @@ class Score:
             for system in page['systems']:
                 system.pop('box', None)
         return obj
+
+    @staticmethod
+    def from_json(obj: Any) -> 'Score':
+        return cast(Score, from_json(Score, obj))
