@@ -1,5 +1,6 @@
 import os
 import subprocess
+from collections import Counter
 from dataclasses import fields, is_dataclass
 from pathlib import Path
 from typing import Any, Iterable, Union, cast, get_args, get_origin
@@ -77,3 +78,11 @@ def from_json(cls: type, data: Any):
         }
     else:
         return data
+
+
+def print_histogram(counter: Counter, title: str, width: int = 80):
+    print(title)
+    max_val = max(counter.values())
+    for key, count in sorted(counter.items()):
+        bar = "█" * int(count / max_val * width)
+        print(f"{key:4d} | {bar} {count:,}")

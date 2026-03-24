@@ -1,4 +1,10 @@
-from .utils import current_commit, from_json, iterable_from_file, path_substract
+from .utils import (
+    current_commit,
+    from_json,
+    iterable_from_file,
+    path_substract,
+    print_histogram,
+)
 from .walker import Walker
 
 __all__ = [
@@ -6,5 +12,6 @@ __all__ = [
     "current_commit",
     "path_substract",
     "from_json",
+    "print_histogram",
     "Walker",
 ]
