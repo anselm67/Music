@@ -174,6 +174,8 @@ def stats(ctx: ClickContext):
 
     print_histogram(stats.system_histo, title="Systems per page:")
     print_histogram(stats.staff_histo, title="Staves per page:")
+    print_histogram(stats.width100_histo, title="Page widths:")
+    print_histogram(stats.height100_histo, title="Page heights:")
 
 
 cli.add_command(query)
