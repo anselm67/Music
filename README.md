@@ -10,3 +10,13 @@ Dataset sources:
 - PDMX: https://zenodo.org/records/14648209
     Requires downloading multiple files, at least PDMX.csv, mxl.tar.gz and metadata.tar.gz
     
+Examples:
+
+To extract a reasonable subset from PDMX, you can use something like this:
+
+```bash
+# Select scores that have all pages rendering less than 16 staves.
+pdmx query -o subset.cvs 'index==index' --score 'pages.*.staff_count < 16'
+# Displays subset general statistics.
+pdmx --csv subset.csv stats
+```
