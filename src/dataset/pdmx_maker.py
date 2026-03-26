@@ -111,7 +111,8 @@ class PDMXMaker:
                     if not files:
                         logging.error(f"{svg_file}: failed to collect pages.")
                     return files
-            raise ValueError("Too many pages in score!")
+            logging.error("Too many pages in score!")
+            return None
 
     async def mxl_svg_task(self, mxl_file: Path):
         svg_files = None
