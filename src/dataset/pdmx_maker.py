@@ -25,10 +25,6 @@ from verovio import (
 from .pdmx import PDMX
 
 
-def newer(src_file: Path, dst_file: Path) -> bool:
-    return dst_file.exists() and dst_file.stat().st_mtime >= src_file.stat().st_mtime
-
-
 @dataclass(frozen=True)
 class Task:
     pass
@@ -63,7 +59,15 @@ class PDMXMaker:
         self.force = force
         self.dry_run = dry_run
 
-    async def exec(self, binary: Path, args: list[str]):
+    def newer(self, src_file: Path, dst_file: Path, check_err_file: bool = True) -> bool:
+        if dst_file.exists():
+            return dst_file.stat().st_mtime >= src_file.stat().st_mtime
+        elif check_err_file:
+            err_file = self.pdmx.get_err_path(dst_file)
+            return err_file.exists() and err_file.stat().st_mtime >= src_file.stat().st_mtime
+        return False
+
+    async def exec(self, binary: Path, args: list[str]) -> int:
         proc = None
         try:
             proc = await create_subprocess_exec(
@@ -74,6 +78,7 @@ class PDMXMaker:
             return_code = await proc.wait()
             if return_code != 0:
                 logging.error(f"{binary} {' '.join(args)}: {return_code}")
+            return return_code
         except CancelledError:
             if proc is not None:
                 proc.kill()
@@ -83,16 +88,16 @@ class PDMXMaker:
         if self.force:
             return True
         # Checks against a one pager svg target.
-        if newer(mxl_file, svg_file):
+        if self.newer(mxl_file, svg_file):
             return False
         # Checks against the first page of a multi-page svg target.
         stem = f"{svg_file.stem}_001"
         tst_file = svg_file.with_stem(stem)
-        if newer(mxl_file, tst_file):
+        if self.newer(mxl_file, tst_file, check_err_file=False):
             return False
         return True
 
-    def collect_svg_files(self, svg_file: Path) -> list[Path]:
+    def collect_svg_files(self, svg_file: Path) -> None | list[Path]:
         if svg_file.exists():
             return [svg_file]
         else:
@@ -104,11 +109,12 @@ class PDMXMaker:
                     files.append(file)
                 else:
                     if not files:
-                        raise ValueError(f"{svg_file}: no svg output.")
+                        logging.error(f"{svg_file}: failed to collect pages.")
                     return files
             raise ValueError("Too many pages in score!")
 
     async def mxl_svg_task(self, mxl_file: Path):
+        svg_files = None
         # Converts the mxl file to svg by rendering it with verovio.
         svg_file = self.pdmx.get_path(mxl_file, 'svg', mkdirs=True)
         if not self.should_refresh_svg(mxl_file, svg_file):
@@ -119,15 +125,18 @@ class PDMXMaker:
                 logging.info(f"{binary} {' '.join(args)}")
             else:
                 logging.debug(f"=> {svg_file}")
-                await self.exec(binary, args)
-        svg_files = self.collect_svg_files(svg_file)
-        json_file = self.pdmx.get_path(mxl_file, 'layout', mkdirs=True)
-        self.queue.put_nowait(SvgLayoutTask(svg_files, json_file))
+                if await self.exec(binary, args) != 0:
+                    self.pdmx.touch_err_path(svg_file)
+                else:
+                    svg_files = self.collect_svg_files(svg_file)
+        if svg_files is not None:
+            json_file = self.pdmx.get_path(mxl_file, 'layout', mkdirs=True)
+            self.queue.put_nowait(SvgLayoutTask(svg_files, json_file))
 
     async def mxl_krn_task(self, mxl_file: Path):
         # Converts the mxl file to svg by rendering it with verovio.
         krn_file = self.pdmx.get_path(mxl_file, 'krn', mkdirs=True)
-        if not self.force and newer(mxl_file, krn_file):
+        if not self.force and self.newer(mxl_file, krn_file):
             logging.debug(f"-> {krn_file}")
         else:
             (binary, args) = mxl_to_kern_command(mxl_file, krn_file)
@@ -135,13 +144,14 @@ class PDMXMaker:
                 logging.info(f"{binary} {' '.join(args)}")
             else:
                 logging.debug(f"=> {krn_file}")
-                await self.exec(binary, args)
+                if await self.exec(binary, args) != 0:
+                    self.pdmx.touch_err_path(krn_file)
 
     def should_refresh_layout(self, svg_files: list[Path], json_file: Path) -> bool:
         if self.force:
             return True
         # Checks against a one pager svg target.
-        if all(newer(svg_file, json_file) for svg_file in svg_files):
+        if all(self.newer(svg_file, json_file) for svg_file in svg_files):
             return False
         return True
 
@@ -171,11 +181,12 @@ class PDMXMaker:
                     await f.write(json.dumps(score.asdict(), indent=2))
             except Exception as e:
                 json_file.unlink(missing_ok=True)
+                self.pdmx.touch_err_path(json_file)
                 logging.error(f"make_layout {svg_file}: {e}")
 
     async def make_png(self, svg_file: Path):
         png_file = self.pdmx.get_path(svg_file, 'png', mkdirs=True)
-        if not self.force and newer(svg_file, png_file):
+        if not self.force and self.newer(svg_file, png_file):
             logging.debug(f"-> {png_file}")
         else:
             (binary, args) = svg_to_png_command(svg_file, png_file)
@@ -183,7 +194,8 @@ class PDMXMaker:
                 logging.info(f"{binary} {' '.join(args)}")
             else:
                 logging.debug(f"=> {png_file}")
-                await self.exec(binary, args)
+                if await self.exec(binary, args) != 0:
+                    self.pdmx.touch_err_path(png_file)
 
     async def svg_layout_task(self, svg_files: list[Path], json_file: Path):
         await self.make_layout(svg_files, json_file)

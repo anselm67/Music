@@ -47,6 +47,14 @@ class PDMX:
             path.parent.mkdir(parents=True, exist_ok=True)
         return path
 
+    def get_err_path(self, path: Path) -> Path:
+        return path.with_suffix('.err')
+
+    def touch_err_path(self, path: Path):
+        err_path = self.get_err_path(path)
+        err_path.parent.mkdir(parents=True, exist_ok=True)
+        err_path.touch()
+
     def get_page_path(self, some: Path, dir_class: DirClass, page_number: int) -> Path:
         relative = self.relative(some)
         if len(relative.parts) <= 1:
