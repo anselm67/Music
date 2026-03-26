@@ -25,6 +25,8 @@ class PDMXStats:
     # Par page layout statistics.
     system_histo: Counter = Counter()
     staff_histo: Counter = Counter()
+    width100_histo: Counter = Counter()
+    height100_histo: Counter = Counter()
 
     def __init__(self):
         self.mxl_count = 0
@@ -46,6 +48,8 @@ class PDMXStats:
         for p in score.pages:
             self.system_histo[p.system_count] += 1
             self.staff_histo[p.staff_count] += 1
+            self.width100_histo[p.image_width // 100] += 1
+            self.height100_histo[p.image_height // 100] += 1
 
     def collect(self, other: 'PDMXStats'):
         self.score_count += other.score_count
