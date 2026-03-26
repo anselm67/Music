@@ -118,7 +118,7 @@ class PDMXMaker:
             if self.dry_run:
                 logging.info(f"{binary} {' '.join(args)}")
             else:
-                logging.info(f"=> {svg_file}")
+                logging.debug(f"=> {svg_file}")
                 await self.exec(binary, args)
         svg_files = self.collect_svg_files(svg_file)
         json_file = self.pdmx.get_path(mxl_file, 'layout', mkdirs=True)
@@ -134,7 +134,7 @@ class PDMXMaker:
             if self.dry_run:
                 logging.info(f"{binary} {' '.join(args)}")
             else:
-                logging.info(f"=> {krn_file}")
+                logging.debug(f"=> {krn_file}")
                 await self.exec(binary, args)
 
     def should_refresh_layout(self, svg_files: list[Path], json_file: Path) -> bool:
@@ -151,7 +151,7 @@ class PDMXMaker:
         elif self.dry_run:
             logging.info(f"-> {json_file}")
         else:
-            logging.info(f"=> {json_file}")
+            logging.debug(f"=> {json_file}")
             pages: list[Page] = list()
             page_number = 1
             bar_number = 1
@@ -164,7 +164,9 @@ class PDMXMaker:
                     page_number += 1
                 # Saves the final json file.
                 score = Score(
-                    str(self.pdmx.relative(json_file).with_suffix('')), pages)
+                    id=str(self.pdmx.get_path(json_file, 'mxl')),
+                    pages=pages
+                )
                 async with aiofiles.open(json_file, 'w') as f:
                     await f.write(json.dumps(score.asdict(), indent=2))
             except Exception as e:
@@ -180,7 +182,7 @@ class PDMXMaker:
             if self.dry_run:
                 logging.info(f"{binary} {' '.join(args)}")
             else:
-                logging.info(f"=> {png_file}")
+                logging.debug(f"=> {png_file}")
                 await self.exec(binary, args)
 
     async def svg_layout_task(self, svg_files: list[Path], json_file: Path):
