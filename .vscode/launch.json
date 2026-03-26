@@ -58,7 +58,7 @@
             "python": "${workspaceFolder}/.venv/bin/python",
             "args": [
                 "show",
-                "/home/anselm/datasets/PDMX/mxl/1/11/Qmbb6xiNcSyfz6CMss3B6orrHaHiqRT5ZknTtW5XFu4mkd.mxl"
+                "./mxl/1/11/QmbbFXoGYxR8JLdAwi9U77pGVWxgkStWZBEyUqC9gQtjWH.mxl"
             ]
         },
         {
@@ -70,9 +70,11 @@
             "python": "${workspaceFolder}/.venv/bin/python",
             "args": [
                 "query",
+                "-c",
+                "mxl",
                 "index == index",
-                "--parts",
-                "2"
+                "-s",
+                "pages.*.staff_count < 16"
             ]
         },
         {

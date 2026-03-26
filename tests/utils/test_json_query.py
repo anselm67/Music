@@ -116,6 +116,79 @@ class TestCompileFilter(unittest.TestCase):
                          [{"age": 30}, {"age": 35}])
 
 
+class TestCompileQueryWildcard(unittest.TestCase):
+
+    def test_wildcard_simple(self):
+        q = compile_query("pages.*")
+        self.assertEqual(q({"pages": [1, 2, 3]}), ('*', [1, 2, 3]))
+
+    def test_wildcard_nested(self):
+        q = compile_query("pages.*.staff_count")
+        data = {"pages": [{"staff_count": 10}, {"staff_count": 40}]}
+        self.assertEqual(q(data), ('*', [10, 40]))
+
+    def test_wildcard_not_a_list_returns_none(self):
+        q = compile_query("pages.*.staff_count")
+        self.assertIsNone(q({"pages": "oops"}))
+
+    def test_wildcard_empty_list(self):
+        q = compile_query("pages.*.staff_count")
+        self.assertEqual(q({"pages": []}), ('*', []))
+
+    def test_wildcard_missing_key_in_items(self):
+        q = compile_query("pages.*.staff_count")
+        data = {"pages": [{"staff_count": 10}, {}]}
+        self.assertEqual(q(data), ('*', [10, None]))
+
+
+class TestCompileFilterWildcard(unittest.TestCase):
+
+    def test_any_match(self):
+        f = compile_filter("pages.?.staff_count > 30")
+        data = {"pages": [{"staff_count": 10}, {"staff_count": 40}]}
+        self.assertTrue(f(data))
+
+    def test_all_match(self):
+        f = compile_filter("pages.*.staff_count > 30")
+        data = {"pages": [{"staff_count": 10}, {"staff_count": 40}]}
+        self.assertFalse(f(data))
+        f = compile_filter("pages.*.staff_count > 5")
+        self.assertTrue(f(data))
+
+    def test_no_match(self):
+        f = compile_filter("pages.*.staff_count > 30")
+        data = {"pages": [{"staff_count": 10}, {"staff_count": 20}]}
+        self.assertFalse(f(data))
+
+    def test_empty_list(self):
+        f = compile_filter("pages.*.staff_count > 30")
+        self.assertFalse(f({"pages": []}))
+
+    def test_none_items_skipped(self):
+        f = compile_filter("pages.*.staff_count > 30")
+        # second has no staff_count
+        data = {"pages": [{"staff_count": 40}, {}]}
+        self.assertFalse(f(data))
+
+        f = compile_filter("pages.?.staff_count > 30")
+        # second has no staff_count
+        data = {"pages": [{"staff_count": 40}, {}]}
+        self.assertTrue(f(data))  # still True because first matches
+
+    def test_all_none_items(self):
+        f = compile_filter("pages.*.staff_count > 30")
+        data = {"pages": [{}, {}]}  # no staff_count anywhere
+        self.assertFalse(f(data))
+
+    def test_not_a_list_returns_false(self):
+        f = compile_filter("pages.*.staff_count > 30")
+        self.assertFalse(f({"pages": "oops"}))
+
+    def test_wildcard_str_equality(self):
+        f = compile_filter("pages.?.clef == 'treble'")
+        data = {"pages": [{"clef": "bass"}, {"clef": "treble"}]}
+        self.assertTrue(f(data))
+
+
 if __name__ == "__main__":
-    unittest.main()
     unittest.main()

@@ -26,27 +26,40 @@ class ClickContext:
                                               exists=True, readable=True,
                                               path_type=Path),
               default=HOME, show_default=True)
+@click.option("--csv", default="PDMX.csv", show_default=True,
+              help="Name of the .csv master file.")
 @click.option("--log-level", default="INFO",
               type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"], case_sensitive=False))
 @click.pass_context
-def cli(ctx, home: Path, log_level: str):
+def cli(ctx, home: Path, csv: str, log_level: str):
     logging.basicConfig(level=getattr(logging, log_level.upper()))
-    pdmx = PDMX(home)
+    pdmx = PDMX(home, csv)
     ctx.obj = ClickContext(home=home, pdmx=pdmx)
 
 
 @click.command()
 @click.argument("query_string")
-@click.option("--parts", "-p", type=int, help="With this number of parts.", default=-1)
+@click.option("--metadata", "-m", type=str, default=None,
+              help="Metadata query as a json filter.")
+@click.option("--score", "-s", type=str, default=None,
+              help="Score query as a json filter.")
 @click.option("--columns", "-c", multiple=True, help="Columns to display")
-@click.option("--limit", "-n", default=20, show_default=True)
+@click.option("--limit", "-n", default=-1, show_default=True,
+              help="Limit output to this many rows.")
+@click.option("--output", "-o",
+              type=click.Path(dir_okay=False, file_okay=True, path_type=Path),
+              default=None,
+              help="Save the filtered set to the given output file.")
 @click.pass_obj
-def query(ctx: ClickContext, query_string: str, parts: int, columns: tuple[str], limit: int):
+def query(ctx: ClickContext, query_string: str, metadata: str | None, score: str | None, columns: tuple[str], limit: int, output: Path | None):
     """Query the underlying PDMX.csv database as a DataFrame."""
-    result = ctx.pdmx.query(query_string, parts_count=parts)
+    result = ctx.pdmx.query(query_string, metadata=metadata, score=score)
     if columns:
         result = result[list(columns)]
-    print(result.head(limit).to_string())
+    if output is not None:
+        result.to_csv(output, index=False)
+    else:
+        print(result.head(limit).to_string())
 
 
 @click.command()
@@ -85,10 +98,12 @@ def mouse_positon_handler(event, x, y, flags, param):
 @click.command()
 @click.argument("any_file",
                 type=click.Path(dir_okay=False, file_okay=True,
-                                exists=True, readable=True, path_type=Path),
+                                readable=True, path_type=Path),
                 required=True)
+@click.option("--scale", "-s", default=0.4, show_default=True,
+              help="Resize scale of image and structure for display.")
 @click.pass_obj
-def show(ctx: ClickContext, any_file: Path):
+def show(ctx: ClickContext, any_file: Path, scale=0.4):
     """Displays the provided image and layout info when available."""
     pdmx = ctx.pdmx
     with open(pdmx.get_path(any_file, 'layout'), 'r') as f:
@@ -104,7 +119,8 @@ def show(ctx: ClickContext, any_file: Path):
             img_path = pdmx.get_path(any_file, 'png')
         img = cv2.imread(img_path)
         assert img is not None, f"Can't read image {img_path}"
-        print(f"Page {page_index+1}: {len(page.systems)} systems...")
+        print(
+            f"Page {page_index+1}: {page.image_width}x{page.image_height}px {len(page.systems)} systems...")
         for index, system in enumerate(page.systems):
             print(f"\tsystem {index+1}: {len(page.systems[0].staves)} staves.")
         # Renders the page layout on top of the image.
@@ -120,7 +136,6 @@ def show(ctx: ClickContext, any_file: Path):
                 for bar in staff.bars:
                     cv2.line(img, (bar, staff.box.top),
                              (bar, staff.box.bottom), bar_color, 2)
-        scale = 0.4
         (width, height) = tuple(map(lambda x: int(x * scale), img.shape[:2]))
         cv2.imshow("layout", cv2.resize(img, (height, width)))
         cv2.setMouseCallback("layout", mouse_positon_handler)
