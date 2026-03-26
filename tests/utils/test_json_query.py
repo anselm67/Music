@@ -1,16 +1,6 @@
 import unittest
 
-
-def compile_query(path: str):
-    keys = path.split(".")
-    def query(record):
-        val = record
-        for key in keys:
-            if val is None:
-                return None
-            val = val[int(key)] if isinstance(val, list) else val.get(key)
-        return val
-    return query
+from utils import compile_filter, compile_query
 
 
 class TestCompileQuery(unittest.TestCase):
@@ -41,11 +31,13 @@ class TestCompileQuery(unittest.TestCase):
 
     def test_list_index(self):
         q = compile_query("people.0.name")
-        self.assertEqual(q({"people": [{"name": "Alice"}, {"name": "Bob"}]}), "Alice")
+        self.assertEqual(
+            q({"people": [{"name": "Alice"}, {"name": "Bob"}]}), "Alice")
 
     def test_list_index_last(self):
         q = compile_query("people.1.name")
-        self.assertEqual(q({"people": [{"name": "Alice"}, {"name": "Bob"}]}), "Bob")
+        self.assertEqual(
+            q({"people": [{"name": "Alice"}, {"name": "Bob"}]}), "Bob")
 
     def test_integer_value(self):
         q = compile_query("age")
@@ -61,5 +53,69 @@ class TestCompileQuery(unittest.TestCase):
         self.assertEqual([q(r) for r in records], ["Alice", "Bob", "Carol"])
 
 
+class TestCompileFilter(unittest.TestCase):
+
+    def test_str_equality_match(self):
+        f = compile_filter("name == 'Alice'")
+        self.assertTrue(f({"name": "Alice"}))
+
+    def test_str_equality_no_match(self):
+        f = compile_filter("name == 'Alice'")
+        self.assertFalse(f({"name": "Bob"}))
+
+    def test_str_double_quotes(self):
+        f = compile_filter('name == "Alice"')
+        self.assertTrue(f({"name": "Alice"}))
+
+    def test_int_equality(self):
+        f = compile_filter("age == 30")
+        self.assertTrue(f({"age": 30}))
+
+    def test_int_not_equal(self):
+        f = compile_filter("age != 30")
+        self.assertTrue(f({"age": 25}))
+        self.assertFalse(f({"age": 30}))
+
+    def test_int_greater_than(self):
+        f = compile_filter("age > 28")
+        self.assertTrue(f({"age": 30}))
+        self.assertFalse(f({"age": 28}))
+
+    def test_int_greater_than_or_equal(self):
+        f = compile_filter("age >= 30")
+        self.assertTrue(f({"age": 30}))
+        self.assertFalse(f({"age": 29}))
+
+    def test_int_less_than(self):
+        f = compile_filter("age < 30")
+        self.assertTrue(f({"age": 25}))
+        self.assertFalse(f({"age": 30}))
+
+    def test_int_less_than_or_equal(self):
+        f = compile_filter("age <= 30")
+        self.assertTrue(f({"age": 30}))
+        self.assertFalse(f({"age": 31}))
+
+    def test_nested_path(self):
+        f = compile_filter("address.city == 'Paris'")
+        self.assertTrue(f({"address": {"city": "Paris"}}))
+        self.assertFalse(f({"address": {"city": "London"}}))
+
+    def test_missing_value_does_not_raise(self):
+        f = compile_filter("age > 28")
+        self.assertFalse(f({}))
+
+    def test_invalid_expression_raises(self):
+        with self.assertRaises(ValueError):
+            compile_filter("foo.bar.baz")
+
+    def test_compile_once_reuse(self):
+        f = compile_filter("age > 28")
+        records = [{"age": 25}, {"age": 30}, {"age": 35}]
+        self.assertEqual([r for r in records if f(r)],
+                         [{"age": 30}, {"age": 35}])
+
+
 if __name__ == "__main__":
+    unittest.main()
     unittest.main()

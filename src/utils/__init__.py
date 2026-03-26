@@ -1,3 +1,4 @@
+from .json_query import compile_filter, compile_query
 from .utils import (
     current_commit,
     from_json,
@@ -14,4 +15,6 @@ __all__ = [
     "from_json",
     "print_histogram",
     "Walker",
+    "compile_query",
+    "compile_filter"
 ]
