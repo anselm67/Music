@@ -32,6 +32,7 @@ def make_pdmx(tmp_path: Path) -> PDMX:
         tmp_path / kind / Path(*src.relative_to(tmp_path).parts[1:])
     ).with_suffix(PDMX.EXTENSIONS[kind])
     pdmx.relative.side_effect = lambda p: p.relative_to(tmp_path)
+    pdmx.get_err_path.side_effect = lambda p: p.with_suffix('.err')
     return pdmx
 
 
@@ -61,8 +62,8 @@ class TestNewer:
         src = tmp_path / "src.mxl"
         dst = tmp_path / "dst.svg"
         touch(src)
-        from dataset.pdmx_maker import newer
-        assert not newer(src, dst)
+        maker = make_maker(tmp_path)
+        assert not maker.newer(src, dst, check_err_file=False)
 
     def test_dst_older_than_src(self, tmp_path):
         src = tmp_path / "src.mxl"
@@ -70,8 +71,8 @@ class TestNewer:
         now = time.time()
         touch(dst, now - 10)
         touch(src, now)
-        from dataset.pdmx_maker import newer
-        assert not newer(src, dst)
+        maker = make_maker(tmp_path)
+        assert not maker.newer(src, dst, check_err_file=False)
 
     def test_dst_newer_than_src(self, tmp_path):
         src = tmp_path / "src.mxl"
@@ -79,8 +80,8 @@ class TestNewer:
         now = time.time()
         touch(src, now - 10)
         touch(dst, now)
-        from dataset.pdmx_maker import newer
-        assert newer(src, dst)
+        maker = make_maker(tmp_path)
+        assert maker.newer(src, dst, check_err_file=False)
 
 
 # ---------------------------------------------------------------------------
@@ -142,11 +143,10 @@ class TestCollectSvgFiles:
             touch(page)
         assert p.collect_svg_files(svg) == pages
 
-    def test_no_svg_raises(self, tmp_path):
+    def test_no_svg_returns_none(self, tmp_path):
         p = make_maker(tmp_path)
         svg = tmp_path / "svg/1/aa/score.svg"
-        with pytest.raises(ValueError, match="no svg output"):
-            p.collect_svg_files(svg)
+        assert p.collect_svg_files(svg) is None
 
 
 # ---------------------------------------------------------------------------
@@ -178,6 +178,9 @@ class TestShouldRefreshLayout:
         svg = tmp_path / "svg/1/aa/score.svg"
         json_file = tmp_path / "layout/1/aa/score.json"
         touch(svg)
+        err_file = tmp_path / "layout/1/aa/score.err"
+        print(f"HERE THERE {err_file.exists()}")  # should be False
+
         assert p.should_refresh_layout([svg], json_file) is True
 
 

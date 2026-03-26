@@ -110,7 +110,9 @@ class PDMXMaker:
                 else:
                     if not files:
                         logging.error(f"{svg_file}: failed to collect pages.")
-                    return files
+                        return None
+                    else:
+                        return files
             logging.error("Too many pages in score!")
             return None
 
