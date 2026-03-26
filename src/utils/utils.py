@@ -83,6 +83,7 @@ def from_json(cls: type, data: Any):
 def print_histogram(counter: Counter, title: str, width: int = 80):
     print(title)
     max_val = max(counter.values())
+    total = sum(counter.values())
     for key, count in sorted(counter.items()):
         bar = "█" * int(count / max_val * width)
-        print(f"{key:4d} | {bar} {count:,}")
+        print(f"{key:4d} | {bar} {count:,} {count / total:.1%}")
