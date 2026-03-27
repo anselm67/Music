@@ -25,6 +25,13 @@ class Box:
     def right(self) -> int:
         return self.bot_right[0]
 
+    def to_cxcywh(self, image_width: int, image_height: int) -> list[float]:
+        cx = (self.left + self.right) / 2 / image_width
+        cy = (self.top + self.bottom) / 2 / image_height
+        w = (self.right - self.left) / image_width
+        h = (self.bottom - self.top) / image_height
+        return [cx, cy, w, h]
+
 
 @dataclass(frozen=True)
 class Staff:
