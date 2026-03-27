@@ -20,3 +20,5 @@ pdmx query -o subset.cvs 'index==index' --score 'pages.*.staff_count < 16'
 # Displays subset general statistics.
 pdmx --csv subset.csv stats
 ```
+TODO: import imslp from projects/OMR
+TODO: import editor from projects/Staffer or projects/OMR
