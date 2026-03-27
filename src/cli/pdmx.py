@@ -6,6 +6,7 @@ from pathlib import Path
 
 import click
 import cv2
+import torch
 
 from dataset import PDMX, Score
 from utils import print_histogram
@@ -187,6 +188,12 @@ def stats(ctx: ClickContext):
     print(f" Staff count: {stats.staff_count:,}")
     print(f"   Bar count: {stats.bar_count}:,")
 
+    mean = stats.pixel_sum / stats.pixel_count
+    std = torch.sqrt((stats.pixel_sum2 / stats.pixel_count) - mean*mean)
+    print(f"Pixel count: {stats.pixel_count:,}")
+    print(f"       mean: {mean}")
+    print(f"        std: {std}")
+
     print_histogram(stats.system_histo, title="Systems per page:")
     print_histogram(stats.staff_histo, title="Staves per page:")
     print_histogram(stats.width100_histo, title="Page widths:")
@@ -206,4 +213,5 @@ def main():
 
 
 if __name__ == "__main__":
+    main()
     main()
