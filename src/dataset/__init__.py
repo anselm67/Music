@@ -1,6 +1,7 @@
-from .layout import Box, Page, Score, Staff, System
+from .layout import Box, CenteredBox, Page, Score, Staff, System
 from .pdmx import PDMX
 from .pdmx_maker import PDMXMaker
+from .staffer_dataset import StafferDataset
 
 __all__ = [
     "PDMX",
@@ -9,5 +10,7 @@ __all__ = [
     "System",
     "Staff",
     "Score",
-    "PDMXMaker"
+    "PDMXMaker",
+    "CenteredBox",
+    "StafferDataset"
 ]

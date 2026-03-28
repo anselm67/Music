@@ -13,11 +13,11 @@ class Config:
     image_shape: tuple[int, int] = field(init=False)
 
     # Maximums as obtained with the "stats" command.
-    max_width: int = 2100
-    max_height: int = 2970
+    max_width: int = 1024
+    max_height: int = 1449
 
     in_channels: int = 1
-    divider: int = 4
+    divider: float = 1.5
     embed_dim: int = 256                # Also known as D
     mlp_dim: int = 1024
 
@@ -50,7 +50,6 @@ class Config:
             self.scale_to_patch(self.max_height),
             self.scale_to_patch(self.max_width),
         )
-        assert self.patch_size ** 2 == self.embed_dim
         assert self.patch_size ** 2 == self.embed_dim
 
 
