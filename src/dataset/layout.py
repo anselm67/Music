@@ -5,6 +5,12 @@ from utils import from_json
 
 
 @dataclass(frozen=True)
+class NormBox:
+    top_left: tuple[float, float]
+    bot_right: tuple[float, float]
+
+
+@dataclass(frozen=True)
 class Box:
     top_left: tuple[int, int]
     bot_right: tuple[int, int]
@@ -32,6 +38,14 @@ class Box:
         h = (self.bottom - self.top) / image_height
         return [cx, cy, w, h]
 
+    def scale(self, w_scale: float, h_scale: float) -> 'Box':
+        return Box(
+            top_left=(int(self.top_left[0] * w_scale),
+                      int(self.top_left[1] * h_scale)),
+            bot_right=(int(self.bot_right[0] * w_scale),
+                       int(self.bot_right[1] * h_scale)),
+        )
+
 
 @dataclass(frozen=True)
 class Staff:
@@ -53,6 +67,12 @@ class Staff:
     @property
     def right(self) -> int:
         return self.box.right
+
+    def scale(self, w_scale: float, h_scale: float) -> 'Staff':
+        return Staff(
+            box=self.box.scale(w_scale, h_scale),
+            bars=[int(b * w_scale) for b in self.bars]
+        )
 
 
 @dataclass(frozen=True)
@@ -103,6 +123,12 @@ class System:
         obj.pop("box", None)
         return obj
 
+    def scale(self, w_scale: float, h_scale: float) -> 'System':
+        return System(
+            bar_number=self.bar_number,
+            staves=[s.scale(w_scale, h_scale) for s in self.staves]
+        )
+
 
 @dataclass(frozen=True)
 class Page:
@@ -130,6 +156,18 @@ class Page:
     @property
     def bar_count(self):
         return sum(x.bar_count for x in self.systems)
+
+    def resize(self, width: int, height: int) -> 'Page':
+        w_scale = width / self.image_width
+        h_scale = height / self.image_height
+        return Page(
+            page_number=self.page_number,
+            image_width=width,
+            image_height=height,
+            systems=[s.scale(w_scale, h_scale) for s in self.systems],
+            validated=self.validated,
+            image_rotation=self.image_rotation
+        )
 
 
 @dataclass(frozen=True)
@@ -160,6 +198,9 @@ class Score:
             for system in page['systems']:
                 system.pop('box', None)
         return obj
+
+    def resize(self, width: int, height: int) -> 'Score':
+        return Score(self.id, [p.resize(width, height) for p in self.pages])
 
     @staticmethod
     def from_json(obj: Any) -> 'Score':
