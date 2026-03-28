@@ -57,7 +57,7 @@ def render(src_file: Path, dst_file: Path) -> list[Path]:
 
 def svg_to_png_command(svg_file: Path, png_file: Path) -> tuple[Path, list[str]]:
     return rsvgconvert_binary(), [
-        "-f", "png", "-b", "white",
+        "-f", "png", "-b", "white", "--width", "1024",
         "-o", png_file.as_posix(),
         svg_file.as_posix()
     ]
