@@ -68,9 +68,12 @@ class HierarchicalLoss(nn.Module):
         total_loss = torch.tensor(0.0, device=pred_sys_boxes.device)
 
         for i in range(B):
-            # --- System loss ---
+            # TODO Check this out, added to original code.
+            num_gt_staves = (gt_assign[i] != -1).sum().item()
+            num_gt_sys = gt_assign[i][gt_assign[i] != -1].max().item() + 1
+
             sys_pred_idx, sys_gt_idx = hungarian_match(
-                pred_sys_boxes[i], gt_sys_boxes[i])
+                pred_sys_boxes[i], gt_sys_boxes[i][:num_gt_sys])
 
             matched_sys_boxes = pred_sys_boxes[i][sys_pred_idx]
             sys_box_loss = F.l1_loss(
@@ -85,8 +88,9 @@ class HierarchicalLoss(nn.Module):
                 pred_sys_logits[i].squeeze(-1), sys_obj_target)
 
             # --- Stave loss ---
+
             stave_pred_idx, stave_gt_idx = hungarian_match(
-                pred_stave_boxes[i], gt_stave_boxes[i])
+                pred_stave_boxes[i], gt_stave_boxes[i][:num_gt_staves])
 
             matched_stave_boxes = pred_stave_boxes[i][stave_pred_idx]
             stave_box_loss = F.l1_loss(
