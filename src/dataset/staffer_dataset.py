@@ -30,7 +30,7 @@ class StafferDataset(Dataset):
                 interpolation=config.interpolation,
                 antialias=config.antialias),
             v2.ToDtype(torch.float, scale=True),
-            # v2.Normalize(mean=[], std=[]),
+            v2.Normalize(mean=[0.9563435316085815], std=[0.16557540870879858]),
         ])
         # Build flat list of (mxl_path, page_number) pairs
         logging.info("Initializing StafferDataset...")
@@ -56,26 +56,35 @@ class StafferDataset(Dataset):
         return len(self.items)
 
     def __getitem__(self, idx: int) -> tuple[Tensor, Tensor, Tensor, Tensor]:
-        layout_path, png_path, page_number = self.items[idx]
-        score = Score.from_json(json.loads(layout_path.read_text()))
-        page = score.pages[page_number - 1]
+        while True:
+            layout_path, png_path, page_number = self.items[idx]
+            # Attempts to decode this image, or next one when that fails.
+            try:
+                image = decode_image(png_path.as_posix())
+                image = self.transform(image)
+            except Exception as e:
+                mxl_path = self.pdmx.get_path(layout_path, 'mxl')
+                logging.error(f"{mxl_path}: {e}")
+                idx += 1
+                continue
 
-        image = decode_image(png_path.as_posix())
-        image = self.transform(image)
+            # Converts the Score to expected ground truth tensors.
+            score = Score.from_json(json.loads(layout_path.read_text()))
+            page = score.pages[page_number - 1]
 
-        sys_boxes = torch.zeros(self.config.num_system_queries, 4)
-        staff_boxes = torch.zeros(self.config.num_stave_queries, 4)
-        assigns = torch.full(
-            (self.config.num_stave_queries,), -1, dtype=torch.long)
+            sys_boxes = torch.zeros(self.config.num_system_queries, 4)
+            staff_boxes = torch.zeros(self.config.num_stave_queries, 4)
+            assigns = torch.full(
+                (self.config.num_stave_queries,), -1, dtype=torch.long)
 
-        staff_idx = 0
-        for sys_idx, system in enumerate(page.systems):
-            sys_boxes[sys_idx] = torch.tensor(system.box.to_cxcywh(
-                page.image_width, page.image_height))
-            for staff in system.staves:
-                staff_boxes[staff_idx] = torch.tensor(staff.box.to_cxcywh(
+            staff_idx = 0
+            for sys_idx, system in enumerate(page.systems):
+                sys_boxes[sys_idx] = torch.tensor(system.box.to_cxcywh(
                     page.image_width, page.image_height))
-                assigns[staff_idx] = sys_idx
-                staff_idx += 1
+                for staff in system.staves:
+                    staff_boxes[staff_idx] = torch.tensor(staff.box.to_cxcywh(
+                        page.image_width, page.image_height))
+                    assigns[staff_idx] = sys_idx
+                    staff_idx += 1
 
-        return image, sys_boxes, staff_boxes, assigns
+            return image, sys_boxes, staff_boxes, assigns

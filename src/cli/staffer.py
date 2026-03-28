@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import logging
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -55,7 +56,7 @@ def show(ctx: ClickContext):
         ds, num_workers=1, batch_size=ctx.config.batch_size
     )
     for images, syses, staves, assigns in loader:
-        for batch_index in range(ctx.config.batch_size):
+        for batch_index in range(len(images)):
             img, sys, staff, assign = images[batch_index], syses[batch_index], staves[batch_index], assigns[batch_index]
             img = img.squeeze(0).cpu().numpy()
             (height, width) = img.shape
@@ -78,8 +79,45 @@ def show(ctx: ClickContext):
                 return
 
 
+@click.command()
+@click.option("--count", "-c", type=int, default=50000,
+              help="Number of samples to pick to compute the stats.")
+@click.option("--num-workers", type=int, default=8,
+              help="Number of workers for the dataset loader.")
+@click.pass_obj
+def stats(ctx: ClickContext, count: int, num_workers: int):
+    """Computes the mean and std of a subset of images from the dataset.."""
+    ds = StafferDataset(ctx.config, ctx.pdmx)
+    loader = DataLoader[tuple[Tensor, Tensor, Tensor, Tensor]](
+        ds, num_workers=num_workers, batch_size=ctx.config.batch_size
+    )
+    scanned = count
+    pix_sum = 0
+    pix_sum2 = 0
+    pix_count = 0
+    for images, _, _, _ in loader:
+        if count <= 0:
+            break
+        for batch_index in range(len(images)):
+            img = images[batch_index].squeeze(0).cpu().numpy()
+            pix_sum += img.sum()
+            pix_sum2 += (img**2).sum()
+            pix_count += img.shape[0] * img.shape[1]
+            count -= 1
+            if count <= 0:
+                break
+        if count % 100 == 0:
+            logging.info(f"{count} left.")
+    mean = pix_sum / pix_count
+    std = math.sqrt(pix_sum2 / pix_count - mean ** 2)
+    print(f"Scanned {scanned} images.")
+    print(f"mean: {mean}")
+    print(f" std: {std}")
+
+
 cli.add_command(summary)
 cli.add_command(show)
+cli.add_command(stats)
 
 
 def main():
@@ -87,5 +125,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
     main()
