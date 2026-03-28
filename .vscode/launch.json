@@ -17,39 +17,6 @@
             ]
         },
         {
-            "name": "pdmx to-svg",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "cli.pdmx",
-            "console": "integratedTerminal",
-            "python": "${workspaceFolder}/.venv/bin/python",
-            "args": [
-                "to-svg"
-            ]
-        },
-        {
-            "name": "pdmx to-layout",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "cli.pdmx",
-            "console": "integratedTerminal",
-            "python": "${workspaceFolder}/.venv/bin/python",
-            "args": [
-                "to-layout",
-            ]
-        },
-        {
-            "name": "pdmx to-png",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "cli.pdmx",
-            "console": "integratedTerminal",
-            "python": "${workspaceFolder}/.venv/bin/python",
-            "args": [
-                "to-png",
-            ]
-        },
-        {
             "name": "pdmx show",
             "type": "debugpy",
             "request": "launch",
