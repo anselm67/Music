@@ -176,22 +176,22 @@ class DecoderLayer(nn.Module):
 
     def forward(self, sys_q: Tensor, stave_q: Tensor, memory: Tensor) -> tuple[Tensor, Tensor]:
         # System stream
-        sys_q = sys_q + self.sys_self_attn(self.sys_self_attn_norm(
-            sys_q), *([self.sys_self_attn_norm(sys_q)] * 2))[0]
-        sys_q = sys_q + \
-            self.sys_cross_attn(
-                self.sys_cross_attn_norm(sys_q), memory, memory)[0]
+        normed = self.sys_self_attn_norm(sys_q)
+        sys_q = sys_q + self.sys_self_attn(normed, normed, normed)[0]
+
+        query = self.sys_cross_attn_norm(sys_q)
+        sys_q = sys_q + self.sys_cross_attn(query, memory, memory)[0]
         sys_q = sys_q + self.sys_ffn(self.sys_ffn_norm(sys_q))
 
         # Stave stream
-        stave_q = stave_q + self.stave_self_attn(self.stave_self_attn_norm(
-            stave_q), *([self.stave_self_attn_norm(stave_q)] * 2))[0]
-        stave_q = stave_q + \
-            self.stave_cross_attn(
-                self.stave_cross_attn_norm(stave_q), memory, memory)[0]
-        stave_q = stave_q + \
-            self.stave_group_attn(
-                self.stave_group_norm(stave_q), sys_q, sys_q)[0]
+        normed = self.stave_self_attn_norm(stave_q)
+        stave_q = stave_q + self.stave_self_attn(normed, normed, normed)[0]
+
+        query = self.stave_cross_attn_norm(stave_q)
+        stave_q = stave_q + self.stave_cross_attn(query, memory, memory)[0]
+
+        normed = self.stave_group_norm(stave_q)
+        stave_q = stave_q + self.stave_group_attn(normed, sys_q, sys_q)[0]
         stave_q = stave_q + self.stave_ffn(self.stave_ffn_norm(stave_q))
 
         return sys_q, stave_q
