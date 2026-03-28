@@ -59,7 +59,11 @@ class PDMXMaker:
         self.force = force
         self.dry_run = dry_run
 
+    def erred(self, dst_file: Path):
+        return self.pdmx.get_err_path(dst_file).exists()
+
     def newer(self, src_file: Path, dst_file: Path, check_err_file: bool = True) -> bool:
+        # Returns None if a up-to-date err file exists.
         if dst_file.exists():
             return dst_file.stat().st_mtime >= src_file.stat().st_mtime
         elif check_err_file:
@@ -122,6 +126,8 @@ class PDMXMaker:
         svg_file = self.pdmx.get_path(mxl_file, 'svg', mkdirs=True)
         if not self.should_refresh_svg(mxl_file, svg_file):
             logging.debug(f"-> {svg_file}")
+            if not self.erred(svg_file):
+                svg_files = self.collect_svg_files(svg_file)
         else:
             (binary, args) = render_command(mxl_file, svg_file)
             if self.dry_run:
@@ -130,8 +136,8 @@ class PDMXMaker:
                 logging.debug(f"=> {svg_file}")
                 if await self.exec(binary, args) != 0:
                     self.pdmx.touch_err_path(svg_file)
-                    return
-        svg_files = self.collect_svg_files(svg_file)
+                else:
+                    svg_files = self.collect_svg_files(svg_file)
         if svg_files is not None:
             json_file = self.pdmx.get_path(mxl_file, 'layout', mkdirs=True)
             self.queue.put_nowait(SvgLayoutTask(svg_files, json_file))

@@ -184,7 +184,6 @@ def make(ctx: ClickContext, mxl_file: Path | None, force: bool, dry_run: bool):
     # Resolves relative path if needed.
     if mxl_file is not None:
         mxl_file = pdmx.get_path(mxl_file, 'mxl')
-    print(mxl_file)
     pdmx.make(mxl_file, force=force, dry_run=dry_run)
 
 
