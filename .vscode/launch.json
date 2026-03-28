@@ -81,6 +81,17 @@
             "args": [
                 "show",
             ]
+        },
+        {
+            "name": "staffer stats",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "cli.staffer",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "args": [
+                "stats",
+            ]
         }
     ]
 }
