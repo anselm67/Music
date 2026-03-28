@@ -130,8 +130,8 @@ class PDMXMaker:
                 logging.debug(f"=> {svg_file}")
                 if await self.exec(binary, args) != 0:
                     self.pdmx.touch_err_path(svg_file)
-                else:
-                    svg_files = self.collect_svg_files(svg_file)
+                    return
+        svg_files = self.collect_svg_files(svg_file)
         if svg_files is not None:
             json_file = self.pdmx.get_path(mxl_file, 'layout', mkdirs=True)
             self.queue.put_nowait(SvgLayoutTask(svg_files, json_file))
