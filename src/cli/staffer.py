@@ -6,6 +6,7 @@ from pathlib import Path
 
 import click
 import cv2
+import torch
 from torch import Tensor
 from torch.utils.data import DataLoader
 from torchinfo import summary as model_summary
@@ -45,6 +46,26 @@ def summary():
     model = HierarchicalDETR(config)
     model_summary(model, input_size=(config.batch_size,
                   config.in_channels, *config.image_shape))
+
+
+@click.command()
+def check():
+    config = Config()
+    model = HierarchicalDETR(config)
+
+    model.eval()
+    x = torch.randn(config.batch_size, config.in_channels, *config.image_shape)
+    print(f"input:          {x.shape}")
+
+    with torch.no_grad():
+        sys_boxes, sys_logits, stave_boxes, stave_logits, assign_logits = model(
+            x)
+
+    print(f"sys_boxes:      {sys_boxes.shape}")       # (B, 16, 4)
+    print(f"sys_logits:     {sys_logits.shape}")      # (B, 16, 1)
+    print(f"stave_boxes:    {stave_boxes.shape}")     # (B, 16, 4)
+    print(f"stave_logits:   {stave_logits.shape}")    # (B, 16, 1)
+    print(f"assign_logits:  {assign_logits.shape}")   # (B, 16, 16)
 
 
 @click.command()
@@ -116,6 +137,7 @@ def stats(ctx: ClickContext, count: int, num_workers: int):
 
 
 cli.add_command(summary)
+cli.add_command(check)
 cli.add_command(show)
 cli.add_command(stats)
 
@@ -125,4 +147,5 @@ def main():
 
 
 if __name__ == '__main__':
+    main()
     main()
