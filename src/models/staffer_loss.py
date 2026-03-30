@@ -119,16 +119,14 @@ class HierarchicalLoss(nn.Module):
 
     def _assignment_loss(
         self,
-        pred_assign: Tensor,   # (M, N)
+        pred_assign: Tensor,     # (M, N)
         stave_pred_idx: list[int],
         sys_pred_idx: list[int],
-        gt_assign: Tensor,     # (M,) padded with -1
+        gt_assign: Tensor,       # (M,) padded with -1
         num_gt_staves: int,
-        num_gt_sys: int,
     ) -> Tensor:
-        sys_gt_to_pred = {k: sys_pred_idx[k] for k in range(num_gt_sys)}
         remapped = torch.tensor(
-            [sys_gt_to_pred[int(gt_assign[j].item())]
+            [sys_pred_idx[int(gt_assign[j].item())]
              for j in range(num_gt_staves)],
             dtype=torch.long,
             device=pred_assign.device,
@@ -165,8 +163,8 @@ class HierarchicalLoss(nn.Module):
             sorted_stave_boxes = pred_stave_boxes[i][stave_pred_idx]
 
             assign_loss = self._assignment_loss(
-                pred_assign[i], stave_pred_idx, sys_pred_idx, gt_assign[i], num_gt_staves, num_gt_sys,
-            )
+                pred_assign[i], stave_pred_idx, sys_pred_idx, gt_assign[i], num_gt_staves)
+
             containment_loss = self._containment_loss(
                 sorted_sys_boxes, sorted_stave_boxes,
                 gt_assign[i], num_gt_staves, num_gt_sys,
