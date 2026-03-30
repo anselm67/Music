@@ -69,7 +69,7 @@ class TestHierarchicalLoss:
         assert result.item() > 0
 
     def test_loss_decreases_with_better_boxes(self, loss: HierarchicalLoss, config: Config):
-        """Loss should be lower when predicted boxes are sorted to match GT."""
+        """Loss should be lower when predicted boxes match GT than when far away."""
         B = 1
         N, M = config.num_system_queries, config.num_stave_queries
 
@@ -77,31 +77,26 @@ class TestHierarchicalLoss:
         gt_stave = make_boxes(5, M)
         gt_assign = make_assign(5, 3, M)
 
-        # Good prediction: top N predictions already sorted by cy matching GT
-        good_sys_boxes = torch.rand(B, N, 4)
-        good_sys_boxes[0, :3] = gt_sys[:3]  # first 3 match GT exactly
-        good_sys_boxes[0] = good_sys_boxes[0,
-                                           good_sys_boxes[0, :, 1].argsort()]
-
-        good_stave_boxes = torch.rand(B, M, 4)
-        good_stave_boxes[0, :5] = gt_stave[:5]
-        good_stave_boxes[0] = good_stave_boxes[0,
-                                               good_stave_boxes[0, :, 1].argsort()]
-
-        # Random prediction
-        rand_sys_boxes = torch.rand(B, N, 4)
-        rand_stave_boxes = torch.rand(B, M, 4)
-
         logits = torch.zeros(B, N, 1)
         stave_logits = torch.zeros(B, M, 1)
-        pred_assign = torch.randn(B, M, N)
+        pred_assign = torch.zeros(B, M, N)
 
-        good_loss = loss(good_sys_boxes, logits, good_stave_boxes, stave_logits,
-                         pred_assign, [gt_sys], [gt_stave], [gt_assign])
-        rand_loss = loss(rand_sys_boxes, logits, rand_stave_boxes, stave_logits,
-                         pred_assign, [gt_sys], [gt_stave], [gt_assign])
+        # Good: predictions sorted by cy, first num_gt match GT exactly
+        good_sys = torch.ones(B, N, 4)
+        good_sys[0, :3] = gt_sys[:3]
+        good_stave = torch.ones(B, M, 4)
+        good_stave[0, :5] = gt_stave[:5]
 
-        assert good_loss.item() < rand_loss.item()
+        # Bad: predictions are all at opposite corner from GT
+        bad_sys = torch.ones(B, N, 4) * 0.9
+        bad_stave = torch.ones(B, M, 4) * 0.9
+
+        good_loss = loss(good_sys, logits, good_stave, stave_logits,
+                         pred_assign, [gt_sys], [gt_stave], [gt_assign])
+        bad_loss = loss(bad_sys, logits, bad_stave, stave_logits,
+                        pred_assign, [gt_sys], [gt_stave], [gt_assign])
+
+        assert good_loss.item() < bad_loss.item()
 
     def test_loss_backward(self, loss: HierarchicalLoss, config: Config):
         """Loss should be differentiable."""

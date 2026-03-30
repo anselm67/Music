@@ -176,8 +176,5 @@ class HierarchicalLoss(nn.Module):
             total_loss = total_loss + sys_box_loss + sys_giou_loss + sys_obj_loss
             total_loss = total_loss + stave_box_loss + stave_giou_loss + stave_obj_loss
             total_loss = total_loss + assign_loss + containment_loss
-            print(f"sys: {sys_box_loss}, {sys_giou_loss}, {sys_obj_loss}")
-            print(
-                f"stave: {stave_box_loss}, {stave_giou_loss}, {stave_obj_loss}")
-            print(f"assign: {assign_loss}, containment: {containment_loss}")
+
         return total_loss / B
