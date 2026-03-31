@@ -35,7 +35,7 @@ class Config:
     num_stave_queries: int = 16         # Also knwon as M
     num_decoder_layers: int = 4
 
-    batch_size: int = 8
+    batch_size: int = 16
     valid_split: float = 0.95
 
     interpolation: InterpolationMode = InterpolationMode.NEAREST
@@ -43,7 +43,7 @@ class Config:
 
     # Training config.
     sample_count: int = 50_000
-    max_steps: int = 200_000
+    max_steps: int = 25_000
     lr: float = 1e-4
     weight_decay: float = 1e-4
     warmup_steps: int = 1000

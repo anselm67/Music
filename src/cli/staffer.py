@@ -143,10 +143,14 @@ def stats(ctx: ClickContext, count: int, num_workers: int):
 
 @click.command()
 @click.argument("name", type=str)
-@click.option("--max-steps", "-s", type=int, default=200_000)
-@click.option("--sample-count", "-s", type=int, default=50_000)
+@click.option("--max-steps", "-s", type=int, default=25_000,    # B=8, N=50,000 -> 4 epochs
+              help="Number of training steps to run.")
+@click.option("--sample-count", "-c", type=int, default=50_000,
+              help="Number of sample to use from the dataset.")
+@click.option("--hide-progress", "-h", type=bool, is_flag=True, default=False,
+              help="Hide progress report, e.g. to see the logging info.")
 @click.pass_obj
-def train(ctx: ClickContext, name: str, max_steps: int, sample_count: int):
+def train(ctx: ClickContext, name: str, max_steps: int, sample_count: int, hide_progress: bool):
     """Trains the Staffer model.
 
     NAME: sets id/name of the model being trained.
@@ -161,7 +165,7 @@ def train(ctx: ClickContext, name: str, max_steps: int, sample_count: int):
     data_module = StafferDataModule(config, ctx.pdmx)
     model = StafferModule(config)
 
-    logger = CSVLogger("logs", name="staffer", version=config.id_name)
+    logger = CSVLogger(save_dir="logs", name="staffer", version=config.id_name)
 
     callbacks: list[Callback] = [
         ModelCheckpoint(
@@ -179,26 +183,41 @@ def train(ctx: ClickContext, name: str, max_steps: int, sample_count: int):
         ),
     ]
 
-    last_checkpoint = f"checkpoints/{config.id_name}/last.ckpt"
+    # Resume training if we have an existing checkpoint.
+    last_checkpoint: Path | None = Path(
+        f"checkpoints/{config.id_name}/last.ckpt")
+    if last_checkpoint.exists():
+        logging.info(f"Resuming training from {last_checkpoint}")
+    else:
+        last_checkpoint = None
+
     trainer = L.Trainer(
         max_steps=max_steps,
         logger=logger,
         callbacks=callbacks,
         log_every_n_steps=50,
-        val_check_interval=1000,
+        val_check_interval=250,
         precision="16-mixed",
+        enable_progress_bar=not hide_progress
     )
+
+    # Following incantation required to load checkpoints.
+    from torchvision.transforms.functional import InterpolationMode
+    torch.serialization.add_safe_globals([InterpolationMode])
 
     trainer.fit(
         model,
         data_module,
-        ckpt_path=last_checkpoint if Path(last_checkpoint).exists() else None
+        ckpt_path=last_checkpoint
     )
 
 
 @click.argument("name", type=str)
 @click.command()
 def logs(name: str):
+    csv_path = Path(f"logs/staffer/{name}/metrics.csv")
+    if not csv_path.exists():
+        logging.error(f"No csv log {str(csv_path)}, bye !")
     plt.ion()
     fig, (ax_loss, ax_metrics) = plt.subplots(1, 2, figsize=(16, 6))
 
@@ -207,7 +226,6 @@ def logs(name: str):
             plt.close("all")
 
     fig.canvas.mpl_connect('key_press_event', on_key)
-    csv_path = Path(f"logs/staffer/{name}/metrics.csv")
     last_mod = 0
 
     while plt.get_fignums():

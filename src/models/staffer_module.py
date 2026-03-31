@@ -6,9 +6,6 @@ from torch import Tensor
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
 
-
-
-
 from .staffer_loss import HierarchicalLoss, generalized_iou
 from .staffer_model import Config, HierarchicalDETR
 
@@ -52,9 +49,9 @@ class StafferModule(L.LightningModule):
         )
 
         self.log(f"{stage}/loss", loss, prog_bar=True)
-        self.log(f"{stage}/sys_iou", sys_iou, prog_bar=True)
-        self.log(f"{stage}/stave_iou", stave_iou, prog_bar=True)
-        self.log(f"{stage}/containment", containment, prog_bar=True)
+        self.log(f"{stage}/sys_iou", sys_iou)
+        self.log(f"{stage}/stave_iou", stave_iou)
+        self.log(f"{stage}/containment", containment)
 
         return loss
 
@@ -74,6 +71,7 @@ class StafferModule(L.LightningModule):
             matched = pred_boxes[i][:num_gt]
             gt = gt_boxes[i][:num_gt]
             iou = generalized_iou(matched, gt).clamp(min=0).mean()
+            # logging.info(f"raw iou: {iou}")
             ious.append(iou)
         return torch.stack(ious).mean()
 
@@ -102,5 +100,3 @@ class StafferModule(L.LightningModule):
                 "interval": "step",
             }
         }
-
-
