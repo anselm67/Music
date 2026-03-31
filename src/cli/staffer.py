@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
 import logging
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import click
 import cv2
+import lightning as L
+import matplotlib.pyplot as plt
+import pandas as pd
 import torch
+from lightning.pytorch.callbacks import Callback, EarlyStopping, ModelCheckpoint
+from lightning.pytorch.loggers import CSVLogger
 from torch import Tensor
 from torch.utils.data import DataLoader
 from torchinfo import summary as model_summary
 
-from dataset import PDMX, Box, StafferDataset
-from models import Config, HierarchicalDETR
+from dataset import PDMX, Box, StafferDataModule, StafferDataset
+from models import Config, HierarchicalDETR, StafferModule
 
 HOME = Path("/home/anselm/datasets/PDMX")
 
@@ -72,7 +77,7 @@ def check():
 @click.pass_obj
 def show(ctx: ClickContext):
     """Displays random samples from the dataset."""
-    ds = StafferDataset(ctx.config, ctx.pdmx, count=10)
+    ds = StafferDataset(ctx.config, ctx.pdmx, sample_count=10)
     loader = DataLoader[tuple[Tensor, Tensor, Tensor, Tensor]](
         ds, num_workers=1, batch_size=ctx.config.batch_size
     )
@@ -136,16 +141,126 @@ def stats(ctx: ClickContext, count: int, num_workers: int):
     print(f" std: {std}")
 
 
+@click.command()
+@click.argument("name", type=str)
+@click.option("--max-steps", "-s", type=int, default=200_000)
+@click.option("--sample-count", "-s", type=int, default=50_000)
+@click.pass_obj
+def train(ctx: ClickContext, name: str, max_steps: int, sample_count: int):
+    """Trains the Staffer model.
+
+    NAME: sets id/name of the model being trained.
+    """
+    config = replace(
+        ctx.config,
+        id_name=name,
+        sample_count=sample_count,
+        max_steps=max_steps
+    )
+
+    data_module = StafferDataModule(config, ctx.pdmx)
+    model = StafferModule(config)
+
+    logger = CSVLogger("logs", name="staffer", version=config.id_name)
+
+    callbacks: list[Callback] = [
+        ModelCheckpoint(
+            dirpath=f"checkpoints/{config.id_name}",
+            filename="{epoch}-{val/loss:.4f}",
+            monitor="val/loss",
+            mode="min",
+            save_top_k=3,
+            save_last=True
+        ),
+        EarlyStopping(
+            monitor="val/loss",
+            patience=5,
+            mode="min",
+        ),
+    ]
+
+    last_checkpoint = f"checkpoints/{config.id_name}/last.ckpt"
+    trainer = L.Trainer(
+        max_steps=max_steps,
+        logger=logger,
+        callbacks=callbacks,
+        log_every_n_steps=50,
+        val_check_interval=1000,
+        precision="16-mixed",
+    )
+
+    trainer.fit(
+        model,
+        data_module,
+        ckpt_path=last_checkpoint if Path(last_checkpoint).exists() else None
+    )
+
+
+@click.argument("name", type=str)
+@click.command()
+def logs(name: str):
+    plt.ion()
+    fig, (ax_loss, ax_metrics) = plt.subplots(1, 2, figsize=(16, 6))
+
+    def on_key(event):
+        if event.key == 'q':
+            plt.close("all")
+
+    fig.canvas.mpl_connect('key_press_event', on_key)
+    csv_path = Path(f"logs/staffer/{name}/metrics.csv")
+    last_mod = 0
+
+    while plt.get_fignums():
+        mtime = csv_path.stat().st_mtime
+        if mtime != last_mod:
+            last_mod = mtime
+            df = pd.read_csv(csv_path)
+
+            # Train and validation losses.
+            ax_loss.cla()
+            for col, label in [("train/loss", "train"), ("val/loss", "val")]:
+                if col in df.columns:
+                    d = df[["step", col]].dropna()
+                    ax_loss.plot(d["step"], d[col], label=label)
+            ax_loss.set_title("loss")
+            ax_loss.set_xlabel("step")
+            ax_loss.legend()
+
+            # Validation metrics: containment, stave_iou and sys_iou.
+            ax_metrics.cla()
+            for col, label in [
+                ("val/containment", "containment"),
+                ("val/stave_iou", "stave iou"),
+                ("val/sys_iou", "sys iou"),
+            ]:
+                if col in df.columns:
+                    d = df[["step", col]].dropna()
+                    ax_metrics.plot(d["step"], d[col], label=label)
+            ax_metrics.set_title("val metrics")
+            ax_metrics.set_xlabel("step")
+            ax_metrics.legend()
+
+            fig.tight_layout()
+            fig.canvas.draw()
+
+        plt.pause(5)
+    print("Bye!")
+
+
 cli.add_command(summary)
 cli.add_command(check)
 cli.add_command(show)
 cli.add_command(stats)
+cli.add_command(train)
+cli.add_command(logs)
 
 
 def main():
+    torch.set_float32_matmul_precision("high")
     cli()
 
 
 if __name__ == '__main__':
+    main()
     main()
     main()

@@ -1,6 +1,6 @@
 """A model to computes the layout of a page of sheet music.
 """
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 import torch.nn.functional as F
 from torch import Tensor, nn, randn
@@ -36,10 +36,17 @@ class Config:
     num_decoder_layers: int = 4
 
     batch_size: int = 8
-    valid_split: float = 0.8
+    valid_split: float = 0.95
 
     interpolation: InterpolationMode = InterpolationMode.NEAREST
     antialias: bool = False
+
+    # Training config.
+    sample_count: int = 50_000
+    max_steps: int = 200_000
+    lr: float = 1e-4
+    weight_decay: float = 1e-4
+    warmup_steps: int = 1000
 
     def scale_to_patch(self, value: int) -> int:
         ret = value // self.divider
@@ -51,6 +58,11 @@ class Config:
             self.scale_to_patch(self.max_width),
         )
         assert self.patch_size ** 2 == self.embed_dim
+
+    def asdict(self):
+        obj = asdict(self)
+        obj.pop("image_shape")
+        return obj
 
 
 class PatchEmbedding(nn.Module):

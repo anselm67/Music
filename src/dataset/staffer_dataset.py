@@ -13,14 +13,14 @@ from models import Config
 
 
 class StafferDataset(Dataset):
-    config: Config
+
     pdmx: PDMX
     # layout path, png path, page number
     items: list[tuple[Path, Path, int]]
 
     transform: v2.Transform
 
-    def __init__(self, config: Config, pdmx: PDMX, count: int = -1):
+    def __init__(self, config: Config, pdmx: PDMX, sample_count: int = -1):
         self.config = config
         self.pdmx = pdmx
         self.transform = v2.Compose([
@@ -30,6 +30,7 @@ class StafferDataset(Dataset):
                 interpolation=config.interpolation,
                 antialias=config.antialias),
             v2.ToDtype(torch.float, scale=True),
+            # Values from running: staffer stats
             v2.Normalize(mean=[0.9563435316085815], std=[0.16557540870879858]),
         ])
         # Build flat list of (mxl_path, page_number) pairs
@@ -46,9 +47,9 @@ class StafferDataset(Dataset):
                 else:
                     png_file = pdmx.get_path(mxl_file, 'png')
                 self.items.append((layout_file, png_file, page.page_number))
-            if count > 0:
-                count -= 1
-                if count <= 0:
+            if sample_count > 0:
+                sample_count -= 1
+                if sample_count <= 0:
                     break
         logging.info(f"\tStafferDataset: {len(self.items)} samples.")
 

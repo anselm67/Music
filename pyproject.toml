@@ -7,6 +7,8 @@ requires-python = ">=3.13"
 dependencies = [
     "aiofiles>=25.1.0",
     "click>=8.3.1",
+    "lightning>=2.6.1",
+    "matplotlib>=3.10.8",
     "numpy>=2.4.3",
     "opencv-python>=4.13.0.92",
     "pandas>=3.0.1",
