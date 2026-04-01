@@ -79,7 +79,7 @@ def check():
 @click.pass_obj
 def show(ctx: ClickContext):
     """Displays random samples from the dataset."""
-    ds = StafferDataset(ctx.config, ctx.pdmx, sample_count=10)
+    ds = StafferDataset(ctx.config, ctx.pdmx, count=10)
     loader = DataLoader[tuple[Tensor, Tensor, Tensor, Tensor]](
         ds, num_workers=1, batch_size=ctx.config.batch_size
     )
@@ -145,34 +145,38 @@ def stats(ctx: ClickContext, count: int, num_workers: int):
 
 @click.command()
 @click.argument("name", type=str)
-@click.option("--max-steps", "-s", type=int, default=25_000,    # B=8, N=50,000 -> 4 epochs
-              help="Number of training steps to run.")
-@click.option("--sample-count", "-c", type=int, default=50_000,
-              help="Number of sample to use from the dataset.")
 @click.option("--hide-progress", "-h", type=bool, is_flag=True, default=False,
               help="Hide progress report, e.g. to see the logging info.")
+@click.option("--early-stopping", "-s", type=bool, is_flag=True, default=False,
+              help="Enable early stopping.")
 @click.pass_obj
-def train(ctx: ClickContext, name: str, max_steps: int, sample_count: int, hide_progress: bool):
+def train(ctx: ClickContext,
+          name: str,
+          hide_progress: bool,
+          early_stopping: bool):
     """Trains the Staffer model.
 
     NAME: sets id/name of the model being trained.
     """
+    VAL_CHECK_INTERVAL = 0.001
+    # One full epoch of no changes.
+    PATIENCE = int(1 / VAL_CHECK_INTERVAL)
     config = replace(
         ctx.config,
         id_name=name,
-        sample_count=sample_count,
-        max_steps=max_steps
     )
 
-    early_stopping = EarlyStopping(
-        monitor="val/loss",
-        patience=5,
-        mode="min",
-    )
+    early_stopping_callback = None
+    if early_stopping:
+        early_stopping_callback = EarlyStopping(
+            monitor="val/loss",
+            patience=PATIENCE,
+            mode="min",
+        )
 
-    callbacks: list[Callback] = [
+    callbacks: list[Callback] = [callback for callback in [
         ModelCheckpoint(
-            dirpath=f"checkpoints/{config.id_name}",
+            dirpath=f"checkpoints/staffer/{config.id_name}",
             filename="{epoch}-{val/loss:.4f}",
             monitor="val/loss",
             mode="min",
@@ -181,8 +185,8 @@ def train(ctx: ClickContext, name: str, max_steps: int, sample_count: int, hide_
             save_on_train_epoch_end=True,
             save_on_exception=True
         ),
-        early_stopping
-    ]
+        early_stopping_callback
+    ] if callback is not None]
 
     # Sets up the logger.
     logger_path = Path("logs/staffer") / config.id_name / "metrics.csv"
@@ -207,12 +211,13 @@ def train(ctx: ClickContext, name: str, max_steps: int, sample_count: int, hide_
         last_checkpoint = None
 
     trainer = L.Trainer(
-        max_steps=max_steps,
+        max_steps=config.max_steps,
         logger=logger,
         callbacks=callbacks,
-        log_every_n_steps=50,
+        log_every_n_steps=100,
         val_check_interval=250,
         precision="16-mixed",
+        enable_model_summary=False,
         enable_progress_bar=not hide_progress
     )
 
@@ -226,8 +231,13 @@ def train(ctx: ClickContext, name: str, max_steps: int, sample_count: int, hide_
         ckpt_path=last_checkpoint
     )
 
-    if early_stopping.stopping_reason != EarlyStoppingReason.NOT_STOPPED:
-        logging.info(f"Early stopping: {early_stopping.stopping_reason}")
+    if early_stopping_callback is not None and early_stopping_callback.stopping_reason != EarlyStoppingReason.NOT_STOPPED:
+        logging.info(
+            f"Early stopping: {early_stopping_callback.stopping_reason}")
+        logging.info(
+            f"       message: {early_stopping_callback.stopping_reason_message}")
+        logging.info(
+            f"         epoch: {early_stopping_callback.stopped_epoch}")
 
 
 @click.argument("name", type=str)
