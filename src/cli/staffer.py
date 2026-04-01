@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import logging
 import math
+import shutil
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -11,6 +12,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import torch
 from lightning.pytorch.callbacks import Callback, EarlyStopping, ModelCheckpoint
+from lightning.pytorch.callbacks.early_stopping import EarlyStoppingReason
 from lightning.pytorch.loggers import CSVLogger
 from torch import Tensor
 from torch.utils.data import DataLoader
@@ -162,10 +164,11 @@ def train(ctx: ClickContext, name: str, max_steps: int, sample_count: int, hide_
         max_steps=max_steps
     )
 
-    data_module = StafferDataModule(config, ctx.pdmx)
-    model = StafferModule(config)
-
-    logger = CSVLogger(save_dir="logs", name="staffer", version=config.id_name)
+    early_stopping = EarlyStopping(
+        monitor="val/loss",
+        patience=5,
+        mode="min",
+    )
 
     callbacks: list[Callback] = [
         ModelCheckpoint(
@@ -174,14 +177,26 @@ def train(ctx: ClickContext, name: str, max_steps: int, sample_count: int, hide_
             monitor="val/loss",
             mode="min",
             save_top_k=3,
-            save_last=True
+            save_last=True,
+            save_on_train_epoch_end=True,
+            save_on_exception=True
         ),
-        EarlyStopping(
-            monitor="val/loss",
-            patience=5,
-            mode="min",
-        ),
+        early_stopping
     ]
+
+    # Sets up the logger.
+    logger_path = Path("logs/staffer") / config.id_name / "metrics.csv"
+    if logger_path.exists():
+        all_path = logger_path.with_stem("cumulated_metrics")
+        if all_path.exists():
+            with all_path.open("a+") as fout:
+                with logger_path.open('r') as fin:
+                    fout.write(fin.read())
+        else:
+            shutil.copy(logger_path, all_path)
+        logger_path.unlink()
+
+    logger = CSVLogger(save_dir="logs", name="staffer", version=config.id_name)
 
     # Resume training if we have an existing checkpoint.
     last_checkpoint: Path | None = Path(
@@ -206,10 +221,13 @@ def train(ctx: ClickContext, name: str, max_steps: int, sample_count: int, hide_
     torch.serialization.add_safe_globals([InterpolationMode])
 
     trainer.fit(
-        model,
-        data_module,
+        StafferModule(config),
+        StafferDataModule(config, ctx.pdmx),
         ckpt_path=last_checkpoint
     )
+
+    if early_stopping.stopping_reason != EarlyStoppingReason.NOT_STOPPED:
+        logging.info(f"Early stopping: {early_stopping.stopping_reason}")
 
 
 @click.argument("name", type=str)
@@ -218,6 +236,11 @@ def logs(name: str):
     csv_path = Path(f"logs/staffer/{name}/metrics.csv")
     if not csv_path.exists():
         logging.error(f"No csv log {str(csv_path)}, bye !")
+    all_path = csv_path.with_stem("cumulated_metrics")
+    all_df = None
+    if all_path.exists():
+        all_df = pd.read_csv(all_path)
+
     plt.ion()
     fig, (ax_loss, ax_metrics) = plt.subplots(1, 2, figsize=(16, 6))
 
@@ -232,7 +255,9 @@ def logs(name: str):
         mtime = csv_path.stat().st_mtime
         if mtime != last_mod:
             last_mod = mtime
-            df = pd.read_csv(csv_path)
+
+            df = pd.read_csv(csv_path) if all_df is None else pd.concat(
+                [all_df, pd.read_csv(csv_path)])
 
             # Train and validation losses.
             ax_loss.cla()
@@ -280,5 +305,6 @@ def main():
 
 if __name__ == '__main__':
     main()
-    main()
-    main()
+
+# End of file
+# End of file
