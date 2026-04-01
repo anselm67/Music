@@ -92,6 +92,18 @@
             "args": [
                 "stats",
             ]
+        },
+        {
+            "name": "staffer train",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "cli.staffer",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "args": [
+                "train",
+                "batch16"
+            ]
         }
     ]
 }
