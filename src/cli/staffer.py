@@ -4,6 +4,7 @@ import math
 import shutil
 from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import Any
 
 import click
 import cv2
@@ -240,9 +241,7 @@ def train(ctx: ClickContext,
             f"         epoch: {early_stopping_callback.stopped_epoch}")
 
 
-@click.argument("name", type=str)
-@click.command()
-def logs(name: str):
+def plot_one(ax_loss: Any, ax_metrics: Any, name: str) -> None:
     csv_path = Path(f"logs/staffer/{name}/metrics.csv")
     if not csv_path.exists():
         logging.error(f"No csv log {str(csv_path)}, bye !")
@@ -250,6 +249,38 @@ def logs(name: str):
     all_df = None
     if all_path.exists():
         all_df = pd.read_csv(all_path)
+
+    df = pd.read_csv(csv_path) if all_df is None else pd.concat(
+        [all_df, pd.read_csv(csv_path)])
+
+    # Train and validation losses.
+    for col, label in [("train/loss", f"{name}:train"), ("val/loss", f"{name}:val")]:
+        if col in df.columns:
+            d = df[["step", col]].dropna()
+            ax_loss.plot(d["step"], d[col], label=label)
+    ax_loss.set_title("loss")
+    ax_loss.set_xlabel("step")
+    ax_loss.legend()
+
+    # Validation metrics: containment, stave_iou and sys_iou.
+    for col, label in [
+        ("val/containment", f"{name}:containment"),
+        ("val/stave_iou", f"{name}:stave iou"),
+        ("val/sys_iou", f"{name}:sys iou"),
+    ]:
+        if col in df.columns:
+            d = df[["step", col]].dropna()
+            ax_metrics.plot(d["step"], d[col], label=label)
+    ax_metrics.set_title("val metrics")
+    ax_metrics.set_xlabel("step")
+    ax_metrics.legend()
+
+
+@click.command()
+@click.argument("names", type=str, nargs=-1)
+def logs(names: tuple[str]):
+    (name, *others) = names
+    csv_path = Path(f"logs/staffer/{name}/metrics.csv")
 
     plt.ion()
     fig, (ax_loss, ax_metrics) = plt.subplots(1, 2, figsize=(16, 6))
@@ -266,29 +297,16 @@ def logs(name: str):
         if mtime != last_mod:
             last_mod = mtime
 
-            df = pd.read_csv(csv_path) if all_df is None else pd.concat(
-                [all_df, pd.read_csv(csv_path)])
-
-            # Train and validation losses.
             ax_loss.cla()
-            for col, label in [("train/loss", "train"), ("val/loss", "val")]:
-                if col in df.columns:
-                    d = df[["step", col]].dropna()
-                    ax_loss.plot(d["step"], d[col], label=label)
+            ax_metrics.cla()
+            plot_one(ax_loss, ax_metrics, name)
+            for other in others:
+                plot_one(ax_loss, ax_metrics, other)
+
             ax_loss.set_title("loss")
             ax_loss.set_xlabel("step")
             ax_loss.legend()
 
-            # Validation metrics: containment, stave_iou and sys_iou.
-            ax_metrics.cla()
-            for col, label in [
-                ("val/containment", "containment"),
-                ("val/stave_iou", "stave iou"),
-                ("val/sys_iou", "sys iou"),
-            ]:
-                if col in df.columns:
-                    d = df[["step", col]].dropna()
-                    ax_metrics.plot(d["step"], d[col], label=label)
             ax_metrics.set_title("val metrics")
             ax_metrics.set_xlabel("step")
             ax_metrics.legend()
@@ -316,5 +334,4 @@ def main():
 if __name__ == '__main__':
     main()
 
-# End of file
-# End of file
+# vscode - End of file
