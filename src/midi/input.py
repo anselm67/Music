@@ -1,3 +1,5 @@
+"""Midi stream parser.
+"""
 import array
 from abc import ABC, abstractmethod
 from typing import Optional
@@ -36,8 +38,7 @@ class MidiInput(ABC):
     def debug(self, start_off: int = 5, end_off: int = 5):
         start = max(0, self.pos - start_off)
         end = min(self.pos + end_off, len(self.buf))
-        print(''.join([f"{
-            hex(self.buf[pos])} " for pos in range(start, end)]))
+        print(''.join([f"{hex(self.buf[pos])} " for pos in range(start, end)]))
 
     def parse(self):
         self.decode_header()

@@ -1,3 +1,5 @@
+"""Midi stream output generation.
+"""
 import array
 from math import log2
 from pathlib import Path

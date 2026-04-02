@@ -1,3 +1,5 @@
+"""Typings for the midi package.
+"""
 # https://www.music.mcgill.ca/~ich/classes/mumt306/StandardMIDIfileformat.html
 
 import array
