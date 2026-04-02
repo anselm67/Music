@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+"""CLI to manipulate kern files.
+"""
 import logging
 from dataclasses import dataclass
 from pathlib import Path

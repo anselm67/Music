@@ -104,6 +104,19 @@
                 "train",
                 "testing"
             ]
+        },
+        {
+            "name": "staffer predict",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "cli.staffer",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "args": [
+                "predict",
+                "epoch4x2",
+                "/home/anselm/datasets/PDMX/png/1/11/Qmbb98pzePiuBgWkaiftdheCqa4PVer6PMo3nsspnfz8ub.png"
+            ]
         }
     ]
 }

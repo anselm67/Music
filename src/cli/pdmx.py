@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""Tool to make and manage the music dataset from PDMX.
+
+PDMX Main repo is https://zenodo.org/records/14648209
+
+"""
 import json
 import logging
 from dataclasses import dataclass
@@ -43,7 +48,8 @@ def cli(ctx, home: Path, csv: str, log_level: str):
               help="Metadata query as a json filter.")
 @click.option("--score", "-s", type=str, default=None,
               help="Score query as a json filter.")
-@click.option("--columns", "-c", multiple=True, help="Columns to display")
+@click.option("--columns", "-c", multiple=True,
+              help="Names of columns to display")
 @click.option("--limit", "-n", default=-1, show_default=True,
               help="Limit output to this many rows.")
 @click.option("--output", "-o",
@@ -52,7 +58,11 @@ def cli(ctx, home: Path, csv: str, log_level: str):
               help="Save the filtered set to the given output file.")
 @click.pass_obj
 def query(ctx: ClickContext, query_string: str, metadata: str | None, score: str | None, columns: tuple[str], limit: int, output: Path | None):
-    """Query the underlying PDMX.csv database as a DataFrame."""
+    """Query the underlying PDMX.csv database as a DataFrame.
+
+    Args:
+        query_string: The base panda query to run.
+    """
     result = ctx.pdmx.query(query_string, metadata=metadata, score=score)
     if columns:
         result = result[list(columns)]
@@ -82,9 +92,14 @@ def render(mxl_file: Path, output: Path):
                                 exists=True, readable=True, path_type=Path),
                 required=True)
 @click.option("--output", "-o",
-              type=click.Path(dir_okay=False, file_okay=True, path_type=Path))
+              type=click.Path(dir_okay=False, file_okay=True, path_type=Path),
+              help="Output file, defaults to the mxl file with .krn extension.")
 def from_mxl(mxl_file: Path, output: Path):
-    """Converts ab mxl file into a kern file."""
+    """Converts ab mxl file into a kern file.
+
+    Args:
+        mxl_file: The mxl file to convert to kern.
+    """
     output = output or mxl_file.with_suffix(".krn")
     mxl_to_kern(mxl_file, output)
     print(f"Output written to {output}.")
@@ -96,17 +111,21 @@ def mouse_positon_handler(event, x, y, flags, param):
 
 
 @click.command()
-@click.argument("any_file",
+@click.argument("any_path",
                 type=click.Path(dir_okay=False, file_okay=True,
                                 readable=True, path_type=Path),
                 required=True)
 @click.option("--scale", "-s", default=0.8, show_default=True,
               help="Resize scale of image and structure for display.")
 @click.pass_obj
-def show(ctx: ClickContext, any_file: Path, scale: float):
-    """Displays the provided image and layout info when available."""
+def show(ctx: ClickContext, any_path: Path, scale: float):
+    """Displays the provided image and layout info when available.
+
+    Args:
+        any_path: Any file that refers to a PDMX item, e.g. mxl path.
+    """
     pdmx = ctx.pdmx
-    with open(pdmx.get_path(any_file, 'layout'), 'r') as f:
+    with open(pdmx.get_path(any_path, 'layout'), 'r') as f:
         obj = json.load(f)
     score = Score.from_json(obj)
 
@@ -115,9 +134,9 @@ def show(ctx: ClickContext, any_file: Path, scale: float):
         page = score.pages[page_index]
         # Loads the page image.
         if score.page_count > 1:
-            img_path = pdmx.get_page_path(any_file, 'png', page.page_number)
+            img_path = pdmx.get_page_path(any_path, 'png', page.page_number)
         else:
-            img_path = pdmx.get_path(any_file, 'png')
+            img_path = pdmx.get_path(any_path, 'png')
         img = cv2.imread(img_path)
         assert img is not None, f"Can't load image {img_path}"
 
@@ -179,6 +198,9 @@ def make(ctx: ClickContext, mxl_file: Path | None, force: bool, dry_run: bool):
     - Verovio rendering of the mxl file as a set of svg files - one per page.
     - For each svg file, the corresponding png file.
     - For each mxl file, it's layout infos as page, system, staves and bars.
+
+    Args:
+        mxl_file: Optional, only item to rebuild when provided as an mxl path.
     """
     pdmx = ctx.pdmx
     # Resolves relative path if needed.
