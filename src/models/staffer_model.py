@@ -6,10 +6,13 @@ import torch.nn.functional as F
 from torch import Tensor, nn, randn
 from torchvision.transforms import InterpolationMode
 
+from utils import current_commit
+
 
 @dataclass
 class Config:
     id_name: str = "default"
+    git_hash: str = current_commit()
     image_shape: tuple[int, int] = field(init=False)
 
     # Maximums as obtained with the "stats" command.
@@ -46,7 +49,7 @@ class Config:
     lr: float = 1e-4
     weight_decay: float = 1e-4
     warmup_steps: int = 1000
-    box_loss_multiplier: int = 3
+    box_loss_multiplier: int = 2
 
     def scale_to_patch(self, value: int) -> int:
         ret = value // self.divider
@@ -271,5 +274,7 @@ class HierarchicalDETR(nn.Module):
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         memory = self.backbone(x)           # (B, num_patches, D)
         sys_feats, stave_feats = self.decoder(memory)  # (B, N, D), (B, M, D)
+        return self.heads(sys_feats, stave_feats)
+        # returns: sys_boxes, sys_logits, stave_boxes, stave_logits, assign_logits
         return self.heads(sys_feats, stave_feats)
         # returns: sys_boxes, sys_logits, stave_boxes, stave_logits, assign_logits
