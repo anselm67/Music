@@ -1,3 +1,4 @@
+"""Helpers to launch verovio and rsvg-convert sub-processes."""
 import subprocess
 from pathlib import Path
 

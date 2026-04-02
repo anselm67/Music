@@ -1,3 +1,4 @@
+"""Finding the verovio and rsvg-convert binaries."""
 import shutil
 from pathlib import Path
 
