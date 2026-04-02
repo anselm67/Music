@@ -40,6 +40,8 @@ class ClickContext:
               type=click.Choice(["DEBUG", "INFO", "WARNING",
                                 "ERROR"], case_sensitive=False),
               help="Select a logging level.")
+@click.option("--log-file", type=click.Path(file_okay=True, writable=True, path_type=Path),
+              help="Name of staffer's log file.")
 @click.option("--home", "-h", type=click.Path(dir_okay=True, file_okay=False,
                                               exists=True, readable=True,
                                               path_type=Path),
@@ -48,8 +50,13 @@ class ClickContext:
 @click.option("--csv", default="Staff16.csv", show_default=True,
               help="Name of the .csv master file.")
 @click.pass_context
-def cli(ctx, log_level: str, home: Path, csv: str):
-    logging.basicConfig(level=getattr(logging, log_level.upper()))
+def cli(ctx, log_level: str, log_file: None | Path, home: Path, csv: str):
+    logging.basicConfig(
+        level=getattr(logging, log_level.upper()),
+        filename=log_file,
+        format="%(asctime)s | %(levelname)s | %(module)s.%(funcName)s:%(lineno)d | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    )
     pdmx = PDMX(home, csv)
     ctx.obj = ClickContext(Config(), home, pdmx)
 
