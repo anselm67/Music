@@ -1,3 +1,5 @@
+"""Kern parser.
+"""
 # https://www.humdrum.org/guide/
 # Formal syntax: https://www.humdrum.org/guide/ch05/
 # Note tokens: https://www.humdrum.org/rep/kern/

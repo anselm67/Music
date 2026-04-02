@@ -1,10 +1,12 @@
-from abc import ABC, abstractmethod
+"""Converts a kern file to a playable midi file.
+"""
+
 from collections import deque
 from pathlib import Path
 from typing import cast
 
 from kern.parser import Parser
-from kern.typing import Chord, Duration, Meter, Note, Rest, Token
+from kern.typing import Chord, Duration, Note, Rest, Token
 from midi import Channel, MidiOutput
 from midi import Pitch as MidiPitch
 from midi import Velocity

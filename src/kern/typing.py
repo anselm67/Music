@@ -1,3 +1,5 @@
+"""Types for the kern module.
+"""
 import re
 from dataclasses import dataclass
 from enum import Enum

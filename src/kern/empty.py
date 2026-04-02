@@ -1,3 +1,5 @@
+"""Base empy handle class for the Humdrum Kern parser.
+"""
 from typing import List, Optional, Tuple
 
 from kern.parser import Parser

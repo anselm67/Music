@@ -1,3 +1,5 @@
+"""Parses a Kern _token_ file to align it with bar numbers to a pdf/png score.
+"""
 import re
 from pathlib import Path
 from typing import Optional
