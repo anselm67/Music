@@ -1,3 +1,7 @@
+"""Computes various statistics on the maked PDMX dataset.
+
+Statistics are collected into a PDMXStats instance.
+"""
 import json
 import logging
 from asyncio import Queue, QueueEmpty, TaskGroup, run

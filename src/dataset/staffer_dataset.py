@@ -1,3 +1,5 @@
+"""Torch Dataset for training models against the PDMX dataset.
+"""
 import json
 import logging
 from pathlib import Path

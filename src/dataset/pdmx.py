@@ -1,3 +1,9 @@
+"""Main class for accessing the PDMX dataset.
+
+This class manages tghe patgh of files within a PDMX dataset, in addition:
+- It generates the files needed for training models,
+- It can computes various statistics about the underlying dataset.
+"""
 import json
 import os
 from pathlib import Path

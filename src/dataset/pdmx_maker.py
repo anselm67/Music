@@ -1,3 +1,11 @@
+"""Generates the training dataset from the PDMX dataset by generating various files.
+
+From a PDMX xxx.mxl file, this class will generate:
+- The kern file as krn/<path>/xxx.krn
+- The rendered sheet music as an svg file cvg/<path>/xxx.svg
+- A set of png/<path>/xxx_ddd.png images, one per page of the score.
+- A layout file layout/<path>/xxx.json describing the score layout info.
+"""
 import json
 import logging
 from asyncio import (

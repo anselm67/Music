@@ -1,3 +1,5 @@
+"""Defines the dataclass hierarchy for encoding score layout information.
+"""
 from dataclasses import asdict, dataclass, field
 from typing import Any, cast
 
