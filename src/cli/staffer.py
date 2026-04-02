@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import logging
 import math
+import random
 import shutil
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -36,11 +37,14 @@ class ClickContext:
 
 @click.group()
 @click.option("--log-level", default="INFO",
-              type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"], case_sensitive=False))
+              type=click.Choice(["DEBUG", "INFO", "WARNING",
+                                "ERROR"], case_sensitive=False),
+              help="Select a logging level.")
 @click.option("--home", "-h", type=click.Path(dir_okay=True, file_okay=False,
                                               exists=True, readable=True,
                                               path_type=Path),
-              default=HOME, show_default=True)
+              default=HOME, show_default=True,
+              help="Root directory of the PDMX dataset.")
 @click.option("--csv", default="Staff16.csv", show_default=True,
               help="Name of the .csv master file.")
 @click.pass_context
@@ -52,6 +56,7 @@ def cli(ctx, log_level: str, home: Path, csv: str):
 
 @click.command()
 def summary():
+    """Displays a nice summary of the underlying HierarchicalDETR model."""
     config = Config()
     model = HierarchicalDETR(config)
     model_summary(model, input_size=(config.batch_size,
@@ -60,6 +65,7 @@ def summary():
 
 @click.command()
 def check():
+    """Checks the model input / output dimensions."""
     config = Config()
     model = HierarchicalDETR(config)
 
@@ -79,35 +85,35 @@ def check():
 
 
 @click.command()
+@click.option("--count", "-c", type=int, default=50_000,
+              help="Number of samples to pick to from, -1 for all.")
 @click.pass_obj
-def show(ctx: ClickContext):
+def show(ctx: ClickContext, count: int):
     """Displays random samples from the dataset."""
-    ds = StafferDataset(ctx.config, ctx.pdmx, count=10)
-    loader = DataLoader[tuple[Tensor, Tensor, Tensor, Tensor]](
-        ds, num_workers=1, batch_size=ctx.config.batch_size
-    )
-    for images, syses, staves, assigns in loader:
-        for batch_index in range(len(images)):
-            img, sys, staff, assign = images[batch_index], syses[batch_index], staves[batch_index], assigns[batch_index]
-            img = img.squeeze(0).cpu().numpy()
-            (height, width) = img.shape
-            # Try to make sense of the ground truth data.
-            for sys_index in range(sys.shape[0]):
-                cx, cy, w, h = sys[sys_index]
-                box = Box.from_cxcywh((width, height), cx, cy, w, h)
-                cv2.rectangle(img, box.top_left, box.bot_right, 0, 2)
-            for staff_index in range(assign.shape[0]):
-                if assign[staff_index] < 0:
-                    break
-                cx, cy, w, h = staff[staff_index]
-                box = Box.from_cxcywh((width, height), cx, cy, w, h)
-                cv2.rectangle(img, box.top_left, box.bot_right, 0, 2)
-            print(f"Image size: {img.shape}")
-            print(f"    Assign: {assign}")
-            cv2.imshow("Page", img)
+    dataset = StafferDataset(ctx.config, ctx.pdmx, count=count)
+    while True:
+        index = random.randint(0, len(dataset) - 1)
+        img, sys, staff, assign = dataset[index]
+        img = img.squeeze(0).cpu().numpy()
+        img = np.stack([img] * 3, axis=-1) * 255
+        width_height = img.shape[1], img.shape[0]
+        # Try to make sense of the ground truth data.
+        for sys_index in range(sys.shape[0]):
+            cx, cy, w, h = tuple(map(lambda x: x.item(), sys[sys_index]))
+            box = Box.from_cxcywh(width_height, cx, cy, w, h)
+            cv2.rectangle(img, box.top_left, box.bot_right, (255, 0, 0), 2)
+        for staff_index in range(assign.shape[0]):
+            if assign[staff_index] < 0:
+                break
+            cx, cy, w, h = tuple(map(lambda x: x.item(), staff[staff_index]))
+            box = Box.from_cxcywh(width_height, cx, cy, w, h)
+            cv2.rectangle(img, box.top_left, box.bot_right, (0, 0, 255), 1)
+        print(f"Image size: {img.shape}")
+        print(f"    Assign: {assign}")
+        cv2.imshow("Page", img)
 
-            if cv2.waitKey(0) == ord('q'):
-                return
+        if cv2.waitKey(0) == ord('q'):
+            return
 
 
 @click.command()
@@ -334,45 +340,52 @@ def unbox(size: tuple[int, int], t: Tensor) -> Box:
 
 @click.command()
 @click.argument("name", type=str)
-@click.argument("img_path", type=click.Path(file_okay=True,
-                                            exists=True, readable=True,
-                                            path_type=Path))
+@click.argument("img_paths", nargs=-1,
+                type=click.Path(file_okay=True,
+                                exists=True, readable=True,
+                                path_type=Path))
 @click.pass_obj
-def predict(ctx: ClickContext, name: str, img_path: Path) -> None:
+def predict(ctx: ClickContext, name: str, img_paths: tuple[Path]) -> None:
     ckpt_path = Path("checkpoints") / "staffer" / name / "last.ckpt"
     ctx.config = config_from_checkpoint(ckpt_path)
     dataset = StafferDataset(ctx.config, ctx.pdmx, count=0)
     model = StafferModule.load_from_checkpoint(
         ckpt_path, config=ctx.config, weights_only=False)
-    img = decode_image(img_path.as_posix())
-    img = dataset.transform(img).cuda()
-    (
-        pred_sys_boxes, pred_sys_logits,
-        pred_stave_boxes, pred_stave_logits,
-        pred_assign                             # (stave_query, system_query)
-    ) = tuple(map(lambda t: t.squeeze(0), model.forward(img.unsqueeze(0))))
+    model.eval()
+    for img_path in img_paths:
+        print(f"Path: {img_path.as_posix()}")
+        img = decode_image(img_path.as_posix())
+        img = dataset.transform(img).cuda()
+        with torch.no_grad():
+            (
+                pred_sys_boxes, pred_sys_logits,
+                pred_stave_boxes, pred_stave_logits,
+                # (stave_query, system_query)
+                pred_assign
+            ) = tuple(map(lambda t: t.squeeze(0), model.forward(img.unsqueeze(0))))
 
-    img = img.squeeze(0).cpu().numpy()
-    img = np.stack([img] * 3, axis=-1) * 255
-    width_height = img.shape[1], img.shape[0]
-    # Try to make sense of the ground truth data.
-    for sys_index in range(pred_sys_boxes.shape[0]):
-        print(f"system[{sys_index}]: {pred_sys_logits[sys_index].item():.2f}")
-        if pred_sys_logits[sys_index].item() > 0.0:
-            box = unbox(width_height, pred_sys_boxes[sys_index])
-            cv2.rectangle(img, box.top_left, box.bot_right, (255, 0, 0), 2)
-    stave_assignment = torch.argmax(pred_assign, dim=1)
-    for staff_index in range(pred_assign.shape[0]):
-        print(
-            f"staff[{staff_index}]: {pred_stave_logits[staff_index].item():.2f}, system: {stave_assignment[staff_index].item()}")
-        if pred_stave_logits[staff_index].item() > 0.0:
-            box = unbox(width_height, pred_stave_boxes[staff_index])
-            cv2.rectangle(img, box.top_left, box.bot_right, (0, 255, 0), 1)
-    print(f"Image size: {img.shape}")
-    cv2.imshow("Page", img)
+        img = img.squeeze(0).cpu().numpy()
+        img = np.stack([img] * 3, axis=-1) * 255
+        width_height = img.shape[1], img.shape[0]
+        # Try to make sense of the ground truth data.
+        for sys_index in range(pred_sys_boxes.shape[0]):
+            print(
+                f"\tsystem[{sys_index}]: {pred_sys_logits[sys_index].item():.2f}")
+            if pred_sys_logits[sys_index].item() > 0.0:
+                box = unbox(width_height, pred_sys_boxes[sys_index])
+                cv2.rectangle(img, box.top_left, box.bot_right, (0, 0, 255), 2)
+        stave_assignment = torch.argmax(pred_assign, dim=1)
+        for staff_index in range(pred_assign.shape[0]):
+            print(
+                f"\tstaff[{staff_index}]: {pred_stave_logits[staff_index].item():.2f}, system: {stave_assignment[staff_index].item()}")
+            if pred_stave_logits[staff_index].item() > 0.0:
+                box = unbox(width_height, pred_stave_boxes[staff_index])
+                cv2.rectangle(img, box.top_left, box.bot_right, (0, 255, 0), 1)
+        cv2.imshow("Page", img)
 
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+        if cv2.waitKey(0) == ord('q'):
+            return
+        cv2.destroyAllWindows()
 
 
 cli.add_command(summary)
@@ -391,6 +404,8 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+# vscode - End of file
 
 # vscode - End of file
 
