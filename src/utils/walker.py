@@ -1,3 +1,4 @@
+"""An efficient(?) engine to apply shell commands to a hierarchy of files."""
 import logging
 import os
 from asyncio import (

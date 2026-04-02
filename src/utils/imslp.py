@@ -1,4 +1,4 @@
-
+"""Looks up and fetches imslp pdf score."""
 import logging
 import re
 from asyncio import run

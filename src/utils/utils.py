@@ -1,3 +1,4 @@
+"""Misc utilities, too small to live in ther own module."""
 import os
 import subprocess
 from collections import Counter

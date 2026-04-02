@@ -1,3 +1,4 @@
+"""Simple json query support for querying various json objects within the project."""
 import re
 from typing import Any, Callable
 
