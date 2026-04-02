@@ -18,6 +18,7 @@ from lightning.pytorch.loggers import CSVLogger
 from torch import Tensor
 from torch.utils.data import DataLoader
 from torchinfo import summary as model_summary
+from torchvision.io import decode_image
 
 from dataset import PDMX, Box, StafferDataModule, StafferDataset
 from models import Config, HierarchicalDETR, StafferModule
@@ -241,7 +242,7 @@ def train(ctx: ClickContext,
             f"         epoch: {early_stopping_callback.stopped_epoch}")
 
 
-def plot_one(ax_loss: Any, ax_metrics: Any, name: str) -> None:
+def plot_one(ax_loss: Any, ax_metrics: Any, name: str, ls='solid') -> None:
     csv_path = Path(f"logs/staffer/{name}/metrics.csv")
     if not csv_path.exists():
         logging.error(f"No csv log {str(csv_path)}, bye !")
@@ -257,7 +258,7 @@ def plot_one(ax_loss: Any, ax_metrics: Any, name: str) -> None:
     for col, label in [("train/loss", f"{name}:train"), ("val/loss", f"{name}:val")]:
         if col in df.columns:
             d = df[["step", col]].dropna()
-            ax_loss.plot(d["step"], d[col], label=label)
+            ax_loss.plot(d["step"], d[col], label=label, ls=ls)
     ax_loss.set_title("loss")
     ax_loss.set_xlabel("step")
     ax_loss.legend()
@@ -270,7 +271,7 @@ def plot_one(ax_loss: Any, ax_metrics: Any, name: str) -> None:
     ]:
         if col in df.columns:
             d = df[["step", col]].dropna()
-            ax_metrics.plot(d["step"], d[col], label=label)
+            ax_metrics.plot(d["step"], d[col], label=label, ls=ls)
     ax_metrics.set_title("val metrics")
     ax_metrics.set_xlabel("step")
     ax_metrics.legend()
@@ -301,7 +302,7 @@ def logs(names: tuple[str]):
             ax_metrics.cla()
             plot_one(ax_loss, ax_metrics, name)
             for other in others:
-                plot_one(ax_loss, ax_metrics, other)
+                plot_one(ax_loss, ax_metrics, other, ls='dashed')
 
             ax_loss.set_title("loss")
             ax_loss.set_xlabel("step")
@@ -318,12 +319,66 @@ def logs(names: tuple[str]):
     print("Bye!")
 
 
+def config_from_checkpoint(checkpoint_path: Path) -> Config:
+    checkpoint = torch.load(checkpoint_path, weights_only=False)
+    return Config(**checkpoint["hyper_parameters"])
+
+
+def unbox(size: tuple[int, int], t: Tensor) -> Box:
+    value = tuple(map(lambda x: x.item(), t))
+    assert len(value) == 4, f"Box tensor expect shape [4], but got {t.shape}"
+    cx, cy, w, h = value
+    return Box.from_cxcywh(size, cx, cy, w, h)
+
+
+@click.command()
+@click.argument("name", type=str)
+@click.argument("img_path", type=click.Path(file_okay=True,
+                                            exists=True, readable=True,
+                                            path_type=Path))
+@click.pass_obj
+def predict(ctx: ClickContext, name: str, img_path: Path) -> None:
+    ckpt_path = Path("checkpoints") / "staffer" / name / "last.ckpt"
+    ctx.config = config_from_checkpoint(ckpt_path)
+    dataset = StafferDataset(ctx.config, ctx.pdmx, count=0)
+    model = StafferModule.load_from_checkpoint(
+        ckpt_path, config=ctx.config, weights_only=False)
+    img = decode_image(img_path.as_posix())
+    img = dataset.transform(img).cuda()
+    (
+        pred_sys_boxes, pred_sys_logits,
+        pred_stave_boxes, pred_stave_logits,
+        pred_assign
+    ) = tuple(map(lambda t: t.unsqueeze(0), model.forward(img.unsqueeze(0))))
+
+    img = img.squeeze(0).cpu().numpy()
+    width_height = img.shape[1], img.shape[0]
+    # Try to make sense of the ground truth data.
+    for sys_index in range(pred_sys_boxes.shape[0]):
+        box = unbox(width_height, pred_sys_boxes[sys_index])
+        cv2.rectangle(img, box.top_left, box.bot_right, 0, 2)
+    for staff_index in range(pred_assign.shape[0]):
+        if pred_assign[staff_index] < 0:
+            break
+        box = unbox(width_height, pred_stave_boxes[staff_index])
+        cv2.rectangle(img, box.top_left, box.bot_right, 0, 2)
+    print(f"Image size: {img.shape}")
+    print(f"    Assign: {pred_assign}")
+    cv2.imshow("Page", img)
+
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+    print("here")
+
+
 cli.add_command(summary)
 cli.add_command(check)
 cli.add_command(show)
 cli.add_command(stats)
 cli.add_command(train)
 cli.add_command(logs)
+cli.add_command(predict)
 
 
 def main():
@@ -333,5 +388,9 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+# vscode - End of file
+
+# vscode - End of file
 
 # vscode - End of file
