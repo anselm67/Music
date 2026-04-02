@@ -47,7 +47,7 @@ class StafferDataset(Dataset):
                 else:
                     png_file = pdmx.get_path(mxl_file, 'png')
                 self.items.append((layout_file, png_file, page.page_number))
-            if count > 0 and len(self.items) >= count:
+            if count >= 0 and len(self.items) >= count:
                 self.items = self.items[:count]
                 break
         logging.info(f"\tStafferDataset: {len(self.items)} samples.")
