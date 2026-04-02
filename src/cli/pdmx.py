@@ -60,8 +60,7 @@ def cli(ctx, home: Path, csv: str, log_level: str):
 def query(ctx: ClickContext, query_string: str, metadata: str | None, score: str | None, columns: tuple[str], limit: int, output: Path | None):
     """Query the underlying PDMX.csv database as a DataFrame.
 
-    Args:
-        query_string: The base panda query to run.
+    QUERY_STRING: The base panda query to run.
     """
     result = ctx.pdmx.query(query_string, metadata=metadata, score=score)
     if columns:
@@ -80,7 +79,7 @@ def query(ctx: ClickContext, query_string: str, metadata: str | None, score: str
 @click.option("--output", "-o",
               type=click.Path(dir_okay=False, file_okay=True, path_type=Path))
 def render(mxl_file: Path, output: Path):
-    """Renders the mxl file into .svg files, one per page."""
+    """Renders MXL_FILE into .svg files, one per page."""
     svg_file = output or mxl_file.with_suffix(".svg")
     verovio_render(mxl_file, svg_file)
     print(f"Output written to {svg_file}.")
@@ -95,10 +94,9 @@ def render(mxl_file: Path, output: Path):
               type=click.Path(dir_okay=False, file_okay=True, path_type=Path),
               help="Output file, defaults to the mxl file with .krn extension.")
 def from_mxl(mxl_file: Path, output: Path):
-    """Converts ab mxl file into a kern file.
+    """Converts MXL_FILE into a kern file.
 
-    Args:
-        mxl_file: The mxl file to convert to kern.
+        MXL_FILE: The mxl file to convert to kern.
     """
     output = output or mxl_file.with_suffix(".krn")
     mxl_to_kern(mxl_file, output)
@@ -121,8 +119,8 @@ def mouse_positon_handler(event, x, y, flags, param):
 def show(ctx: ClickContext, any_path: Path, scale: float):
     """Displays the provided image and layout info when available.
 
-    Args:
-        any_path: Any file that refers to a PDMX item, e.g. mxl path.
+
+        ANY_PATH: Any file that refers to a PDMX item, e.g. its mxl or svg path.
     """
     pdmx = ctx.pdmx
     with open(pdmx.get_path(any_path, 'layout'), 'r') as f:
@@ -199,8 +197,8 @@ def make(ctx: ClickContext, mxl_file: Path | None, force: bool, dry_run: bool):
     - For each svg file, the corresponding png file.
     - For each mxl file, it's layout infos as page, system, staves and bars.
 
-    Args:
-        mxl_file: Optional, only item to rebuild when provided as an mxl path.
+
+    MXL_FILE: Optional; When provided only this item is checked and rebuild.
     """
     pdmx = ctx.pdmx
     # Resolves relative path if needed.
