@@ -170,13 +170,10 @@ def train(ctx: ClickContext,
           name: str,
           hide_progress: bool,
           early_stopping: bool):
-    """Trains the Staffer model.
+    """Trains and/or resume training of a Staffer model instance.
 
     NAME: sets id/name of the model being trained.
     """
-    VAL_CHECK_INTERVAL = 0.001
-    # One full epoch of no changes.
-    PATIENCE = int(1 / VAL_CHECK_INTERVAL)
     config = replace(
         ctx.config,
         id_name=name,
@@ -184,9 +181,12 @@ def train(ctx: ClickContext,
 
     early_stopping_callback = None
     if early_stopping:
+        logging.warning(
+            f"EarlyStopping: PATIENCE isn't properly set. It should be computed "
+            "as a number of epoch, based on other config parameters.")
         early_stopping_callback = EarlyStopping(
             monitor="val/loss",
-            patience=PATIENCE,
+            patience=500_000,
             mode="min",
         )
 
@@ -294,6 +294,9 @@ def plot_one(ax_loss: Any, ax_metrics: Any, name: str, ls='solid') -> None:
 @click.command()
 @click.argument("names", type=str, nargs=-1)
 def logs(names: tuple[str]):
+    """Displays training logs from multiple experiments in a single graph.
+
+    NAMES: List of the names of the model experiments you want graphed."""
     (name, *others) = names
     csv_path = Path(f"logs/staffer/{name}/metrics.csv")
 
@@ -353,11 +356,16 @@ def unbox(size: tuple[int, int], t: Tensor) -> Box:
                                 path_type=Path))
 @click.pass_obj
 def predict(ctx: ClickContext, name: str, img_paths: tuple[Path]) -> None:
+    """Predicts bounding boxes for system and staves for a list of images.
+
+    NAME: The model version to use to make the predictions.
+    IMG_PATHS: The list of images to process and visualize.
+    """
     ckpt_path = Path("checkpoints") / "staffer" / name / "last.ckpt"
-    ctx.config = config_from_checkpoint(ckpt_path)
-    dataset = StafferDataset(ctx.config, ctx.pdmx, count=0)
+    config = config_from_checkpoint(ckpt_path)
+    dataset = StafferDataset(config, ctx.pdmx, count=0)
     model = StafferModule.load_from_checkpoint(
-        ckpt_path, config=ctx.config, weights_only=False)
+        ckpt_path, config=config, weights_only=False)
     model.eval()
     for img_path in img_paths:
         print(f"Path: {img_path.as_posix()}")
@@ -411,13 +419,5 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-# vscode - End of file
-
-# vscode - End of file
-
-# vscode - End of file
-
-# vscode - End of file
 
 # vscode - End of file
