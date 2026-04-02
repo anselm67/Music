@@ -35,7 +35,7 @@ class Config:
     num_stave_queries: int = 16         # Also knwon as M
     num_decoder_layers: int = 4
 
-    interpolation: InterpolationMode = InterpolationMode.NEAREST
+    interpolation: InterpolationMode = InterpolationMode.BILINEAR
     antialias: bool = False
 
     # Training config.
