@@ -154,10 +154,9 @@ class HierarchicalLoss(nn.Module):
                 gt_assign[i], num_gt_staves, num_gt_sys,
             )
 
-            # TODO Get the box loss multiplier from config
-            total_loss = total_loss + 2 * \
+            total_loss = total_loss + self.config.box_loss_multiplier * \
                 (sys_box_loss + sys_giou_loss) + sys_obj_loss
-            total_loss = total_loss + 2 * \
+            total_loss = total_loss + self.config.box_loss_multiplier * \
                 (stave_box_loss + stave_giou_loss) + stave_obj_loss
             total_loss = total_loss + assign_loss + containment_loss
 

@@ -40,12 +40,13 @@ class Config:
 
     # Training config.
     batch_size: int = 16
-    train_len: int = 6250 * batch_size
+    train_len: int = 12500 * batch_size
     valid_len: int = 100 * batch_size
-    max_steps: int = 4 * (train_len // batch_size)
+    max_steps: int = 6 * (train_len // batch_size)
     lr: float = 1e-4
     weight_decay: float = 1e-4
     warmup_steps: int = 1000
+    box_loss_multiplier: int = 3
 
     def scale_to_patch(self, value: int) -> int:
         ret = value // self.divider
