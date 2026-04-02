@@ -1,3 +1,4 @@
+"""Lignhtning module for the Staffer model."""
 import math
 
 import lightning as L

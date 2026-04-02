@@ -1,3 +1,4 @@
+"""Loss module for the Staffer model."""
 import torch
 import torch.nn.functional as F
 from torch import Tensor, nn

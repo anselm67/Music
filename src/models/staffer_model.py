@@ -1,4 +1,4 @@
-"""A model to computes the layout of a page of sheet music.
+"""A HierarchicakDETR model to computes the layout of a page of sheet music.
 """
 from dataclasses import asdict, dataclass, field
 
