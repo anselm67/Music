@@ -114,7 +114,7 @@
             "python": "${workspaceFolder}/.venv/bin/python",
             "args": [
                 "predict",
-                "epoch4x2",
+                "epoch6x3",
                 "/home/anselm/datasets/PDMX/png/1/11/Qmbb98pzePiuBgWkaiftdheCqa4PVer6PMo3nsspnfz8ub.png"
             ]
         }

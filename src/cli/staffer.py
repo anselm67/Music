@@ -10,6 +10,7 @@ import click
 import cv2
 import lightning as L
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import torch
 from lightning.pytorch.callbacks import Callback, EarlyStopping, ModelCheckpoint
@@ -348,28 +349,30 @@ def predict(ctx: ClickContext, name: str, img_path: Path) -> None:
     (
         pred_sys_boxes, pred_sys_logits,
         pred_stave_boxes, pred_stave_logits,
-        pred_assign
-    ) = tuple(map(lambda t: t.unsqueeze(0), model.forward(img.unsqueeze(0))))
+        pred_assign                             # (stave_query, system_query)
+    ) = tuple(map(lambda t: t.squeeze(0), model.forward(img.unsqueeze(0))))
 
     img = img.squeeze(0).cpu().numpy()
+    img = np.stack([img] * 3, axis=-1) * 255
     width_height = img.shape[1], img.shape[0]
     # Try to make sense of the ground truth data.
     for sys_index in range(pred_sys_boxes.shape[0]):
-        box = unbox(width_height, pred_sys_boxes[sys_index])
-        cv2.rectangle(img, box.top_left, box.bot_right, 0, 2)
+        print(f"system[{sys_index}]: {pred_sys_logits[sys_index].item():.2f}")
+        if pred_sys_logits[sys_index].item() > 0.0:
+            box = unbox(width_height, pred_sys_boxes[sys_index])
+            cv2.rectangle(img, box.top_left, box.bot_right, (255, 0, 0), 2)
+    stave_assignment = torch.argmax(pred_assign, dim=1)
     for staff_index in range(pred_assign.shape[0]):
-        if pred_assign[staff_index] < 0:
-            break
-        box = unbox(width_height, pred_stave_boxes[staff_index])
-        cv2.rectangle(img, box.top_left, box.bot_right, 0, 2)
+        print(
+            f"staff[{staff_index}]: {pred_stave_logits[staff_index].item():.2f}, system: {stave_assignment[staff_index].item()}")
+        if pred_stave_logits[staff_index].item() > 0.0:
+            box = unbox(width_height, pred_stave_boxes[staff_index])
+            cv2.rectangle(img, box.top_left, box.bot_right, (0, 255, 0), 1)
     print(f"Image size: {img.shape}")
-    print(f"    Assign: {pred_assign}")
     cv2.imshow("Page", img)
 
     cv2.waitKey(0)
     cv2.destroyAllWindows()
-
-    print("here")
 
 
 cli.add_command(summary)
@@ -388,6 +391,8 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+# vscode - End of file
 
 # vscode - End of file
 
