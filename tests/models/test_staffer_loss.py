@@ -2,7 +2,7 @@ import pytest
 import torch
 from torch import Tensor
 
-from models import Config, HierarchicalLoss
+from models import Config, HierarchicalLoss, LossDict
 
 
 def make_boxes(n: int, padded: int) -> Tensor:
@@ -52,21 +52,21 @@ class TestHierarchicalLoss:
         """Loss should return a scalar tensor."""
         inputs = self._make_inputs(config, num_sys=3, num_staves=5)
         result = loss(*inputs)
-        assert result.shape == torch.Size([])
-        assert result.item() > 0
+        assert isinstance(result, LossDict)
+        assert result.total() > 0
 
     def test_loss_single_system_single_stave(self, loss: HierarchicalLoss, config: Config):
         """Minimal case — one system, one stave."""
         inputs = self._make_inputs(config, num_sys=1, num_staves=1)
         result = loss(*inputs)
-        assert result.item() > 0
+        assert result.total() > 0
 
     def test_loss_max_queries(self, loss: HierarchicalLoss, config: Config):
         """Loss should handle num_gt == num_queries without crashing."""
         N, M = config.num_system_queries, config.num_stave_queries
         inputs = self._make_inputs(config, num_sys=N, num_staves=M)
         result = loss(*inputs)
-        assert result.item() > 0
+        assert result.total() > 0
 
     def test_loss_decreases_with_better_boxes(self, loss: HierarchicalLoss, config: Config):
         """Loss should be lower when predicted boxes match GT than when far away."""
@@ -96,7 +96,7 @@ class TestHierarchicalLoss:
         bad_loss = loss(bad_sys, logits, bad_stave, stave_logits,
                         pred_assign, [gt_sys], [gt_stave], [gt_assign])
 
-        assert good_loss.item() < bad_loss.item()
+        assert good_loss.total() < bad_loss.total()
 
     def test_loss_backward(self, loss: HierarchicalLoss, config: Config):
         """Loss should be differentiable."""
@@ -115,7 +115,7 @@ class TestHierarchicalLoss:
 
         result = loss(pred_sys_boxes, pred_sys_logits, pred_stave_boxes,
                       pred_stave_logits, pred_assign, gt_sys_boxes, gt_stave_boxes, gt_assign)
-        result.backward()
+        result.total().backward()
 
         assert pred_sys_boxes.grad is not None
         assert pred_stave_boxes.grad is not None
@@ -200,7 +200,7 @@ class TestHierarchicalLoss:
         bad_loss = loss(bad_sys, sys_logits, bad_stave, stave_logits,
                         pred_assign, [gt_sys_bad], [gt_stave_bad], [gt_assign])
 
-        assert bad_loss.item() > good_loss.item()
+        assert bad_loss.total().item() > good_loss.total().item()
 
 
 class TestAlignmentLoss:
