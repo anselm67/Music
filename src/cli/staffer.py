@@ -256,7 +256,17 @@ def train(ctx: ClickContext,
             f"         epoch: {early_stopping_callback.stopped_epoch}")
 
 
-def plot_one(ax_loss: Any, ax_metrics: Any, name: str, ls='solid') -> None:
+LOG_VARIABLES = [
+    "loss",
+    "containment",
+    "stave_iou",
+    "sys_iou",
+]
+
+
+def plot_one(ax_metrics: Any, name: str,
+             columns: tuple[str, ...],
+             ls='solid') -> None:
     csv_path = Path(f"logs/staffer/{name}/metrics.csv")
     if not csv_path.exists():
         logging.error(f"No csv log {str(csv_path)}, bye !")
@@ -269,39 +279,41 @@ def plot_one(ax_loss: Any, ax_metrics: Any, name: str, ls='solid') -> None:
         [all_df, pd.read_csv(csv_path)])
 
     # Train and validation losses.
-    for col, label in [("train/loss", f"{name}:train"), ("val/loss", f"{name}:val")]:
-        if col in df.columns:
-            d = df[["step", col]].dropna()
-            ax_loss.plot(d["step"], d[col], label=label, ls=ls)
-    ax_loss.set_title("loss")
-    ax_loss.set_xlabel("step")
-    ax_loss.legend()
-
-    # Validation metrics: containment, stave_iou and sys_iou.
-    for col, label in [
-        ("val/containment", f"{name}:containment"),
-        ("val/stave_iou", f"{name}:stave iou"),
-        ("val/sys_iou", f"{name}:sys iou"),
-    ]:
+    labels = tuple(map(lambda t: f"{name}:{t}", columns))
+    for col, label in zip(columns, labels):
         if col in df.columns:
             d = df[["step", col]].dropna()
             ax_metrics.plot(d["step"], d[col], label=label, ls=ls)
-    ax_metrics.set_title("val metrics")
+    ax_metrics.set_title("Training metrics")
     ax_metrics.set_xlabel("step")
+    ax_metrics.legend()
+
     ax_metrics.legend()
 
 
 @click.command()
 @click.argument("names", type=str, nargs=-1)
-def logs(names: tuple[str]):
+@click.option("--train-columns", "-t",
+              type=click.Choice(LOG_VARIABLES, case_sensitive=False),
+              multiple=True,
+              help="Select one or more training metrics to plot.")
+@click.option("--valid-columns", "-v",
+              type=click.Choice(LOG_VARIABLES, case_sensitive=False),
+              multiple=True,
+              help="Select one or more validation metrics to plot.")
+def logs(names: tuple[str], train_columns: tuple[str, ...], valid_columns: tuple[str, ...]):
     """Displays training logs from multiple experiments in a single graph.
 
     NAMES: List of the names of the model experiments you want graphed."""
+    columns = (tuple(map(lambda s: f"train/{s}", train_columns))
+               + tuple(map(lambda s: f"val/{s}", valid_columns)))
+    if len(columns) == 0:
+        raise click.UsageError("Select at least one metric to plot.")
     (name, *others) = names
     csv_path = Path(f"logs/staffer/{name}/metrics.csv")
 
     plt.ion()
-    fig, (ax_loss, ax_metrics) = plt.subplots(1, 2, figsize=(16, 6))
+    fig, ax_metrics = plt.subplots(1, 1)
 
     def on_key(event):
         if event.key == 'q':
@@ -315,21 +327,15 @@ def logs(names: tuple[str]):
         if mtime != last_mod:
             last_mod = mtime
 
-            ax_loss.cla()
             ax_metrics.cla()
-            plot_one(ax_loss, ax_metrics, name)
+            plot_one(ax_metrics, name, columns)
             for other in others:
-                plot_one(ax_loss, ax_metrics, other, ls='dashed')
+                plot_one(ax_metrics, other, columns, ls='dashed')
 
-            ax_loss.set_title("loss")
-            ax_loss.set_xlabel("step")
-            ax_loss.legend()
-
-            ax_metrics.set_title("val metrics")
+            ax_metrics.set_title("Training metrics")
             ax_metrics.set_xlabel("step")
             ax_metrics.legend()
 
-            fig.tight_layout()
             fig.canvas.draw()
 
         plt.pause(5)
