@@ -239,7 +239,7 @@ def train(ctx: ClickContext,
         max_steps=config.max_steps,
         logger=logger,
         callbacks=callbacks,
-        log_every_n_steps=100
+        log_every_n_steps=100,
         val_check_interval=VAL_CHECK_INTERVAL,
         precision="16-mixed",
         enable_model_summary=False,
