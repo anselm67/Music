@@ -174,10 +174,18 @@ def train(ctx: ClickContext,
 
     NAME: sets id/name of the model being trained.
     """
-    config = replace(
-        ctx.config,
-        id_name=name,
-    )
+
+    # Resume training if we have an existing checkpoint.
+    ckpt_path = Path("checkpoints") / "staffer" / name / "last.ckpt"
+    config = config_from_checkpoint(ckpt_path)
+    if ckpt_path.exists():
+        logging.info(f"Resuming training from {ckpt_path}")
+    else:
+        ckpt_path = None
+        config = replace(
+            ctx.config,
+            id_name=name,
+        )
 
     early_stopping_callback = None
     if early_stopping:
@@ -218,14 +226,6 @@ def train(ctx: ClickContext,
 
     logger = CSVLogger(save_dir="logs", name="staffer", version=config.id_name)
 
-    # Resume training if we have an existing checkpoint.
-    last_checkpoint: Path | None = Path(
-        f"checkpoints/{config.id_name}/last.ckpt")
-    if last_checkpoint.exists():
-        logging.info(f"Resuming training from {last_checkpoint}")
-    else:
-        last_checkpoint = None
-
     trainer = L.Trainer(
         max_steps=config.max_steps,
         logger=logger,
@@ -244,7 +244,7 @@ def train(ctx: ClickContext,
     trainer.fit(
         StafferModule(config),
         StafferDataModule(config, ctx.pdmx),
-        ckpt_path=last_checkpoint
+        ckpt_path=ckpt_path
     )
 
     if early_stopping_callback is not None and early_stopping_callback.stopping_reason != EarlyStoppingReason.NOT_STOPPED:
