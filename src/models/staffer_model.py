@@ -279,5 +279,5 @@ class HierarchicalDETR(nn.Module):
         sys_feats, stave_feats = self.decoder(memory)  # (B, N, D), (B, M, D)
         return self.heads(sys_feats, stave_feats)
         # returns: sys_boxes, sys_logits, stave_boxes, stave_logits, assign_logits
-        return self.heads(sys_feats, stave_feats)
-        # returns: sys_boxes, sys_logits, stave_boxes, stave_logits, assign_logits
+
+# vscode - End of file.
