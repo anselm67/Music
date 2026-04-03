@@ -289,27 +289,25 @@ def plot_one(ax_metrics: Any, name: str,
              columns: tuple[str, ...],
              ls='solid') -> None:
     csv_path = Path(f"logs/staffer/{name}/metrics.csv")
-    if not csv_path.exists():
-        logging.error(f"No csv log {str(csv_path)}, bye !")
     all_path = csv_path.with_stem("cumulated_metrics")
     all_df = None
     if all_path.exists():
         all_df = pd.read_csv(all_path)
 
-    df = pd.read_csv(csv_path) if all_df is None else pd.concat(
-        [all_df, pd.read_csv(csv_path)])
+    if csv_path.exists():
+        df = pd.read_csv(csv_path) if all_df is None else pd.concat(
+            [all_df, pd.read_csv(csv_path)])
+    elif all_df is not None:
+        df = all_df
+    else:
+        raise click.UsageError(f"No metrics file found for {name}.")
 
     # Train and validation losses.
-    labels = tuple(map(lambda t: f"{name}:{t}", columns))
+    labels = tuple(f"{name}:{col}" for col in columns)
     for col, label in zip(columns, labels):
         if col in df.columns:
             d = df[["step", col]].dropna()
             ax_metrics.plot(d["step"], d[col], label=label, ls=ls)
-    ax_metrics.set_title("Training metrics")
-    ax_metrics.set_xlabel("step")
-    ax_metrics.legend()
-
-    ax_metrics.legend()
 
 
 @click.command()
@@ -326,8 +324,8 @@ def logs(names: tuple[str], train_columns: tuple[str, ...], valid_columns: tuple
     """Displays training logs from multiple experiments in a single graph.
 
     NAMES: List of the names of the model experiments you want graphed."""
-    columns = (tuple(map(lambda s: f"train/{s}", train_columns))
-               + tuple(map(lambda s: f"val/{s}", valid_columns)))
+    columns = (tuple(f"train/{s}" for s in train_columns)
+               + tuple(f"val/{s}" for s in valid_columns))
     if len(columns) == 0:
         raise click.UsageError("Select at least one metric to plot.")
     (name, *others) = names
@@ -359,7 +357,7 @@ def logs(names: tuple[str], train_columns: tuple[str, ...], valid_columns: tuple
 
             fig.canvas.draw()
 
-        plt.pause(5)
+        plt.pause(5000)
     print("Bye!")
 
 
