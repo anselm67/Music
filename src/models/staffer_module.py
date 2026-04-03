@@ -1,5 +1,6 @@
 """Lignhtning module for the Staffer model."""
 import math
+from dataclasses import fields
 
 import lightning as L
 import torch
@@ -28,7 +29,7 @@ class StafferModule(L.LightningModule):
         pred_sys_boxes, pred_sys_logits, pred_stave_boxes, pred_stave_logits, pred_assign = self.model(
             images)
 
-        loss = self.loss_fn(
+        loss = self.loss_fn.forward(
             pred_sys_boxes, pred_sys_logits,
             pred_stave_boxes, pred_stave_logits,
             pred_assign,
@@ -41,26 +42,17 @@ class StafferModule(L.LightningModule):
         stave_iou = self._mean_iou(
             pred_stave_boxes, gt_stave_boxes, gt_assign, is_sys=False)
 
-        # Containment metric
-        containment = self.loss_fn._containment_loss(
-            pred_sys_boxes[0], pred_stave_boxes[0],
-            gt_assign[0],
-            int((gt_assign[0] != -1).sum().item()),
-            int(gt_assign[0][gt_assign[0] != -1].max().item()) + 1,
-        )
-
-        alignment_loss = 0
-
-        self.log(f"{stage}/loss", loss, prog_bar=True)
+        self.log(f"{stage}/loss", loss.total(), prog_bar=True)
         self.log(f"{stage}/sys_iou", sys_iou)
         self.log(f"{stage}/stave_iou", stave_iou)
-        self.log(f"{stage}/containment", containment)
-        self.log(f"{stage}/alignment_loss", alignment_loss)
+        for f in fields(loss):
+            self.log(f"{stage}/{f.name}", getattr(loss, f.name))
 
         if stage == 'train':
-            self.log("lr", self.trainer.optimizers[0].param_groups[0]['lr'])
+            self.log(
+                "train/lr", self.trainer.optimizers[0].param_groups[0]['lr'])
 
-        return loss
+        return loss.total()
 
     def _mean_iou(
         self,
@@ -78,8 +70,7 @@ class StafferModule(L.LightningModule):
             matched = pred_boxes[i][:num_gt]
             gt = gt_boxes[i][:num_gt]
             iou = generalized_iou(matched, gt).clamp(min=0).mean()
-            # logging.info(f"raw iou: {iou}")
-            ious.append(iou)
+            ious.append(1.0 - iou)
         return torch.stack(ious).mean()
 
     def training_step(self, batch: tuple, batch_idx: int) -> Tensor:

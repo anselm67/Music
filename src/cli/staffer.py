@@ -163,47 +163,47 @@ def stats(ctx: ClickContext, count: int, num_workers: int):
 @click.argument("name", type=str)
 @click.option("--hide-progress", "-h", type=bool, is_flag=True, default=False,
               help="Hide progress report, e.g. to see the logging info.")
-@click.option("--early-stopping", "-s", type=bool, is_flag=True, default=False,
-              help="Enable early stopping.")
+@click.option("--early-stopping", "-s", type=click.FloatRange(min=0), default=0.0,
+              help="Enable early stopping with a patience of this amount of an epoch.")
 @click.option("--epochs", "-e", type=int, default=4,
               help="Numberof epochs to train for.")
 @click.pass_obj
 def train(ctx: ClickContext,
           name: str,
           hide_progress: bool,
-          early_stopping: bool,
+          early_stopping: float,
           epochs: int):
     """Trains and/or resume training of a Staffer model instance.
 
     NAME: sets id/name of the model being trained.
     """
+    VAL_CHECK_INTERVAL = 250
 
     # Resume training if we have an existing checkpoint.
     ckpt_path = Path("checkpoints") / "staffer" / name / "last.ckpt"
     if ckpt_path.exists():
         logging.info(f"Resuming training from {ckpt_path}")
         config = config_from_checkpoint(ckpt_path)
-        config = replace(
-            config,
-            max_steps=epochs * (config.train_len // config.batch_size)
-        )
     else:
         ckpt_path = None
         config = replace(
             ctx.config,
             id_name=name,
-            max_steps=epochs * (ctx.config.train_len // ctx.config.batch_size)
         )
-
+    config.max_steps = epochs * (config.train_len // config.batch_size)
+    logging.info(f"Training for {epochs} epochs, "
+                 f"or {config.max_steps} steps of {config.batch_size}.")
     early_stopping_callback = None
-    if early_stopping:
-        logging.warning(
-            f"EarlyStopping: PATIENCE isn't properly set. It should be computed "
-            "as a number of epoch, based on other config parameters.")
+    if early_stopping > 0:
+        steps = int(early_stopping * (config.train_len // config.batch_size))
+        steps = steps // VAL_CHECK_INTERVAL
+        logging.info(
+            f"EarlyStopping: patience is {steps} validaton steps.")
         early_stopping_callback = EarlyStopping(
             monitor="val/loss",
-            patience=500_000,
+            patience=steps,
             mode="min",
+            min_delta=1e-4,  # Ignore "noise"
         )
 
     callbacks: list[Callback] = [callback for callback in [
@@ -225,9 +225,10 @@ def train(ctx: ClickContext,
     if logger_path.exists():
         all_path = logger_path.with_stem("cumulated_metrics")
         if all_path.exists():
-            with all_path.open("a+") as fout:
-                with logger_path.open('r') as fin:
-                    fout.write(fin.read())
+            all = pd.read_csv(all_path)
+            new = pd.read_csv(logger_path)
+            pd.concat([all, new], ignore_index=True).to_csv(
+                all_path, index=False)
         else:
             shutil.copy(logger_path, all_path)
         logger_path.unlink()
@@ -238,8 +239,8 @@ def train(ctx: ClickContext,
         max_steps=config.max_steps,
         logger=logger,
         callbacks=callbacks,
-        log_every_n_steps=100,
-        val_check_interval=250,
+        log_every_n_steps=100
+        val_check_interval=VAL_CHECK_INTERVAL,
         precision="16-mixed",
         enable_model_summary=False,
         enable_progress_bar=not hide_progress
@@ -265,10 +266,22 @@ def train(ctx: ClickContext,
 
 
 LOG_VARIABLES = [
+    # From StafferModule._step():
     "loss",
-    "containment",
+    "lr",           # Training only.
     "stave_iou",
     "sys_iou",
+
+    # From LossDict:
+    "sys_box",
+    "sys_giou",
+    "sys_obj",
+    "stave_box",
+    "stave_giou",
+    "stave_obj",
+    "assign",
+    "containment",
+    "alignment"
 ]
 
 

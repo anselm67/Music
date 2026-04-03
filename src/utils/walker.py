@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Callable
 
 
-# TODO Integrate with option tqdm progress report.
 class Walker:
     type CommandBuilder = Callable[
         [Path],
