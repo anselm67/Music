@@ -1,9 +1,31 @@
 """Loss module for the Staffer model."""
+from dataclasses import dataclass
+
 import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
 from .staffer_model import Config
+
+
+@dataclass
+class LossDict:
+    sys_box: Tensor
+    sys_giou: Tensor
+    sys_obj: Tensor
+    stave_box: Tensor
+    stave_giou: Tensor
+    stave_obj: Tensor
+    assign: Tensor
+    containment: Tensor
+    alignment: Tensor
+
+    def total(self) -> Tensor:
+        return (
+            self.sys_box + self.sys_giou + self.sys_obj +
+            self.stave_box + self.stave_giou + self.stave_obj +
+            self.assign + self.containment + self.alignment
+        )
 
 
 def box_cxcywh_to_xyxy(boxes: Tensor) -> Tensor:
@@ -121,44 +143,103 @@ class HierarchicalLoss(nn.Module):
 
         return loss / num_gt_sys
 
+    def _alignment_loss(
+        self,
+        pred_sys_boxes: Tensor,
+        pred_stave_boxes: Tensor,
+        gt_assign: Tensor,
+        num_gt_staves: int,
+        num_gt_sys: int,
+    ) -> Tensor:
+        loss = torch.tensor(0.0, device=pred_sys_boxes.device)
+
+        for sys_idx in range(num_gt_sys):
+            sys_xyxy = box_cxcywh_to_xyxy(
+                pred_sys_boxes[sys_idx].unsqueeze(0)).squeeze(0)
+            stave_mask = gt_assign[:num_gt_staves] == sys_idx
+            if not stave_mask.any():
+                continue
+
+            staves_xyxy = box_cxcywh_to_xyxy(
+                pred_stave_boxes[:num_gt_staves][stave_mask])
+
+            # Top of first stave == top of system
+            top_loss = (staves_xyxy[0, 1] - sys_xyxy[1]).abs()
+
+            # Bottom of last stave == bottom of system
+            bottom_loss = (staves_xyxy[-1, 3] - sys_xyxy[3]).abs()
+
+            # Left and right of all staves == left and right of system
+            left_loss = (staves_xyxy[:, 0] - sys_xyxy[0]).abs().mean()
+            right_loss = (staves_xyxy[:, 2] - sys_xyxy[2]).abs().mean()
+
+            loss = loss + top_loss + bottom_loss + left_loss + right_loss
+
+        return loss / num_gt_sys
+
     def forward(
         self,
-        pred_sys_boxes: Tensor,      # (B, N, 4)
-        pred_sys_logits: Tensor,     # (B, N, 1)
-        pred_stave_boxes: Tensor,    # (B, M, 4)
-        pred_stave_logits: Tensor,   # (B, M, 1)
-        pred_assign: Tensor,         # (B, M, N)
-        gt_sys_boxes: list[Tensor],  # list of (N, 4) padded
-        gt_stave_boxes: list[Tensor],  # list of (M, 4) padded
-        gt_assign: list[Tensor],     # list of (M,) padded with -1
-    ) -> Tensor:
+        pred_sys_boxes: Tensor,
+        pred_sys_logits: Tensor,
+        pred_stave_boxes: Tensor,
+        pred_stave_logits: Tensor,
+        pred_assign: Tensor,
+        gt_sys_boxes: list[Tensor],
+        gt_stave_boxes: list[Tensor],
+        gt_assign: list[Tensor],
+    ) -> LossDict:
         B = pred_sys_boxes.shape[0]
-        total_loss = torch.tensor(0.0, device=pred_sys_boxes.device)
+
+        sys_box = torch.tensor(0.0, device=pred_sys_boxes.device)
+        sys_giou = torch.tensor(0.0, device=pred_sys_boxes.device)
+        sys_obj = torch.tensor(0.0, device=pred_sys_boxes.device)
+        stave_box = torch.tensor(0.0, device=pred_sys_boxes.device)
+        stave_giou = torch.tensor(0.0, device=pred_sys_boxes.device)
+        stave_obj = torch.tensor(0.0, device=pred_sys_boxes.device)
+        assign = torch.tensor(0.0, device=pred_sys_boxes.device)
+        containment = torch.tensor(0.0, device=pred_sys_boxes.device)
+        alignment = torch.tensor(0.0, device=pred_sys_boxes.device)
 
         for i in range(B):
             num_gt_staves = int((gt_assign[i] != -1).sum().item())
             num_gt_sys = int(gt_assign[i][gt_assign[i] != -1].max().item()) + 1
 
-            sys_box_loss, sys_giou_loss, sys_obj_loss = self._box_loss(
+            b, g, o = self._box_loss(
                 pred_sys_boxes[i], pred_sys_logits[i],
                 gt_sys_boxes[i], num_gt_sys, self.config.num_system_queries,
             )
-            stave_box_loss, stave_giou_loss, stave_obj_loss = self._box_loss(
+            sys_box = sys_box + b
+            sys_giou = sys_giou + g
+            sys_obj = sys_obj + o
+
+            b, g, o = self._box_loss(
                 pred_stave_boxes[i], pred_stave_logits[i],
                 gt_stave_boxes[i], num_gt_staves, self.config.num_stave_queries,
             )
-            assign_loss = self._assignment_loss(
+            stave_box = stave_box + b
+            stave_giou = stave_giou + g
+            stave_obj = stave_obj + o
+
+            assign = assign + self._assignment_loss(
                 pred_assign[i], gt_assign[i], num_gt_staves,
             )
-            containment_loss = self._containment_loss(
+            containment = containment + self._containment_loss(
+                pred_sys_boxes[i], pred_stave_boxes[i],
+                gt_assign[i], num_gt_staves, num_gt_sys,
+            )
+            alignment = alignment + self._alignment_loss(
                 pred_sys_boxes[i], pred_stave_boxes[i],
                 gt_assign[i], num_gt_staves, num_gt_sys,
             )
 
-            total_loss = total_loss + self.config.box_loss_multiplier * \
-                (sys_box_loss + sys_giou_loss) + sys_obj_loss
-            total_loss = total_loss + self.config.box_loss_multiplier * \
-                (stave_box_loss + stave_giou_loss) + stave_obj_loss
-            total_loss = total_loss + assign_loss + containment_loss
-
-        return total_loss / B
+        return LossDict(
+            sys_box=self.config.box_loss_multiplier * (sys_box / B),
+            sys_giou=self.config.box_loss_multiplier * (sys_giou / B),
+            sys_obj=sys_obj / B,
+            stave_box=self.config.box_loss_multiplier * (stave_box / B),
+            stave_giou=self.config.box_loss_multiplier * (stave_giou / B),
+            stave_obj=stave_obj / B,
+            assign=assign / B,
+            containment=containment / B,
+            alignment=alignment / B,
+        )

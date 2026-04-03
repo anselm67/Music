@@ -49,10 +49,16 @@ class StafferModule(L.LightningModule):
             int(gt_assign[0][gt_assign[0] != -1].max().item()) + 1,
         )
 
+        alignment_loss = 0
+
         self.log(f"{stage}/loss", loss, prog_bar=True)
         self.log(f"{stage}/sys_iou", sys_iou)
         self.log(f"{stage}/stave_iou", stave_iou)
         self.log(f"{stage}/containment", containment)
+        self.log(f"{stage}/alignment_loss", alignment_loss)
+
+        if stage == 'train':
+            self.log("lr", self.trainer.optimizers[0].param_groups[0]['lr'])
 
         return loss
 
