@@ -165,11 +165,14 @@ def stats(ctx: ClickContext, count: int, num_workers: int):
               help="Hide progress report, e.g. to see the logging info.")
 @click.option("--early-stopping", "-s", type=bool, is_flag=True, default=False,
               help="Enable early stopping.")
+@click.option("--epochs", "-e", type=int, default=4,
+              help="Numberof epochs to train for.")
 @click.pass_obj
 def train(ctx: ClickContext,
           name: str,
           hide_progress: bool,
-          early_stopping: bool):
+          early_stopping: bool,
+          epochs: int):
     """Trains and/or resume training of a Staffer model instance.
 
     NAME: sets id/name of the model being trained.
@@ -177,14 +180,19 @@ def train(ctx: ClickContext,
 
     # Resume training if we have an existing checkpoint.
     ckpt_path = Path("checkpoints") / "staffer" / name / "last.ckpt"
-    config = config_from_checkpoint(ckpt_path)
     if ckpt_path.exists():
         logging.info(f"Resuming training from {ckpt_path}")
+        config = config_from_checkpoint(ckpt_path)
+        config = replace(
+            config,
+            max_steps=epochs * (config.train_len // config.batch_size)
+        )
     else:
         ckpt_path = None
         config = replace(
             ctx.config,
             id_name=name,
+            max_steps=epochs * (ctx.config.train_len // ctx.config.batch_size)
         )
 
     early_stopping_callback = None
