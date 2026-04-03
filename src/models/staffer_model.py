@@ -45,10 +45,10 @@ class Config:
     batch_size: int = 16
     train_len: int = 12500 * batch_size
     valid_len: int = 100 * batch_size
-    max_steps: int = 6 * (train_len // batch_size)
+    max_steps: int = field(init=False)
     lr: float = 1e-4
     weight_decay: float = 1e-4
-    warmup_steps: int = 1000
+    warmup_steps: int = 4000
     box_loss_multiplier: int = 2
 
     def scale_to_patch(self, value: int) -> int:
@@ -61,10 +61,13 @@ class Config:
             self.scale_to_patch(self.max_width),
         )
         assert self.patch_size ** 2 == self.embed_dim
+        # Trains for 4 epochs by default.
+        self.max_steps = 4 * (self.train_len // self.batch_size)
 
     def asdict(self):
         obj = asdict(self)
         obj.pop("image_shape")
+        obj.pop("max_steps")
         return obj
 
 
