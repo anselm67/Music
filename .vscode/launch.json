@@ -102,7 +102,7 @@
             "python": "${workspaceFolder}/.venv/bin/python",
             "args": [
                 "train",
-                "bilinear"
+                "testing"
             ]
         },
         {
