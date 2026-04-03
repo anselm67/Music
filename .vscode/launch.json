@@ -102,7 +102,7 @@
             "python": "${workspaceFolder}/.venv/bin/python",
             "args": [
                 "train",
-                "testing"
+                "bilinear"
             ]
         },
         {
@@ -116,6 +116,19 @@
                 "predict",
                 "epoch6x3",
                 "/home/anselm/datasets/PDMX/png/1/11/Qmbb98pzePiuBgWkaiftdheCqa4PVer6PMo3nsspnfz8ub.png"
+            ]
+        },
+        {
+            "name": "staffer logs",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "cli.staffer",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "args": [
+                "logs",
+                "bilinear",
+                "epoch6x3"
             ]
         }
     ]
