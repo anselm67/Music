@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import aiofiles
+from pandas import Series
 
 from dataset import Score
 
@@ -23,6 +24,7 @@ class Task:
 
 @dataclass(frozen=True)
 class LayoutTask(Task):
+    row: Series
     json_file: Path
 
 
@@ -37,11 +39,14 @@ class PDMXStats:
     staff_count: int
     bar_count: int
 
-    # Par page layout statistics.
-    system_histo: Counter = Counter()
-    staff_histo: Counter = Counter()
-    width100_histo: Counter = Counter()
-    height100_histo: Counter = Counter()
+    # Per score statictics.
+    part_histo: Counter
+
+    # Per page layout statistics.
+    system_histo: Counter
+    staff_histo: Counter
+    width100_histo: Counter
+    height100_histo: Counter
 
     def __init__(self):
         self.mxl_count = 0
@@ -51,15 +56,20 @@ class PDMXStats:
         self.system_count = 0
         self.staff_count = 0
         self.bar_count = 0
+        self.part_histo = Counter()
         self.system_histo = Counter()
         self.staff_histo = Counter()
+        self.width100_histo = Counter()
+        self.height100_histo = Counter()
 
-    def aggregate(self, score: Score):
+    def aggregate(self, row: Series, score: Score):
         self.score_count += 1
         self.page_count += score.page_count
         self.system_count += score.system_count
         self.staff_count += score.staff_count
         self.bar_count += score.bar_count
+        parts = row['n_tracks'] or 0
+        self.part_histo[parts] += 1
         for p in score.pages:
             self.system_histo[p.system_count] += 1
             self.staff_histo[p.staff_count] += 1
@@ -73,8 +83,11 @@ class PDMXStats:
         self.system_count += other.system_count
         self.staff_count += other.staff_count
         self.bar_count += other.bar_count
+        self.part_histo += other.part_histo
         self.system_histo += other.system_histo
         self.staff_histo += other.staff_histo
+        self.width100_histo += other.width100_histo
+        self.height100_histo += other.height100_histo
 
 
 class PDMXStater:
@@ -85,14 +98,14 @@ class PDMXStater:
         self.pdmx = pdmx
         self.queue = Queue()
 
-    async def layout_stats(self, stats: PDMXStats, json_file: Path):
+    async def layout_stats(self, stats: PDMXStats, row: Series, json_file: Path):
         logging.debug(f"layout_stats {json_file}")
         try:
             async with aiofiles.open(json_file, 'r') as f:
                 text = await f.read()
             stats.layout_count += 1
             score = Score.from_json(json.loads(text))
-            stats.aggregate(score)
+            stats.aggregate(row, score)
             logging.debug(f"+ {json_file}")
         except FileNotFoundError:
             logging.info(f"- {json_file}")
@@ -108,7 +121,7 @@ class PDMXStater:
             try:
                 match task:
                     case LayoutTask():
-                        await self.layout_stats(stats, task.json_file)
+                        await self.layout_stats(stats, task.row, task.json_file)
             except Exception as e:
                 logging.error(f"Task {task}: {e}", exc_info=e)
         return stats
@@ -122,7 +135,7 @@ class PDMXStater:
             else:
                 mxl_file = (self.pdmx.home / mxl_str)
                 self.queue.put_nowait(LayoutTask(
-                    self.pdmx.get_path(mxl_file, 'layout')))
+                    row, self.pdmx.get_path(mxl_file, 'layout')))
 
         async with TaskGroup() as tg:
             tasks = [tg.create_task(self.worker()) for _ in range(num_worker)]
@@ -134,4 +147,5 @@ class PDMXStater:
 
     def run(self, num_worker: int) -> PDMXStats:
         logging.info(f"PDMXState.run: {num_worker} workers.")
+        return run(self.async_run(num_worker))
         return run(self.async_run(num_worker))

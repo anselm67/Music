@@ -31,13 +31,20 @@ class ClickContext:
                                               exists=True, readable=True,
                                               path_type=Path),
               default=HOME, show_default=True)
+@click.option("--log-file", type=click.Path(file_okay=True, writable=True, path_type=Path),
+              help="Name of pdmx's log file.")
 @click.option("--csv", default="PDMX.csv", show_default=True,
               help="Name of the .csv master file.")
 @click.option("--log-level", default="INFO",
               type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"], case_sensitive=False))
 @click.pass_context
-def cli(ctx, home: Path, csv: str, log_level: str):
-    logging.basicConfig(level=getattr(logging, log_level.upper()))
+def cli(ctx, home: Path, csv: str, log_file: None | Path, log_level: str):
+    logging.basicConfig(
+        level=getattr(logging, log_level.upper()),
+        filename=log_file,
+        format="%(asctime)s | %(levelname)s | %(module)s.%(funcName)s:%(lineno)d | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    )
     pdmx = PDMX(home, csv)
     ctx.obj = ClickContext(home=home, pdmx=pdmx)
 
@@ -218,6 +225,8 @@ def stats(ctx: ClickContext):
     print(f"System count: {stats.system_count:,}")
     print(f" Staff count: {stats.staff_count:,}")
     print(f"   Bar count: {stats.bar_count}:,")
+
+    print_histogram(stats.part_histo, title="Parts per score:")
 
     print_histogram(stats.system_histo, title="Systems per page:")
     print_histogram(stats.staff_histo, title="Staves per page:")
