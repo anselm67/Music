@@ -20,4 +20,10 @@ pdmx query -o subset.cvs 'index==index' --score 'pages.*.staff_count < 16'
 # Displays subset general statistics.
 pdmx --csv subset.csv stats
 ```
-TODO: import editor from projects/Staffer or projects/OMR
+
+TODO List:
+- Use WeightedRandomSampler to equalize the distribution of part count when training
+- Simplify the network output so staff becomes two coordinates only (top, bottom) derive other coordinates from the system
+- Add support for bar detection.
+- import editor from projects/Staffer or projects/OMR
+
