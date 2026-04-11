@@ -7,7 +7,7 @@ This class manages tghe patgh of files within a PDMX dataset, in addition:
 import json
 import os
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
 import pandas as pd
 
@@ -39,9 +39,19 @@ class PDMX:
     }
     home: Path
 
-    def __init__(self, home, name: str = "PDMX.csv"):
+    def __init__(self, home, name: str = "PDMX.csv", offset: int = -1, count: int = -1):
         self.home = home
         self.df = pd.read_csv(home / name)
+        self.slice(offset, count)
+
+    def slice(self, offset: int, count: int) -> Self:
+        offset = max(0, min(offset, len(self.df)))
+        count = min(count, len(self.df) - offset)
+        if count < 0:
+            self.df = self.df.iloc[offset:]
+        else:
+            self.df = self.df.iloc[offset: offset + count]
+        return self
 
     def relative(self, path) -> Path:
         return path.relative_to(self.home)
@@ -114,4 +124,5 @@ class PDMX:
     def stats(self, num_worker: int = os.cpu_count() or 4):
         from .pdmx_stater import PDMXStater
         stater = PDMXStater(self)
+        return stater.run(num_worker)
         return stater.run(num_worker)

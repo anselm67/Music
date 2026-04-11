@@ -49,15 +49,19 @@ class ClickContext:
               help="Root directory of the PDMX dataset.")
 @click.option("--csv", default="Staff16.csv", show_default=True,
               help="Name of the .csv master file.")
+@click.option("--count", "-n", type=int, default=-1, show_default="all",
+              help="How many rows of the dataset should we consider.")
+@click.option("--offset", "-o", type=int, default=-1, show_default="start",
+              help="Offset at which to start picking rows from the dataset.")
 @click.pass_context
-def cli(ctx, log_level: str, log_file: None | Path, home: Path, csv: str):
+def cli(ctx, log_level: str, log_file: None | Path, home: Path, csv: str, offset: int, count: int):
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
         filename=log_file,
         format="%(asctime)s | %(levelname)s | %(module)s.%(funcName)s:%(lineno)d | %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S"
     )
-    pdmx = PDMX(home, csv)
+    pdmx = PDMX(home, csv, offset, count)
     ctx.obj = ClickContext(Config(), home, pdmx)
 
 
@@ -92,12 +96,10 @@ def check():
 
 
 @click.command()
-@click.option("--count", "-c", type=int, default=50_000,
-              help="Number of samples to pick to from, -1 for all.")
 @click.pass_obj
-def show(ctx: ClickContext, count: int):
+def show(ctx: ClickContext):
     """Displays random samples from the dataset."""
-    dataset = StafferDataset(ctx.config, ctx.pdmx, count=count)
+    dataset = StafferDataset(ctx.config, ctx.pdmx)
     while True:
         index = random.randint(0, len(dataset) - 1)
         img, sys, staff, assign = dataset[index]
@@ -124,18 +126,15 @@ def show(ctx: ClickContext, count: int):
 
 
 @click.command()
-@click.option("--count", "-c", type=int, default=50000,
-              help="Number of samples to pick to compute the stats.")
 @click.option("--num-workers", type=int, default=8,
               help="Number of workers for the dataset loader.")
 @click.pass_obj
-def stats(ctx: ClickContext, count: int, num_workers: int):
+def stats(ctx: ClickContext, num_workers: int):
     """Computes the mean and std of a subset of images from the dataset.."""
     ds = StafferDataset(ctx.config, ctx.pdmx)
     loader = DataLoader[tuple[Tensor, Tensor, Tensor, Tensor]](
         ds, num_workers=num_workers, batch_size=ctx.config.batch_size
     )
-    scanned = count
     pix_sum = 0
     pix_sum2 = 0
     pix_count = 0
@@ -154,7 +153,7 @@ def stats(ctx: ClickContext, count: int, num_workers: int):
             logging.info(f"{count} left.")
     mean = pix_sum / pix_count
     std = math.sqrt(pix_sum2 / pix_count - mean ** 2)
-    print(f"Scanned {scanned} images.")
+    print(f"Scanned {len(ds)} images.")
     print(f"mean: {mean}")
     print(f" std: {std}")
 
@@ -388,7 +387,7 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path]) -> None:
     """
     ckpt_path = Path("checkpoints") / "staffer" / name / "last.ckpt"
     config = config_from_checkpoint(ckpt_path)
-    dataset = StafferDataset(config, ctx.pdmx, count=0)
+    dataset = StafferDataset(config, ctx.pdmx)
     model = StafferModule.load_from_checkpoint(
         ckpt_path, config=config, weights_only=False)
     model.eval()

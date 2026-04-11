@@ -19,8 +19,8 @@ class StafferDataModule(L.LightningDataModule):
         self.pdmx = pdmx
 
     def setup(self, stage: str | None = None):
-        full = StafferDataset(self.config, self.pdmx,
-                              self.config.train_len + self.config.valid_len)
+        self.pdmx.slice(0, self.config.train_len + self.config.valid_len)
+        full = StafferDataset(self.config, self.pdmx)
         self.train_ds, self.val_ds = random_split(
             full, [self.config.train_len, self.config.valid_len])
 

@@ -37,15 +37,19 @@ class ClickContext:
               help="Name of the .csv master file.")
 @click.option("--log-level", default="INFO",
               type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"], case_sensitive=False))
+@click.option("--count", "-n", type=int, default=-1, show_default="all",
+              help="How many rows of the dataset should we consider.")
+@click.option("--offset", "-o", type=int, default=-1, show_default="start",
+              help="Offset at which to start picking rows from the dataset.")
 @click.pass_context
-def cli(ctx, home: Path, csv: str, log_file: None | Path, log_level: str):
+def cli(ctx, home: Path, csv: str, log_file: None | Path, log_level: str, offset: int, count: int):
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
         filename=log_file,
         format="%(asctime)s | %(levelname)s | %(module)s.%(funcName)s:%(lineno)d | %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S"
     )
-    pdmx = PDMX(home, csv)
+    pdmx = PDMX(home, csv, offset, count)
     ctx.obj = ClickContext(home=home, pdmx=pdmx)
 
 
@@ -57,14 +61,12 @@ def cli(ctx, home: Path, csv: str, log_file: None | Path, log_level: str):
               help="Score query as a json filter.")
 @click.option("--columns", "-c", multiple=True,
               help="Names of columns to display")
-@click.option("--limit", "-n", default=-1, show_default=True,
-              help="Limit output to this many rows.")
 @click.option("--output", "-o",
               type=click.Path(dir_okay=False, file_okay=True, path_type=Path),
               default=None,
               help="Save the filtered set to the given output file.")
 @click.pass_obj
-def query(ctx: ClickContext, query_string: str, metadata: str | None, score: str | None, columns: tuple[str], limit: int, output: Path | None):
+def query(ctx: ClickContext, query_string: str, metadata: str | None, score: str | None, columns: tuple[str], output: Path | None):
     """Query the underlying PDMX.csv database as a DataFrame.
 
     QUERY_STRING: The base panda query to run.
@@ -75,7 +77,7 @@ def query(ctx: ClickContext, query_string: str, metadata: str | None, score: str
     if output is not None:
         result.to_csv(output, index=False)
     else:
-        print(result.head(limit).to_string())
+        print(result.to_string())
 
 
 @click.command()
@@ -232,6 +234,12 @@ def stats(ctx: ClickContext):
     print_histogram(stats.staff_histo, title="Staves per page:")
     print_histogram(stats.width100_histo, title="Page widths:")
     print_histogram(stats.height100_histo, title="Page heights:")
+
+    # Print the python code for part distribution so we can paste it to compute weights.
+    print("part_counts = {")
+    print(", ".join([f"{key}: {count}" for (key, count)
+                     in sorted(stats.part_histo.items())]))
+    print("}")
 
 
 cli.add_command(query)
