@@ -67,6 +67,10 @@
             "args": [
                 "--csv",
                 "Staff16.csv",
+                "-o",
+                "25000",
+                "-n",
+                "50000",
                 "stats",
             ]
         },
@@ -90,6 +94,10 @@
             "console": "integratedTerminal",
             "python": "${workspaceFolder}/.venv/bin/python",
             "args": [
+                "-o",
+                "0",
+                "-n",
+                "50000",
                 "stats",
             ]
         },
