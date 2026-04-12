@@ -44,6 +44,9 @@ class PDMX:
         self.df = pd.read_csv(home / name)
         self.slice(offset, count)
 
+    def __len__(self) -> int:
+        return len(self.df)
+
     def slice(self, offset: int, count: int) -> Self:
         offset = max(0, min(offset, len(self.df)))
         count = min(count, len(self.df) - offset)

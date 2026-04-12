@@ -110,7 +110,8 @@
             "python": "${workspaceFolder}/.venv/bin/python",
             "args": [
                 "train",
-                "testing"
+                "--use-sampler",
+                "sampler"
             ]
         },
         {

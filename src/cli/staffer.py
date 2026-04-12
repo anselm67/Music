@@ -166,12 +166,15 @@ def stats(ctx: ClickContext, num_workers: int):
               help="Enable early stopping with a patience of this amount of an epoch.")
 @click.option("--epochs", "-e", type=int, default=4,
               help="Numberof epochs to train for.")
+@click.option("--use-sampler", type=bool, is_flag=True, default=False,
+              help="Use a weighted sampler loader to equalize the distribution.")
 @click.pass_obj
 def train(ctx: ClickContext,
           name: str,
           hide_progress: bool,
           early_stopping: float,
-          epochs: int):
+          epochs: int,
+          use_sampler: bool):
     """Trains and/or resume training of a Staffer model instance.
 
     NAME: sets id/name of the model being trained.
@@ -251,7 +254,7 @@ def train(ctx: ClickContext,
 
     trainer.fit(
         StafferModule(config),
-        StafferDataModule(config, ctx.pdmx),
+        StafferDataModule(config, ctx.pdmx, use_sampler),
         ckpt_path=ckpt_path
     )
 
