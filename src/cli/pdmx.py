@@ -235,11 +235,7 @@ def stats(ctx: ClickContext):
     print_histogram(stats.width100_histo, title="Page widths:")
     print_histogram(stats.height100_histo, title="Page heights:")
 
-    # Print the python code for part distribution so we can paste it to compute weights.
-    print("part_counts = {")
-    print(", ".join([f"{key}: {count}" for (key, count)
-                     in sorted(stats.part_histo.items())]))
-    print("}")
+    print_histogram(stats.bar_histo, title="Bars per system:")
 
 
 cli.add_command(query)

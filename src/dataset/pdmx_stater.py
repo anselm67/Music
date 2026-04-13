@@ -46,6 +46,9 @@ class PDMXStats:
     width100_histo: Counter
     height100_histo: Counter
 
+    # Per stave statistics.
+    bar_histo: Counter
+
     def __init__(self):
         self.mxl_count = 0
         self.layout_count = 0
@@ -59,6 +62,7 @@ class PDMXStats:
         self.staff_histo = Counter()
         self.width100_histo = Counter()
         self.height100_histo = Counter()
+        self.bar_histo = Counter()
 
     def aggregate(self, score: Score):
         self.score_count += 1
@@ -72,6 +76,8 @@ class PDMXStats:
             self.staff_histo[p.staff_count] += 1
             self.width100_histo[p.image_width // 100] += 1
             self.height100_histo[p.image_height // 100] += 1
+            for s in p.systems:
+                self.bar_histo[s.bar_count] += 1
 
     def collect(self, other: 'PDMXStats'):
         self.layout_count += other.layout_count
@@ -85,6 +91,7 @@ class PDMXStats:
         self.staff_histo += other.staff_histo
         self.width100_histo += other.width100_histo
         self.height100_histo += other.height100_histo
+        self.bar_histo += other.bar_histo
 
 
 class PDMXStater:
