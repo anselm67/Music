@@ -102,7 +102,7 @@ def show(ctx: ClickContext):
     dataset = StafferDataset(ctx.config, ctx.pdmx)
     while True:
         index = random.randint(0, len(dataset) - 1)
-        img, sys, staff, assign = dataset[index]
+        img, sys, staff, assign, bar_xs = dataset[index]
         img = img.squeeze(0).cpu().numpy()
         img = np.stack([img] * 3, axis=-1) * 255
         width_height = img.shape[1], img.shape[0]
@@ -168,13 +168,16 @@ def stats(ctx: ClickContext, num_workers: int):
               help="Numberof epochs to train for.")
 @click.option("--use-sampler", type=bool, is_flag=True, default=False,
               help="Use a weighted sampler loader to equalize the distribution.")
+@click.option("--num-workers", type=int, default=8,
+              help="Number of workers for the dataset loader.")
 @click.pass_obj
 def train(ctx: ClickContext,
           name: str,
           hide_progress: bool,
           early_stopping: float,
           epochs: int,
-          use_sampler: bool):
+          use_sampler: bool,
+          num_workers: int):
     """Trains and/or resume training of a Staffer model instance.
 
     NAME: sets id/name of the model being trained.
@@ -254,7 +257,8 @@ def train(ctx: ClickContext,
 
     trainer.fit(
         StafferModule(config),
-        StafferDataModule(config, ctx.pdmx, use_sampler),
+        StafferDataModule(config, ctx.pdmx, use_sampler,
+                          num_workers=num_workers),
         ckpt_path=ckpt_path
     )
 
@@ -283,7 +287,9 @@ LOG_VARIABLES = [
     "stave_obj",
     "assign",
     "containment",
-    "alignment"
+    "alignment",
+    "bar_x",
+    "bar_obj"
 ]
 
 

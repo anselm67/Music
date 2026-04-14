@@ -41,6 +41,7 @@ class StafferDataset(Dataset):
             v2.Normalize(mean=[0.9563435316085815], std=[0.16557540870879858]),
         ])
         # Build flat list of (mxl_path, page_number) pairs
+        # TODO We're loading te score twice: once here and once in __getitem__
         logging.info("Initializing StafferDataset...")
         self.items = []
         for _, row in tqdm(pdmx.df.iterrows(), total=len(pdmx.df), desc="Loading dataset"):
@@ -65,7 +66,7 @@ class StafferDataset(Dataset):
     def __len__(self) -> int:
         return len(self.items)
 
-    def __getitem__(self, idx: int) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+    def __getitem__(self, idx: int) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         while True:
             layout_path, png_path, page_number, _, _ = self.items[idx]
             # Attempts to decode this image, or next one when that fails.
@@ -79,6 +80,8 @@ class StafferDataset(Dataset):
                 continue
 
             # Converts the Score to expected ground truth tensors.
+            # TODO We're loading te score twice: once here and once in __getitem__
+            is_ok = True
             score = Score.from_json(json.loads(layout_path.read_text()))
             page = score.pages[page_number - 1]
 
@@ -86,18 +89,29 @@ class StafferDataset(Dataset):
             staff_boxes = torch.zeros(self.config.num_stave_queries, 4)
             assigns = torch.full(
                 (self.config.num_stave_queries,), -1, dtype=torch.long)
-
+            bar_xs = torch.zeros(
+                self.config.num_system_queries, self.config.num_bar_queries)
             staff_idx = 0
             for sys_idx, system in enumerate(page.systems):
                 sys_boxes[sys_idx] = torch.tensor(system.box.to_cxcywh(
                     page.image_width, page.image_height))
+                bars = torch.tensor(system.staves[0].bars) / page.image_width
+                if len(bars) >= self.config.num_bar_queries:
+                    logging.warning(
+                        f"{layout_path}: too many bars {len(bars)}.")
+                    is_ok = False
+                    idx += 1
+                    break
+                bar_xs[sys_idx, :len(bars)] = bars
                 for staff in system.staves:
+                    # TODO Should we check that all bar_xs in this page match bar_xs pf the system.
                     staff_boxes[staff_idx] = torch.tensor(staff.box.to_cxcywh(
                         page.image_width, page.image_height))
                     assigns[staff_idx] = sys_idx
                     staff_idx += 1
 
-            return image, sys_boxes, staff_boxes, assigns
+            if is_ok:
+                return image, sys_boxes, staff_boxes, assigns, bar_xs
 
 
 def build_sampler(ds: Dataset, last_page_weight: float = 1.5) -> WeightedRandomSampler:

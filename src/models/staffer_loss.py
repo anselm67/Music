@@ -19,12 +19,15 @@ class LossDict:
     assign: Tensor
     containment: Tensor
     alignment: Tensor
+    bar_x: Tensor
+    bar_obj: Tensor
 
     def total(self) -> Tensor:
         return (
             self.sys_box + self.sys_giou + self.sys_obj +
             self.stave_box + self.stave_giou + self.stave_obj +
-            self.assign + self.containment + self.alignment
+            self.assign + self.containment + self.alignment +
+            self.bar_x + self.bar_obj
         )
 
 
@@ -179,14 +182,12 @@ class HierarchicalLoss(nn.Module):
 
     def forward(
         self,
-        pred_sys_boxes: Tensor,
-        pred_sys_logits: Tensor,
-        pred_stave_boxes: Tensor,
-        pred_stave_logits: Tensor,
-        pred_assign: Tensor,
-        gt_sys_boxes: list[Tensor],
-        gt_stave_boxes: list[Tensor],
-        gt_assign: list[Tensor],
+        pred_sys_boxes: Tensor, pred_sys_logits: Tensor,
+        pred_stave_boxes: Tensor, pred_stave_logits: Tensor, pred_assign: Tensor,
+        pred_bar_xs: Tensor, pred_bar_logits: Tensor,
+        gt_sys_boxes: Tensor,
+        gt_stave_boxes: Tensor, gt_assign: Tensor,
+        gt_bar_xs: Tensor
     ) -> LossDict:
         B = pred_sys_boxes.shape[0]
 
@@ -199,6 +200,8 @@ class HierarchicalLoss(nn.Module):
         assign = torch.tensor(0.0, device=pred_sys_boxes.device)
         containment = torch.tensor(0.0, device=pred_sys_boxes.device)
         alignment = torch.tensor(0.0, device=pred_sys_boxes.device)
+        bar_x = torch.tensor(0.0, device=pred_bar_xs.device)
+        bar_obj = torch.tensor(0.0, device=pred_bar_logits.device)
 
         for i in range(B):
             num_gt_staves = int((gt_assign[i] != -1).sum().item())
@@ -232,6 +235,16 @@ class HierarchicalLoss(nn.Module):
                 gt_assign[i], num_gt_staves, num_gt_sys,
             )
 
+            bar_mask = gt_bar_xs > 0
+            bar_x = bar_x + F.l1_loss(
+                pred_bar_xs[bar_mask].squeeze(-1),
+                gt_bar_xs[bar_mask]
+            )
+            bar_obj = bar_obj + F.binary_cross_entropy_with_logits(
+                pred_bar_logits.squeeze(-1),
+                bar_mask.float()
+            )
+
         return LossDict(
             sys_box=self.config.box_loss_multiplier * (sys_box / B),
             sys_giou=self.config.box_loss_multiplier * (sys_giou / B),
@@ -242,4 +255,6 @@ class HierarchicalLoss(nn.Module):
             assign=assign / B,
             containment=containment / B,
             alignment=alignment / B,
+            bar_x=bar_x / B,
+            bar_obj=bar_obj / B
         )
