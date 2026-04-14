@@ -244,6 +244,7 @@ cli.add_command(from_mxl)
 cli.add_command(show)
 cli.add_command(make)
 cli.add_command(stats)
+# TODO Add a validate command to check that all bars within a system are the same.
 
 
 def main():
