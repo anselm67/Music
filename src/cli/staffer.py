@@ -321,21 +321,40 @@ def plot_one(ax_metrics: Any, name: str,
 @click.command()
 @click.argument("names", type=str, nargs=-1)
 @click.option("--train-columns", "-t",
-              type=click.Choice(LOG_VARIABLES, case_sensitive=False),
+              type=str,
               multiple=True,
               help="Select one or more training metrics to plot.")
 @click.option("--valid-columns", "-v",
-              type=click.Choice(LOG_VARIABLES, case_sensitive=False),
+              type=str,
               multiple=True,
               help="Select one or more validation metrics to plot.")
-def logs(names: tuple[str], train_columns: tuple[str, ...], valid_columns: tuple[str, ...]):
+@click.option("--both-columns", "-a",
+              type=str,
+              multiple=True,
+              help="Selects one or more train and validation metrics to plot.")
+def logs(names: tuple[str],
+         train_columns: tuple[str, ...],
+         valid_columns: tuple[str, ...],
+         both_columns: tuple[str, ...]):
     """Displays training logs from multiple experiments in a single graph.
 
     NAMES: List of the names of the model experiments you want graphed."""
+    # Parses the metric names and select train/valid variant.
+    train_columns = tuple(i for c in train_columns for i in c.split(','))
+    valid_columns = tuple(i for c in valid_columns for i in c.split(','))
+    both_columns = tuple(i for c in both_columns for i in c.split(','))
+    for c in train_columns + valid_columns + both_columns:
+        if c not in LOG_VARIABLES:
+            raise click.UsageError(f"metric {c} doesn't exist.")
     columns = (tuple(f"train/{s}" for s in train_columns)
                + tuple(f"val/{s}" for s in valid_columns))
+    if len(both_columns) > 0:
+        columns += tuple(f"train/{s}" for s in both_columns)
+        columns += tuple(f"val/{s}" for s in both_columns)
     if len(columns) == 0:
         raise click.UsageError("Select at least one metric to plot.")
+
+    # Plots the metrics.
     (name, *others) = names
     csv_path = Path(f"logs/staffer/{name}/metrics.csv")
 
