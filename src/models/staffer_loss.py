@@ -235,16 +235,16 @@ class HierarchicalLoss(nn.Module):
                 gt_assign[i], num_gt_staves, num_gt_sys,
             )
 
-            bar_mask = gt_bar_xs > 0
-            bar_x = bar_x + F.l1_loss(
+        bar_mask = gt_bar_xs > 0
+        if bar_mask.any():
+            bar_x = F.l1_loss(
                 pred_bar_xs[bar_mask].squeeze(-1),
                 gt_bar_xs[bar_mask],
-                reduction='mean'
             )
-            bar_obj = bar_obj + F.binary_cross_entropy_with_logits(
-                pred_bar_logits.squeeze(-1),
-                bar_mask.float()
-            )
+        bar_obj = F.binary_cross_entropy_with_logits(
+            pred_bar_logits.squeeze(-1),
+            bar_mask.float()
+        )
 
         return LossDict(
             sys_box=self.config.box_loss_multiplier * (sys_box / B),
@@ -256,6 +256,6 @@ class HierarchicalLoss(nn.Module):
             assign=assign / B,
             containment=containment / B,
             alignment=alignment / B,
-            bar_x=self.config.bar_loss_multiplier * (bar_x / B),
-            bar_obj=bar_obj / B
+            bar_x=self.config.bar_loss_multiplier * bar_x,
+            bar_obj=bar_obj
         )
