@@ -19,6 +19,8 @@ To extract a reasonable subset from PDMX, you can use something like this:
 pdmx query -o subset.cvs 'index==index' --score 'pages.*.staff_count < 16'
 # Displays subset general statistics.
 pdmx --csv subset.csv stats
+# Train the staffer on that dataset.
+staffer --log-file logs/staffer.log train -e 12 --use-sampler
 ```
 
 TODO List:
