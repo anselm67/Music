@@ -50,7 +50,8 @@ class Config:
     weight_decay: float = 1e-4
     warmup_steps: int = 4000
     box_loss_multiplier: int = 2
-
+    bar_loss_multiplier: int = 5
+    
     def scale_to_patch(self, value: int) -> int:
         ret = value // self.divider
         return int(round(ret / self.patch_size) * self.patch_size)

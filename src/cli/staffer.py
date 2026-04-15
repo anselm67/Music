@@ -427,8 +427,8 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path]) -> None:
             (
                 pred_sys_boxes, pred_sys_logits,
                 pred_stave_boxes, pred_stave_logits,
-                # (stave_query, system_query)
-                pred_assign
+                pred_assign,
+                pred_bar_xs, pred_bar_logits
             ) = tuple(map(lambda t: t.squeeze(0), model.forward(img.unsqueeze(0))))
 
         img = img.squeeze(0).cpu().numpy()
@@ -441,6 +441,12 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path]) -> None:
             if pred_sys_logits[sys_index].item() > 0.0:
                 box = unbox(width_height, pred_sys_boxes[sys_index])
                 cv2.rectangle(img, box.top_left, box.bot_right, (0, 0, 255), 2)
+                for x, logits in zip(pred_bar_xs[sys_index], pred_bar_logits[sys_index]):
+                    print(f"\t\tbar {x.item()}: {logits.item():.2f}")
+                    if logits.item() > 0.0:
+                        x = int(x.item() * width_height[0])
+                        cv2.line(img, (x, box.top),
+                                 (x, box.bottom), (255, 0, 0), 2)
         stave_assignment = torch.argmax(pred_assign, dim=1)
         for staff_index in range(pred_assign.shape[0]):
             print(

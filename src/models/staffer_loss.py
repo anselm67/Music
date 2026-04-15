@@ -238,7 +238,8 @@ class HierarchicalLoss(nn.Module):
             bar_mask = gt_bar_xs > 0
             bar_x = bar_x + F.l1_loss(
                 pred_bar_xs[bar_mask].squeeze(-1),
-                gt_bar_xs[bar_mask]
+                gt_bar_xs[bar_mask],
+                reduction='mean'
             )
             bar_obj = bar_obj + F.binary_cross_entropy_with_logits(
                 pred_bar_logits.squeeze(-1),
@@ -255,6 +256,6 @@ class HierarchicalLoss(nn.Module):
             assign=assign / B,
             containment=containment / B,
             alignment=alignment / B,
-            bar_x=bar_x / B,
+            bar_x=self.config.bar_loss_multiplier * (bar_x / B),
             bar_obj=bar_obj / B
         )
