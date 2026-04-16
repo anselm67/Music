@@ -338,7 +338,15 @@ def logs(names: tuple[str],
          both_columns: tuple[str, ...]):
     """Displays training logs from multiple experiments in a single graph.
 
-    NAMES: List of the names of the model experiments you want graphed."""
+    NAMES: List of the names of the model experiments you want graphed.
+
+    The following metrics are available:
+
+    loss, lr (training only), stave_iou, sys_iou,
+    {sys|stave}_{iou, giou, obj, box},
+    assign, containment,
+    bar_x, bar_obj
+    """
     # Parses the metric names and select train/valid variant.
     train_columns = tuple(i for c in train_columns for i in c.split(','))
     valid_columns = tuple(i for c in valid_columns for i in c.split(','))
