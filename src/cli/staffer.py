@@ -323,14 +323,17 @@ def plot_one(ax_metrics: Any, name: str,
 @click.option("--train-columns", "-t",
               type=str,
               multiple=True,
+              metavar="METRIC,METRIC,...",
               help="Select one or more training metrics to plot.")
 @click.option("--valid-columns", "-v",
               type=str,
               multiple=True,
+              metavar="METRIC,METRIC,...",
               help="Select one or more validation metrics to plot.")
 @click.option("--both-columns", "-a",
               type=str,
               multiple=True,
+              metavar="METRIC,METRIC,...",
               help="Selects one or more train and validation metrics to plot.")
 def logs(names: tuple[str],
          train_columns: tuple[str, ...],
@@ -341,7 +344,7 @@ def logs(names: tuple[str],
     NAMES: List of the names of the model experiments you want graphed.
 
     \b
-    The following metrics are available:
+    The following METRIC are available:
     - loss, lr (training only), stave_iou, sys_iou,
     - {sys|stave}_{iou, giou, obj, box},
     - assign (staves), containment (staves),
