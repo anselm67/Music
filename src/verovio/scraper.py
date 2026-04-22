@@ -2,6 +2,7 @@
 """
 from __future__ import annotations
 
+import logging
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -49,6 +50,21 @@ class LayoutExtractor:
             right = to_x if right < 0 else max(right, to_x)
         return Box((left, top), (right, bottom))
 
+    def parse_bar_number(self, system_group) -> int | None:
+        measure = system_group.find("svg:g[@class='measure']", self.namespaces)
+        for g in measure.findall(".//svg:g", self.namespaces):
+            if "mNum" in (g.get("class") or ""):
+                text = g.find("svg:text", self.namespaces)
+                if text is None:
+                    return None
+                # Verovio sometimes wraps in tspan
+                tspans = list(text.iterfind(".//svg:tspan", self.namespaces))
+                if not tspans:
+                    return None
+                raw = tspans[-1].text or ""
+                return int(raw) if raw.strip().isdigit() else None
+        return None
+
     def parse_system(self, system_group, bar_number: int = 1) -> tuple[int, System]:
         # Collects the bounding box for all bars within that system.
         boxes: dict[int, list[Box]] = dict()
@@ -69,6 +85,11 @@ class LayoutExtractor:
                 bars=[bars[0].left, bars[0].right,
                       *[x.right for x in bars[1:]]]
             ))
+
+        # Parses and checks the bar number vs svg bar number when available:
+        svg_bar_number = self.parse_bar_number(system_group)
+        if svg_bar_number is not None and svg_bar_number != bar_number:
+            logging.warning(f"{self.svg_file}: bar count mismatch.")
 
         if not staves:
             raise ValueError(f"{self.svg_file} has a system with no staff.")
@@ -99,3 +120,5 @@ class LayoutExtractor:
             systems=systems,
             validated=True
         )
+
+# vscode - End of File

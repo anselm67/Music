@@ -55,6 +55,10 @@
             "python": "${workspaceFolder}/.venv/bin/python",
             "args": [
                 "make",
+                "--num-workers",
+                "1",
+                "--force",
+                "mxl/0/0/Qma1a2YHEJ8j9gxLCxgALAfjYaiYJQogh1bgyFSwNSRPCs.mxl"
             ]
         },
         {
