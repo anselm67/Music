@@ -187,7 +187,7 @@ class PDMXMaker:
                     page = LayoutExtractor(
                         svg_file).parse(page_number, bar_number)
                     pages.append(page)
-                    bar_number += page.bar_count
+                    bar_number = page.next_bar_number
                     page_number += 1
                 # Saves the final json file.
                 score = Score(

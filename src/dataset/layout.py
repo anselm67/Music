@@ -94,6 +94,13 @@ class System:
         _type_: A frozen dataclass describing the system layout.
     """
     bar_number: int
+
+    # bar_mismatch indicates an issue with the starting bar number for this
+    # system. The bar number found in the svg didn't match the bar number
+    # computed by summing all bars to this system start.
+    # When this flag is True, it is impossible to align the kern tokens
+    # to the corresponding system.
+    bar_mismatch: bool
     staves: list[Staff]
     box: Box = field(init=False)
 
@@ -132,7 +139,8 @@ class System:
 
     def scale(self, w_scale: float, h_scale: float) -> 'System':
         return System(
-            bar_number=self.bar_number,
+            self.bar_number,
+            self.bar_mismatch,
             staves=[s.scale(w_scale, h_scale) for s in self.staves]
         )
 
@@ -163,6 +171,15 @@ class Page:
     @property
     def bar_count(self):
         return sum(x.bar_count for x in self.systems)
+
+    @property
+    def first_bar_number(self):
+        return self.systems[0].bar_number
+
+    @property
+    def next_bar_number(self):
+        last_system = self.systems[-1]
+        return last_system.bar_number + last_system.bar_count
 
     def resize(self, width: int, height: int) -> 'Page':
         w_scale = width / self.image_width

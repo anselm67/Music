@@ -52,8 +52,11 @@ class LayoutExtractor:
 
     def parse_bar_number(self, system_group) -> int | None:
         measure = system_group.find("svg:g[@class='measure']", self.namespaces)
+        if measure is None:
+            return None
         for g in measure.findall(".//svg:g", self.namespaces):
-            if "mNum" in (g.get("class") or ""):
+            g_class = g.get("class") or ""
+            if ("mNum" in g_class) or g_class == "reh":
                 text = g.find("svg:text", self.namespaces)
                 if text is None:
                     return None
@@ -87,13 +90,23 @@ class LayoutExtractor:
             ))
 
         # Parses and checks the bar number vs svg bar number when available:
+        bar_mismatch: bool = False
         svg_bar_number = self.parse_bar_number(system_group)
         if svg_bar_number is not None and svg_bar_number != bar_number:
-            logging.warning(f"{self.svg_file}: bar count mismatch.")
+            # An off by one when svg_bar_number > bar_number typically indicates the
+            # previous system started with a pickup (anacruisis).
+            # That's fine as far as kern alignment to system is concerned.
+            if svg_bar_number + 1 != bar_number:
+                bar_mismatch = True
+                logging.warning(
+                    f"{self.svg_file}: bar count mismatch (adjusting): "
+                    f"computed {bar_number}, svg says {svg_bar_number}"
+                )
+            bar_number = svg_bar_number
 
         if not staves:
             raise ValueError(f"{self.svg_file} has a system with no staff.")
-        return bar_count, System(staves=staves, bar_number=bar_number)
+        return bar_number + bar_count, System(bar_number, bar_mismatch, staves)
 
     def parse(self, page_number: int = 1, bar_number: int = 1) -> Page:
         root = self.tree.getroot()
@@ -109,9 +122,8 @@ class LayoutExtractor:
         # Collects the bounding box for all bars on that page.
         systems: list[System] = list()
         for group in root.findall(".//svg:g[@class='system']", self.namespaces):
-            bar_count, system = self.parse_system(group, bar_number)
+            bar_number, system = self.parse_system(group, bar_number)
             systems.append(system)
-            bar_number += bar_count
 
         return Page(
             page_number=page_number,
