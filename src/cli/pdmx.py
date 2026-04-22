@@ -191,12 +191,14 @@ def show(ctx: ClickContext, any_path: Path, scale: float):
               help="Recomputes all dependent files even if they're newer than their mxl source.")
 @click.option("--dry-run", "-n", default=False, is_flag=True, show_default=True,
               help="Say what you'd do but don't do it.")
+@click.option("--num-workers", type=int, default=None,
+              help="Number of workers for the dataset loader.")
 @click.argument("mxl_file",
                 type=click.Path(dir_okay=False, file_okay=True,
                                 path_type=Path),
                 required=False, default=None)
 @click.pass_obj
-def make(ctx: ClickContext, mxl_file: Path | None, force: bool, dry_run: bool):
+def make(ctx: ClickContext, mxl_file: Path | None, force: bool, dry_run: bool, num_workers: int | None):
     """Computes all dependent files from PDMX mxl files.
 
     \b
@@ -213,15 +215,17 @@ def make(ctx: ClickContext, mxl_file: Path | None, force: bool, dry_run: bool):
     # Resolves relative path if needed.
     if mxl_file is not None:
         mxl_file = pdmx.get_path(mxl_file, 'mxl')
-    pdmx.make(mxl_file, force=force, dry_run=dry_run)
+    pdmx.make(mxl_file, force=force, dry_run=dry_run, num_workers=num_workers)
 
 
 @click.command()
+@click.option("--num-workers", type=int, default=None,
+              help="Number of workers for the dataset loader.")
 @click.pass_obj
-def stats(ctx: ClickContext):
+def stats(ctx: ClickContext, num_workers: int | None):
     """Computes layout statistics for the PDMX dataset.
     """
-    stats = ctx.pdmx.stats()
+    stats = ctx.pdmx.stats(num_worker=num_workers)
     print(f"{stats.layout_count:,} layout files, {stats.score_count:,} scores:")
     print(f"  Page count: {stats.page_count:,}")
     print(f"System count: {stats.system_count:,}")
