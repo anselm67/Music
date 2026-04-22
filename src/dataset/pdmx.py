@@ -119,13 +119,23 @@ class PDMX:
         else:
             return df
 
-    def make(self, mxl_file: Path | None = None, num_workers: int = os.cpu_count() or 4, force: bool = False, dry_run: bool = False):
+    def make(self,
+             mxl_file: Path | None = None,
+             num_workers: int | None = None,
+             force: bool = False,
+             dry_run: bool = False
+             ):
         from .pdmx_maker import PDMXMaker
+        if num_workers is None:
+            num_workers = os.cpu_count() or 4
         maker = PDMXMaker(self, force=force, dry_run=dry_run)
         maker.run(mxl_file, num_workers)
 
-    def stats(self, num_worker: int = os.cpu_count() or 4):
+    def stats(self, num_worker: int | None = None):
         from .pdmx_stater import PDMXStater
+        if num_worker is None:
+            num_worker = os.cpu_count() or 4
         stater = PDMXStater(self)
         return stater.run(num_worker)
-        return stater.run(num_worker)
+
+# vscode - End of File
