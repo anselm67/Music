@@ -78,6 +78,18 @@
                 "stats",
             ]
         },
+        {
+            "name": "pdmx info",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "cli.pdmx",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "args": [
+                "info",
+                "mxl/1/35/QmboE2pq5hXAvPDWMPG8tg5PTvuVy31yddKY6viRbNeAr4.mxl"
+            ]
+        },
         // staffer cli.
         {
             "name": "staffer show",

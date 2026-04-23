@@ -182,6 +182,13 @@ def show(ctx: ClickContext, any_path: Path, scale: float):
         elif key == ord('n'):
             if (page_index := page_index + 1) >= score.page_count:
                 page_index = 0
+        elif key == ord('i'):
+            mxl_file = pdmx.get_path(any_path, 'mxl')
+            if (infos := pdmx.info(mxl_file)) is None:
+                print(f"{mxl_file}: not found.")
+            else:
+                for title, value in infos:
+                    print(f"{title}\n\t\033[1;31m{value}\033[0m")
 
     cv2.destroyAllWindows()
 
@@ -242,12 +249,35 @@ def stats(ctx: ClickContext, num_workers: int | None):
     print_histogram(stats.bar_histo, title="Bars per system:")
 
 
+@click.command()
+@click.argument("mxl_file",
+                type=click.Path(dir_okay=False, file_okay=True,
+                                path_type=Path),
+                required=False, default=None)
+@click.pass_obj
+def info(ctx: ClickContext, mxl_file: Path):
+    """Displays all infos about a given PDMX score.
+
+    MXL_FILE: Optional; When provided only this item is checked and rebuild.
+    """
+    pdmx = ctx.pdmx
+    # Resolves relative path if needed.
+    if mxl_file is not None:
+        mxl_file = pdmx.get_path(mxl_file, 'mxl')
+    if (infos := pdmx.info(mxl_file)) is None:
+        print(f"{mxl_file}: not found.")
+    else:
+        for title, value in infos:
+            print(f"{title}\n\t\033[1;31m{value}\033[0m")
+
+
 cli.add_command(query)
 cli.add_command(render)
 cli.add_command(from_mxl)
 cli.add_command(show)
 cli.add_command(make)
 cli.add_command(stats)
+cli.add_command(info)
 # TODO Add a validate command to check that all bars within a system are the same.
 
 

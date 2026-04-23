@@ -37,6 +37,70 @@ class PDMX:
         'svg': '.svg',
         'png': '.png'
     }
+    CSV_SCHEMA = {
+        "path": "Path to the data (MusicRender JSON) file.",
+        "metadata": "Path to the associated metadata (JSON) file. The basename of each file matches the basename of the corresponding file in the path column.",
+        "mxl": "Path to the associated compressed MusicXML (MXL) file. The basename of each file matches the basename of the corresponding file in the path column. Values may be N/A, since some of the original MuseScore files are corrupted and thus cannot be converted to compressed MusicXML.",
+        "pdf": "Path to the associated sheet music (PDF) file. The basename of each file matches the basename of the corresponding file in the path column. Values may be N/A, since some of the original MuseScore files are corrupted and thus cannot be converted to PDF.",
+        "mid": "Path to the associated MIDI (MID) file. The basename of each file matches the basename of the corresponding file in the path column. Values may be N/A, since some of the original MuseScore files are corrupted and thus cannot be converted to MID.",
+        "version": "Version of the original MuseScore file.",
+        "is_user_pro": "Whether the user who posted the original MuseScore file is a 'pro' user (pays for a MuseScore subscription).",
+        "is_user_publisher": "Whether the user who posted the original MuseScore file is a music publisher.",
+        "is_user_staff": "Whether the user who posted the original MuseScore file is part of MuseScore staff.",
+        "has_paywall": "Whether the original MuseScore file had a paywall.",
+        "is_rated": "Whether the original MuseScore file had any ratings.",
+        "is_official": "Whether the original MuseScore file was an 'official' score, a title decided by MuseScore.",
+        "is_original": "Whether the original MuseScore file was an original work.",
+        "is_draft": "Whether the original MuseScore file was marked as a draft by the user who posted it.",
+        "has_custom_audio": "Whether the original MuseScore file has an associated custom audio file (must retrieve the actual audio from the metadata).",
+        "has_custom_video": "Whether the original MuseScore file has an associated custom video file (must retrieve the actual video from the metadata).",
+        "n_comments": "Number of comments on the original MuseScore file.",
+        "n_favorites": "Number of users who favorited the original MuseScore file.",
+        "n_views": "Number of views on the original MuseScore file.",
+        "n_ratings": "Number of ratings on the original MuseScore file.",
+        "rating": "Average rating (out of five stars) of the original MuseScore file. A rating of zero indicates that a song is unrated.",
+        "license": "Creative Commons license of the original MuseScore file.",
+        "license_url": "Link to the Creative Commons license of the original MuseScore file. Directly related to the license column.",
+        "license_conflict": "Whether the song's public-facing copyright metadata license disagrees with the internal copyright license data of the original MuseScore file.",
+        "genres": "Genre(s) associated with the original MuseScore file, separated with a '-' if there are multiple.",
+        "groups": "MuseScore group(s) associated with the original MuseScore file, separated with a '-' if there are multiple.",
+        "tags": "MuseScore tag(s) associated with the original MuseScore file, separated with a '-' if there are multiple.",
+        "song_name": "If available, the name of the song.",
+        "title": "If available, the title of the song, oftentimes the same as song_name.",
+        "subtitle": "If available, the subtitle of the song.",
+        "artist_name": "If available, the name of the artist who created the song.",
+        "composer_name": "If available, the name of the composer who created the song, oftentimes the same as artist_name.",
+        "publisher": "If available, the publisher of the song.",
+        "complexity": "The MuseScore complexity score of the original MuseScore file. Ranges from 0-3.",
+        "n_tracks": "The number of tracks (parts) in the original MuseScore file.",
+        "tracks": "Track{s} from the original MuseScore file, separated with a '-' if there are multiple.",
+        "song_length": "Length of the song, in metrical MusPy time steps.",
+        "song_length.seconds": "Length of the song, in seconds.",
+        "song_length.bars": "Length of the song, in bars.",
+        "song_length.beats": "Length of the song, in beats.",
+        "n_notes": "Number of notes in the song.",
+        "notes_per_bar": "Average number of notes per bar in the song.",
+        "n_annotations": "Number of annotations in the song.",
+        "has_annotations": "Whether the song has any annotations.",
+        "n_lyrics": "Number of lyrics in the song.",
+        "has_lyrics": "Whether the song has any lyrics.",
+        "n_tokens": "Number of tokens (n_notes + n_annotations + n_lyrics) in the song.",
+        "pitch_class_entropy": "Pitch Class Entropy of the song, as calculated by the MusPy Package.",
+        "scale_consistency": "Scale Consistency of the song, as calculated by the MusPy Package. Ranges from 0-1.",
+        "groove_consistency": "Groove Consistency of the song, as calculated by the MusPy Package. Ranges from 0-1.",
+        "best_path": "Best filepath in the song's title duplicate grouping (see paper for full description).",
+        "is_best_path": "Whether the song is the best_path in the title duplicate grouping.",
+        "best_arrangement": "Best filepath in the song's title-instrumentation duplicate grouping.",
+        "is_best_arrangement": "Whether the song is the best_arrangement in the title-instrumentation duplicate grouping.",
+        "best_unique_arrangement": "Best filepath in the song's title-instrumentation-arrangement duplicate grouping.",
+        "is_best_unique_arrangement": "Whether the song is the best_unique_arrangement in the title-instrumentation-arrangement duplicate grouping. All songs for which this value is true are part of the Deduplicated subset.",
+        "subset:all": "Whether the song is part of the All subset (all True).",
+        "subset:deduplicated": "Whether the song is part of the Deduplicated subset (the same as is_best_unique_arrangement).",
+        "subset:rated": "Whether the song is part of the Rated subset (the song has a non-zero rating).",
+        "subset:rated_deduplicated": "Whether the song is both part of the Rated and Deduplicated subsets.",
+        "subset:no_license_conflict": "Whether the song's public-facing copyright metadata license agrees with the internal copyright license data of the original MuseScore file (the negation of the license_conflict column).",
+        "subset:all_valid": "Whether the song's associated compressed MusicXML (MXL), sheet music (PDF), and MIDI (MID) files are all valid (non-N/A)."
+    }
     home: Path
 
     def __init__(self, home, name: str = "PDMX.csv", offset: int = -1, count: int = -1):
@@ -137,5 +201,20 @@ class PDMX:
             num_worker = os.cpu_count() or 4
         stater = PDMXStater(self)
         return stater.run(num_worker)
+
+    def info(self, mxl_file: Path) -> list[tuple[str, str]] | None:
+        value = mxl_file.name
+        for _, row in self.df.iterrows():
+            mxl_str = row['mxl']
+            if not isinstance(mxl_str, str):
+                continue
+            elif Path(mxl_str).name == value:
+                infos: list[tuple[str, str]] = list()
+                for col in self.df.columns:
+                    infos.append(
+                        (self.CSV_SCHEMA[col], row[col])
+                    )
+                return infos
+        return None
 
 # vscode - End of File
