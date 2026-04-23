@@ -137,6 +137,7 @@ def show(ctx: ClickContext, any_path: Path, scale: float):
     score = Score.from_json(obj)
 
     page_index = 0
+    hide_truth: bool = False
     while True:
         page = score.pages[page_index]
         # Loads the page image.
@@ -153,24 +154,26 @@ def show(ctx: ClickContext, any_path: Path, scale: float):
         (height, width) = tuple(map(lambda x: int(x * scale), img.shape[:2]))
         img = cv2.resize(img, (width, height))
         page = page.resize(width, height)
-        print(
-            f"Page {page_index+1}: {page.image_width} x {page.image_height} px {len(page.systems)} systems...")
-        for index, system in enumerate(page.systems):
-            print(f"\tsystem {index+1}: {len(page.systems[0].staves)} staves.")
 
         # Renders the page layout on top of the image.
-        system_color = (255, 0, 0)
-        staff_color = (0, 255, 0)
-        bar_color = (0, 0, 255)
-        for system in page.systems:
-            cv2.rectangle(img, system.box.top_left,
-                          system.box.bot_right, system_color, 8)
-            for staff in system.staves:
-                cv2.rectangle(img, staff.box.top_left,
-                              staff.box.bot_right, staff_color, 4)
-                for bar in staff.bars:
-                    cv2.line(img, (bar, staff.box.top),
-                             (bar, staff.box.bottom), bar_color, 2)
+        if not hide_truth:
+            print(
+                f"Page {page_index+1}: {page.image_width} x {page.image_height} px {len(page.systems)} systems...")
+            for index, system in enumerate(page.systems):
+                print(
+                    f"\tsystem {index+1}: {len(page.systems[0].staves)} staves.")
+            system_color = (255, 0, 0)
+            staff_color = (0, 255, 0)
+            bar_color = (0, 0, 255)
+            for system in page.systems:
+                cv2.rectangle(img, system.box.top_left,
+                              system.box.bot_right, system_color, 8)
+                for staff in system.staves:
+                    cv2.rectangle(img, staff.box.top_left,
+                                  staff.box.bot_right, staff_color, 4)
+                    for bar in staff.bars:
+                        cv2.line(img, (bar, staff.box.top),
+                                 (bar, staff.box.bottom), bar_color, 2)
         cv2.imshow("layout", img)
         cv2.setMouseCallback("layout", mouse_positon_handler)
 
@@ -189,6 +192,15 @@ def show(ctx: ClickContext, any_path: Path, scale: float):
             else:
                 for title, value in infos:
                     print(f"{title}\n\t\033[1;31m{value}\033[0m")
+        elif key == ord('h'):
+            hide_truth = not hide_truth
+        else:
+            print(
+                "(p)revious page,\n"
+                "(n)ext page,\n"
+                "(i)nfos about tghe score,\n"
+                "(h)ide/show ground truth boxes."
+            )
 
     cv2.destroyAllWindows()
 
