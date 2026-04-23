@@ -47,8 +47,10 @@ def staff_paths(top_y: int, bot_y: int, left_x: int = 100, right_x: int = 5000) 
 def one_staff_system(top_y: int = 200, bot_y: int = 600) -> str:
     return f"""\
 <g class="system">
-  <g class="staff">
-    {staff_paths(top_y, bot_y)}
+  <g class="measure">
+    <g class="staff">
+        {staff_paths(top_y, bot_y)}
+    </g>
   </g>
 </g>"""
 
@@ -57,12 +59,14 @@ def two_staff_system(top1: int = 200, bot1: int = 600,
                      top2: int = 1200, bot2: int = 1600) -> str:
     return f"""\
 <g class="system">
+ <g class="measure">
   <g class="staff">
     {staff_paths(top1, bot1)}
   </g>
   <g class="staff">
     {staff_paths(top2, bot2)}
   </g>
+ </g>
 </g>"""
 
 
@@ -177,17 +181,21 @@ class TestSystemParsing:
     def test_two_systems_bar_numbers_increment(self, tmp_path):
         body = f"""\
 <g class="system">
+ <g class="measure">
   <g class="staff">
     <path d="M100 200 L1000 200"/>
     <path d="M100 600 L1000 600"/>
     <path d="M2000 200 L3000 200"/>
     <path d="M2000 600 L3000 600"/>
   </g>
+ </g>
 </g>
 <g class="system">
+ <g class="measure">
   <g class="staff">
     {staff_paths(1200, 1600)}
   </g>
+ </g>
 </g>"""
         svg = write_svg(tmp_path, make_svg(body))
         page = LayoutExtractor(svg).parse()
@@ -216,11 +224,13 @@ class TestStaffParsing:
     def test_non_matching_paths_ignored(self, tmp_path):
         body = f"""\
 <g class="system">
+ <g class="measure">
   <g class="staff">
     <path d="M100 200 L5000 200"/>
     <path d="C100 200 300 400 500 600"/>
     <path d="M100 600 L5000 600"/>
   </g>
+ </g>
 </g>"""
         svg = write_svg(tmp_path, make_svg(body))
         page = LayoutExtractor(svg).parse()

@@ -13,19 +13,22 @@ from dataset import Box, Page, Staff, System
 class LayoutExtractor:
     svg_file: Path
     tree: ET.ElementTree[ET.Element]
-    namespaces: dict[str, str]
+    ns: dict[str, str]
     translation: tuple[int, int]
 
     def __init__(self, svg_file: Path):
         self.svg_file = svg_file
         self.tree = ET.parse(svg_file)
-        self.namespaces = {'svg': 'http://www.w3.org/2000/svg'}
+        self.ns = {
+            'svg': 'http://www.w3.org/2000/svg',
+            'xlink': 'http://www.w3.org/1999/xlink'
+        }
         self.parse_translation()
 
     def parse_translation(self):
         self.translation = (0, 0)
         page_margin = self.tree.getroot().find(
-            ".//{http://www.w3.org/2000/svg}g[@class='page-margin']")
+            ".//svg:g[@class='page-margin']", self.ns)
         if page_margin is not None:
             attr = page_margin.attrib.get('transform')
             if attr is not None and (match := re.search(r"translate\((\d+),\s*(\d+)\)", attr)):
@@ -34,9 +37,27 @@ class LayoutExtractor:
     def translate(self, point: tuple[int, int]) -> tuple[int, int]:
         return (point[0] + self.translation[0]) // 10, (point[1] + self.translation[1]) // 10
 
-    def parse_staff_group(self, staff_group) -> Box:
+    MULTIREST_RE = re.compile(r"^#E08(?P<digit>\d)-.*$")
+
+    def check_multirest(self, staff_group) -> int | None:
+        multirest = staff_group.find(
+            ".//svg:g[@class='multiRest']", self.ns)
+        if multirest is None:
+            return None
+        digits: list[str] = list()
+        for use in multirest.findall("svg:use", self.ns):
+            href = use.get(f"{{{self.ns['xlink']}}}href")
+            if (m := self.MULTIREST_RE.match(href)) is not None:
+                digits.append(m.group("digit"))
+        if digits:
+            return int("".join(digits))
+        else:
+            return None
+
+    def parse_staff_group(self, staff_group) -> tuple[int, Box]:
+        """Returns the bafr count (multirest) and bounding box for the staff."""
         (top, bottom, left, right) = (-1, -1, -1, -1)
-        for path in staff_group.findall("svg:path", self.namespaces):
+        for path in staff_group.findall("svg:path", self.ns):
             d_attr = path.get('d', '')
             match = re.match(r"^M(\d+)\s+(\d+)\s+L(\d+)\s+(\d+)$", d_attr)
             if match is None:
@@ -48,20 +69,26 @@ class LayoutExtractor:
             bottom = to_y if bottom < 0 else max(bottom, to_y)
             left = x if left < 0 else min(left, x)
             right = to_x if right < 0 else max(right, to_x)
-        return Box((left, top), (right, bottom))
 
-    def parse_bar_number(self, system_group) -> int | None:
-        measure = system_group.find("svg:g[@class='measure']", self.namespaces)
+        # Checks for a multirest measure.
+        bar_count = self.check_multirest(staff_group)
+        return (
+            1 if bar_count is None else bar_count,
+            Box((left, top), (right, bottom))
+        )
+
+    def check_bar_number(self, system_group) -> int | None:
+        measure = system_group.find("svg:g[@class='measure']", self.ns)
         if measure is None:
             return None
-        for g in measure.findall(".//svg:g", self.namespaces):
+        for g in measure.findall(".//svg:g", self.ns):
             g_class = g.get("class") or ""
             if ("mNum" in g_class) or g_class == "reh":
-                text = g.find("svg:text", self.namespaces)
+                text = g.find("svg:text", self.ns)
                 if text is None:
                     return None
                 # Verovio sometimes wraps in tspan
-                tspans = list(text.iterfind(".//svg:tspan", self.namespaces))
+                tspans = list(text.iterfind(".//svg:tspan", self.ns))
                 if not tspans:
                     return None
                 raw = tspans[-1].text or ""
@@ -71,18 +98,23 @@ class LayoutExtractor:
     def parse_system(self, system_group, bar_number: int = 1) -> tuple[int, System]:
         # Collects the bounding box for all bars within that system.
         boxes: dict[int, list[Box]] = dict()
-        for group in system_group.findall(".//svg:g[@class='staff']", self.namespaces):
-            box = self.parse_staff_group(group)
-            boxes.setdefault(box.top, list()).append(box)
+        bar_count = 0
+        for measure in system_group.findall(".//svg:g[@class='measure']", self.ns):
+            measure_bar_count: int = -1
+            for group in measure.findall(".//svg:g[@class='staff']", self.ns):
+                count, box = self.parse_staff_group(group)
+                if measure_bar_count < 0:
+                    measure_bar_count = count
+                elif measure_bar_count != count:
+                    logging.warning(
+                        f"{self.svg_file}: measure {measure.get('id')} bar count mismatch."
+                    )
+                boxes.setdefault(box.top, list()).append(box)
+            bar_count += measure_bar_count
 
         # Transform bars bounding boxes into a list of staves.
         staves: list[Staff] = list()
-        bar_count = -1
         for _, bars in sorted(boxes.items()):
-            if bar_count < 0:
-                bar_count = len(bars)
-            elif bar_count != len(bars):
-                raise ValueError("Bar count mismatch.")
             staves.append(Staff(
                 box=Box(bars[0].top_left, bars[-1].bot_right),
                 bars=[bars[0].left, bars[0].right,
@@ -91,7 +123,7 @@ class LayoutExtractor:
 
         # Parses and checks the bar number vs svg bar number when available:
         bar_mismatch: bool = False
-        svg_bar_number = self.parse_bar_number(system_group)
+        svg_bar_number = self.check_bar_number(system_group)
         if svg_bar_number is not None and svg_bar_number != bar_number:
             # An off by one when svg_bar_number > bar_number typically indicates the
             # previous system started with a pickup (anacruisis).
@@ -121,7 +153,7 @@ class LayoutExtractor:
 
         # Collects the bounding box for all bars on that page.
         systems: list[System] = list()
-        for group in root.findall(".//svg:g[@class='system']", self.namespaces):
+        for group in root.findall(".//svg:g[@class='system']", self.ns):
             bar_number, system = self.parse_system(group, bar_number)
             systems.append(system)
 
