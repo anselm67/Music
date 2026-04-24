@@ -23,6 +23,7 @@ from pathlib import Path
 import aiofiles
 
 from dataset import Page, Score
+from kern import tokenize
 from verovio import (
     LayoutExtractor,
     mxl_to_kern_command,
@@ -150,11 +151,26 @@ class PDMXMaker:
             json_file = self.pdmx.get_path(mxl_file, 'layout', mkdirs=True)
             self.queue.put_nowait(SvgLayoutTask(svg_files, json_file))
 
+    def krn_to_tokens(self, krn_file: Path):
+        # If the krn file doesn't exist, assume verovio failed to produced it.
+        if not krn_file.exists():
+            return
+        tok_file = krn_file.with_suffix(".tokens")
+        if not self.force and self.newer(krn_file, tok_file):
+            logging.debug(f"-> {tok_file}")
+            return
+        logging.debug(f"=> {tok_file}")
+        try:
+            tokenize(krn_file, tok_file)
+        except Exception as e:
+            logging.warning(f"{tok_file}: {e}")
+
     async def mxl_krn_task(self, mxl_file: Path):
         # Converts the mxl file to svg by rendering it with verovio.
         krn_file = self.pdmx.get_path(mxl_file, 'krn', mkdirs=True)
         if not self.force and self.newer(mxl_file, krn_file):
             logging.debug(f"-> {krn_file}")
+            self.krn_to_tokens(krn_file)
         else:
             (binary, args) = mxl_to_kern_command(mxl_file, krn_file)
             if self.dry_run:
@@ -163,6 +179,9 @@ class PDMXMaker:
                 logging.debug(f"=> {krn_file}")
                 if await self.exec(binary, args) != 0:
                     self.pdmx.touch_err_path(krn_file)
+                    return
+                else:
+                    self.krn_to_tokens(krn_file)
 
     def should_refresh_layout(self, svg_files: list[Path], json_file: Path) -> bool:
         if self.force:
@@ -255,4 +274,6 @@ class PDMXMaker:
                 tg.create_task(self.worker())
 
     def run(self, xml_path: Path | None, num_worker: int):
+        return run(self.async_run(xml_path, num_worker))
+        return run(self.async_run(xml_path, num_worker))
         return run(self.async_run(xml_path, num_worker))

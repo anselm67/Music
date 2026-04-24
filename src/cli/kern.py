@@ -8,6 +8,7 @@ from pathlib import Path
 import click
 
 from kern import EmptyHandler, Parser, to_midi
+from kern import tokenize as kern_tokenize
 
 
 @dataclass
@@ -62,8 +63,23 @@ def midi(ctx: ClickContext, kern_file: Path, output: Path, tempo: int):
     to_midi(kern_file, output, tempo=tempo)
 
 
+@click.command()
+@click.argument("kern_file",
+                type=click.Path(dir_okay=False, file_okay=True,
+                                exists=True, readable=True, path_type=Path),
+                required=True)
+@click.option("--output", "-o",
+              type=click.Path(dir_okay=False, file_okay=True, path_type=Path),
+              default=None)
+@click.pass_obj
+def tokenize(ctx: ClickContext, kern_file: Path, output: Path | None):
+    """Tokenize a kern file into a unique normal form."""
+    kern_tokenize(kern_file, output, enable_warnings=not ctx.silent)
+
+
 cli.add_command(validate)
 cli.add_command(midi)
+cli.add_command(tokenize)
 
 
 def main():
@@ -73,3 +89,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# vscode - End of File

@@ -3,6 +3,7 @@ from .empty import EmptyHandler, EmptySpine
 from .kern_reader import KernReader
 from .parser import Parser
 from .to_midi import to_midi
+from .tokenizer import tokenize
 from .typing import (
     Bar,
     Chord,
@@ -39,5 +40,8 @@ __all__ = [
     "Rest",
     "SpinePath",
     "Token",
-    "to_midi"
+    "to_midi",
+    "tokenize"
 ]
+
+# vscode - End of File

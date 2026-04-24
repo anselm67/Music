@@ -17,6 +17,20 @@
                 "/home/anselm/datasets/kern-sheet/haydn/keyboard/uesonatas/sonata45-3a.krn"
             ]
         },
+        {
+            "name": "kern tokenize",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "cli.kern",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "args": [
+                "tokenize",
+                "-o",
+                "foo.tok",
+                "/home/anselm/datasets/PDMX/krn/1/11/QmbbNbvHZ8SL65ghemEtVrQjwsRHnU5nviRKLKbBwWrWQ2.krn"
+            ]
+        },
         // pdmx cli
         {
             "name": "pdmx show",
@@ -56,9 +70,9 @@
             "args": [
                 "make",
                 "--num-workers",
-                "1",
-                "--force",
-                "mxl/1/30/QmbLm3iHw7MDoY6Jm75w5ZkBNTGvGVqcCiNh3DcK8HrCEU.mxl"
+                "1"
+                // "--force",
+                // "mxl/1/30/QmbLm3iHw7MDoY6Jm75w5ZkBNTGvGVqcCiNh3DcK8HrCEU.mxl"
             ]
         },
         {
