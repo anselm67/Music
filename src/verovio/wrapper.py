@@ -31,7 +31,11 @@ def mxl_to_kern(mxl_file: Path, krn_file: Path) -> bool:
 
 def render_command(src_file: Path, dst_file: Path) -> tuple[Path, list[str]]:
     return verovio_binary(), [
+        # Log off!
         "-l", "off",
+        # Outputs measure number on every bar, for sync with the kern file.
+        "--mnum-interval", "1",
+        # Outputs all pages at once.
         "-a",
         src_file.as_posix(),
         "-o", dst_file.as_posix()
