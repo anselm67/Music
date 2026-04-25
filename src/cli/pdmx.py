@@ -114,7 +114,7 @@ def from_mxl(mxl_file: Path, output: Path):
     print(f"Output written to {output}.")
 
 
-def mouse_positon_handler(event, x, y, flags, any_page):
+def mouse_positon_handler(event, x, y, _, any_page):
     if event != cv2.EVENT_LBUTTONDOWN:
         return
     print(f"x: {x}, y: {y}")
