@@ -24,14 +24,18 @@ from kern.typing import (
 
 
 class Spine:
-
-    in_beam: int = 0
-    in_tie: bool = False
+    pass
 
 
 class IgnoredSpine(Spine):
-
     pass
+
+
+class MergeSpine(Spine):
+    into: Spine
+
+    def __init__(self, into: Spine):
+        self.into = into
 
 
 class TokenFormatter:
@@ -154,16 +158,24 @@ class BaseHandler(Parser[Spine].Handler):
         self.spines.append(spine)
         return spine
 
+    def debug_spine(self):
+        print("\t".join(f"{id(spine):#x}" for spine in self.spines))
+
     def close_spine(self, spine: Spine):
+        # print(f"close: {id(spine):#x}")
         self.spines.remove(spine)
+        # self.debug_spine()
 
     def branch_spine(self, source: Spine) -> Spine:
-        branch = type(source)()
-        self.spines.insert(self.position(source), branch)
+        branch = MergeSpine(source)
+        self.spines.insert(self.position(source) + 1, branch)
+        # print(f"branch: {id(source):#x} => {id(branch):#x}")
+        # self.debug_spine()
         return branch
 
     def merge_spines(self, source: Spine, into: Spine):
         # The source will be close_spine() by the parser.
+        # print(f"merge: {id(source):#x} => {id(into):#x}")
         pass
 
     def rename_spine(self, spine: Spine, name: str):
@@ -263,6 +275,38 @@ class NormHandler(BaseHandler):
 
         return tokens
 
+    def merge(self, toks) -> list[Token]:
+        # We might have merge multiple bar tokens, keep only one.
+        if self.check_type(toks, Bar):
+            return [toks[0]]
+
+        # Continue tokens are redundant with others non-Continue.
+        if self.check_type(toks, Continue):
+            return [toks[0]]
+        else:
+            toks = [tok for tok in toks if not isinstance(tok, Continue)]
+
+        # Rest tokens should have matching length and are redundant.
+        if self.check_type(toks, Rest):
+            return [toks[0]]
+        return toks
+
+    def merge_tokens(self, tokens) -> list[str]:
+        output: list[list[Token]] = [[] for _ in range(len(self.spines))]
+        for idx, (spine, tok) in enumerate(tokens):
+            if isinstance(spine, MergeSpine):
+                dst_index = self.position(cast(MergeSpine, spine).into)
+                output[dst_index].append(tok)
+            else:
+                output[idx].append(tok)
+        # Remove redundant tokens from each remaining spine.
+        output = [self.merge(toks) for toks in output if toks]
+        # Space join tokens that belong to the same spine.
+        formatted_output: list[list[str]] = [
+            [self.formatter.format(tok) for tok in toks] for toks in output
+        ]
+        return [" ".join(toks) for toks in formatted_output]
+
     def append(self, tokens: list[tuple[Spine, Token]]):
         tokens = [(spine, token) for spine, token in tokens
                   if not isinstance(spine, IgnoredSpine)]
@@ -271,10 +315,9 @@ class NormHandler(BaseHandler):
         if not (fixed_bars := self.fix_bar(tokens)):
             return
         tokens = fixed_bars
+        output = self.merge_tokens(tokens)
         if self.output:
-            self.output.write('\t'.join([
-                self.formatter.format(tok) for _, tok in tokens
-            ]) + "\n")
+            self.output.write('\t'.join(tok for tok in output if tok) + "\n")
 
     def done(self):
         if self.output:

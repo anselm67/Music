@@ -331,7 +331,7 @@ class Parser(Generic[T]):
         branch = self.handler.branch_spine(source_holder.spine)
         holder = type(source_holder)(branch)
         holder.enable_warnings = self.enable_warnings
-        self.insert_spine(self.position(source_holder), holder)
+        self.insert_spine(self.position(source_holder) + 1, holder)
         return branch
 
     def merge_spines(self, source_holder: SpineHolder, into_holder: SpineHolder):
