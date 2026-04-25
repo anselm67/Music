@@ -21,7 +21,7 @@ def newer(src_file: Path, dst_file: Path) -> bool:
 
 
 type DirClass = Literal[
-    'data', 'krn',
+    'data', 'krn', 'tokens',
     'layout', 'metadata', 'mxl', 'pdf', 'svg', 'png'
 ]
 
@@ -30,6 +30,7 @@ class PDMX:
     EXTENSIONS: dict[DirClass, str] = {
         'data': '.json',
         'krn': '.krn',
+        'tokens': '.tokens',
         'layout': '.json',
         'metadata': '.json',
         'mxl': '.mxl',

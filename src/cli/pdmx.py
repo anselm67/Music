@@ -15,6 +15,7 @@ import cv2
 
 from dataset import PDMX, Score
 from dataset.layout import Page
+from kern import KernReader
 from utils import print_histogram
 from verovio import mxl_to_kern
 from verovio import render as verovio_render
@@ -114,13 +115,19 @@ def from_mxl(mxl_file: Path, output: Path):
     print(f"Output written to {output}.")
 
 
-def mouse_positon_handler(event, x, y, _, any_page):
+@dataclass
+class ClickParams:
+    page: Page
+    kern_reader: KernReader
+
+
+def mouse_positon_handler(event, x, y, _, click_params):
     if event != cv2.EVENT_LBUTTONDOWN:
         return
     print(f"x: {x}, y: {y}")
     # Converts the (x, y) into a system, staff and bar to highlight.
-    page: Page = cast(Page, any_page)
-    for system_index, system in enumerate(page.systems):
+    params = cast(ClickParams, click_params)
+    for system_index, system in enumerate(params.page.systems):
         if system.box.contains((x, y)):
             for staff_index, staff in enumerate(system.staves):
                 if staff.box.contains((x, y)):
@@ -129,11 +136,18 @@ def mouse_positon_handler(event, x, y, _, any_page):
                     while bar_count+1 < len(staff.bars) and staff.bars[bar_count+1] < x:
                         bar_count += 1
                     print(
-                        f"page number: {page.page_number}\n"
+                        f"page number: {params.page.page_number}\n"
                         f"     system: {system_index}\n"
                         f"      staff: {staff_index}\n"
                         f" bar number: {bar_number + bar_count}"
                     )
+                    tokens = params.kern_reader.get_text(
+                        bar_number + bar_count)
+                    if tokens:
+                        for line in tokens:
+                            print(line)
+                    else:
+                        print("*** No matching tokens.")
                     return
     print("Click on a bar to get its coordinates.")
 
@@ -156,7 +170,7 @@ def show(ctx: ClickContext, any_path: Path, scale: float):
     with open(pdmx.get_path(any_path, 'layout'), 'r') as f:
         obj = json.load(f)
     score = Score.from_json(obj)
-
+    kern_reader = KernReader(pdmx.get_path(any_path, 'tokens'))
     page_index = 0
     hide_truth: bool = False
     while True:
@@ -196,7 +210,11 @@ def show(ctx: ClickContext, any_path: Path, scale: float):
                         cv2.line(img, (bar, staff.box.top),
                                  (bar, staff.box.bottom), bar_color, 2)
         cv2.imshow("layout", img)
-        cv2.setMouseCallback("layout", mouse_positon_handler, param=page)
+        cv2.setMouseCallback(
+            "layout",
+            mouse_positon_handler,
+            param=ClickParams(page, kern_reader)
+        )
 
         if (key := cv2.waitKey()) == ord('q'):
             break

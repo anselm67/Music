@@ -155,7 +155,7 @@ class PDMXMaker:
         # If the krn file doesn't exist, assume verovio failed to produced it.
         if not krn_file.exists():
             return
-        tok_file = krn_file.with_suffix(".tokens")
+        tok_file = self.pdmx.get_path(krn_file, 'tokens', mkdirs=True)
         if not self.force and self.newer(krn_file, tok_file):
             logging.debug(f"-> {tok_file}")
             return
