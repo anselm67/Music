@@ -18,6 +18,7 @@ from kern.typing import (
     Comment,
     Continue,
     Duration,
+    Instrument,
     Key,
     Meter,
     Note,
@@ -337,7 +338,8 @@ class Parser(Generic[T]):
         self.handler.merge_spines(source_holder.spine, into_holder.spine)
         self.close_spine(source_holder)
 
-    INDICATOR_RE = re.compile(r'^\*([I#:/\w"\'\.+-]*)$')
+    INSTRUMENT_RE = re.compile(r'^\*I(["\'])?(.*)$')
+    INDICATOR_RE = re.compile(r'^\*([#:/\w"\'\.+-]*)$')
     SECTION_LABEL_RE = re.compile(r'^\*>.*$')
 
     def parse_spine_indicator(
@@ -375,6 +377,8 @@ class Parser(Generic[T]):
                     if next_token != '*' and not next_token.startswith('*>'):
                         self.error(f"Unexpected token {
                                    next_token} within section labels.")
+            case _ if (m := self.INSTRUMENT_RE.match(indicator)):
+                return Instrument(literal=m.group(2), is_canonical=m.group(1) is None)
             case _ if (m := self.INDICATOR_RE.match(indicator)):
                 # Noop spine indicator.
                 if (indicator := m.group(1)):

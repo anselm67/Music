@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import Mock, call
 
 from kern import EmptyHandler, Parser
-from kern.typing import Bar, Duration, Note, Pitch, Rest, Token
+from kern.typing import Bar, Duration, Instrument, Note, Pitch, Rest, Token
 
 
 class TestHumdrumParser(unittest.TestCase):
@@ -74,6 +74,38 @@ class TestHumdrumParser(unittest.TestCase):
             (handler_instance.open_spine.return_value, Note(
                 pitch=Pitch.A,
                 duration=Duration(8)
+            ))])])
+
+    def test_literal_instrument_parsing(self) -> None:
+        mock_handler = Mock()
+        handler_instance = mock_handler.return_value
+        parser = Parser.from_text(
+            "**kern\n"
+            "*I'Cello\n",
+            handler_instance
+        )
+        parser.parse()
+        self.assertEqual(handler_instance.open_spine.call_count, 1)
+        handler_instance.append.assert_has_calls([call([
+            (handler_instance.open_spine.return_value, Instrument(
+                literal="Cello",
+                is_canonical=False
+            ))])])
+
+    def test_canonical_instrument_parsing(self) -> None:
+        mock_handler = Mock()
+        handler_instance = mock_handler.return_value
+        parser = Parser.from_text(
+            "**kern\n"
+            "*Iviola\n",
+            handler_instance
+        )
+        parser.parse()
+        self.assertEqual(handler_instance.open_spine.call_count, 1)
+        handler_instance.append.assert_has_calls([call([
+            (handler_instance.open_spine.return_value, Instrument(
+                literal="viola",
+                is_canonical=True
             ))])])
 
     def test_some_tokens(self):

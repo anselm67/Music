@@ -222,6 +222,17 @@ class SpinePath(Token):
 
 
 @dataclass(frozen=True)
+class Instrument(Token):
+    """Encodes an instrument tabdem interpretation.
+    The literal field is either the literal instrument name as quoted with either ' or ", 
+    or the canonical name as defined in the appendix 2 in which case is_canonical is True.
+    """
+    # https://www.humdrum.org/Humdrum/guide.append2.html
+    literal: str
+    is_canonical: bool
+
+
+@dataclass(frozen=True)
 class DurationToken(Token):
     duration: Duration | None
 
