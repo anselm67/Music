@@ -45,6 +45,10 @@ class Box:
                        int(self.bot_right[1] * h_scale)),
         )
 
+    def contains(self, xy: tuple[int, int]) -> bool:
+        x, y = xy
+        return x >= self.left and x <= self.right and y <= self.bottom and y >= self.top
+
     @staticmethod
     def from_cxcywh(size: tuple[int, int], cx: float, cy: float, w: float, h: float) -> 'Box':
         left = int((cx - w / 2) * size[0])

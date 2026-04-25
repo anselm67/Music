@@ -8,11 +8,13 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import click
 import cv2
 
 from dataset import PDMX, Score
+from dataset.layout import Page
 from utils import print_histogram
 from verovio import mxl_to_kern
 from verovio import render as verovio_render
@@ -112,9 +114,28 @@ def from_mxl(mxl_file: Path, output: Path):
     print(f"Output written to {output}.")
 
 
-def mouse_positon_handler(event, x, y, flags, param):
-    if event == cv2.EVENT_LBUTTONDOWN:
-        print(f"({x}, {y})")
+def mouse_positon_handler(event, x, y, flags, any_page):
+    if event != cv2.EVENT_LBUTTONDOWN:
+        return
+    print(f"x: {x}, y: {y}")
+    # Converts the (x, y) into a system, staff and bar to highlight.
+    page: Page = cast(Page, any_page)
+    for system_index, system in enumerate(page.systems):
+        if system.box.contains((x, y)):
+            for staff_index, staff in enumerate(system.staves):
+                if staff.box.contains((x, y)):
+                    bar_number = system.bar_number
+                    bar_count = 0
+                    while bar_count+1 < len(staff.bars) and staff.bars[bar_count+1] < x:
+                        bar_count += 1
+                    print(
+                        f"page number: {page.page_number}\n"
+                        f"     system: {system_index}\n"
+                        f"      staff: {staff_index}\n"
+                        f" bar number: {bar_number + bar_count}"
+                    )
+                    return
+    print("Click on a bar to get its coordinates.")
 
 
 @click.command()
@@ -175,7 +196,7 @@ def show(ctx: ClickContext, any_path: Path, scale: float):
                         cv2.line(img, (bar, staff.box.top),
                                  (bar, staff.box.bottom), bar_color, 2)
         cv2.imshow("layout", img)
-        cv2.setMouseCallback("layout", mouse_positon_handler)
+        cv2.setMouseCallback("layout", mouse_positon_handler, param=page)
 
         if (key := cv2.waitKey()) == ord('q'):
             break

@@ -28,7 +28,7 @@
                 "tokenize",
                 "-o",
                 "foo.tok",
-                "/home/anselm/datasets/PDMX/krn/1/1/Qmb23gXjg3jXhsgQ3j1vfVDq7NuLptswoV6LyrPSVwako4.krn"
+                "/home/anselm/datasets/PDMX/krn/1/44/QmbtRycKvzHFVuB2UsnjSei4WFP1ooAx87MGMJFkwozUR3.krn"
             ]
         },
         // pdmx cli
@@ -41,7 +41,7 @@
             "python": "${workspaceFolder}/.venv/bin/python",
             "args": [
                 "show",
-                "./mxl/1/11/QmbbFXoGYxR8JLdAwi9U77pGVWxgkStWZBEyUqC9gQtjWH.mxl"
+                "mxl/1/30/QmbLm3iHw7MDoY6Jm75w5ZkBNTGvGVqcCiNh3DcK8HrCEU.mxl"
             ]
         },
         {
