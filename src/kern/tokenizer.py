@@ -12,7 +12,7 @@ from kern.typing import (
     Comment,
     Continue,
     Duration,
-    DurationToken,
+    Instrument,
     Key,
     Meter,
     Note,
@@ -51,6 +51,7 @@ class TokenFormatter:
             Continue: self.format_continue,
             Note: self.format_note,
             Chord: self.format_chord,
+            Instrument: self.format_instrument,
             SpinePath: self.format_spine_path,
         }
 
@@ -115,8 +116,12 @@ class TokenFormatter:
 
     def format_chord(self, token: Token) -> str:
         chord = cast(Chord, token)
-        text = "\t".join([self.format_note(note) for note in chord.notes])
+        text = " ".join([self.format_note(note) for note in chord.notes])
         return text
+
+    def format_instrument(self, token: Token) -> str:
+        instrument = cast(Instrument, token)
+        return f"Instr: {instrument.literal}"
 
     def format_spine_path(self, _: Token) -> str:
         return self.format_continue(Continue())
@@ -142,7 +147,7 @@ class BaseHandler(Parser[Spine].Handler):
                    spine_type: str | None = None,
                    parent: Spine | None = None) -> Spine:
         match spine_type:
-            case "**dynam" | "**dynam/2" | "**mxhm" | "**recip" | "**fb":
+            case "**dynam" | "**dynam/2" | "**mxhm" | "**recip" | "**fb" | "**text":
                 spine = IgnoredSpine()
             case _:
                 spine = Spine()
@@ -258,50 +263,6 @@ class NormHandler(BaseHandler):
 
         return tokens
 
-    def unique(self, tokens: list[Token]) -> list[Token]:
-        seen = set()
-        return [t for t in tokens if not (t in seen or seen.add(t))]
-
-    def flatten(self, tokens: list[tuple[Spine, Token]]) -> list[Token]:
-        toks = [
-            t for _, t in tokens if not isinstance(t, (Continue, SpinePath))
-        ]
-        if len(toks) == 0:
-            return []
-        if self.check_type(toks, Clef):
-            toks = self.unique(toks)
-            if len(toks) > 2:
-                raise ValueError(
-                    f"Got too many clefs ({len(toks)}), expected 2.")
-        elif self.check_type(toks, Key):
-            toks = self.unique(toks)
-            if len(toks) != 1:
-                raise ValueError(
-                    f"Got too many keys ({len(toks)}), expected 1.")
-            toks = [toks[0], toks[0]]
-        elif self.check_type(toks, Meter):
-            toks = self.unique(toks)
-            if len(toks) != 1:
-                raise ValueError(
-                    f"Got too many meters ({len(toks)}), expected 1.")
-            toks = [toks[0], toks[0]]
-        elif self.check_type(toks, Bar):
-            toks = self.unique(toks)
-            if len(toks) != 1:
-                raise ValueError(
-                    f"Got too many bars ({len(toks)}), expected 1.")
-        elif self.check_type(toks, Rest):
-            toks = [max(toks)]
-        else:
-            notes = [note for n in toks for note in (
-                n.notes if isinstance(n, Chord) else [n])]
-            if self.check_type(notes, DurationToken):
-                toks = sorted(notes)
-            else:
-                print(f"FIXME: got a mix of tokens.")
-
-        return toks
-
     def append(self, tokens: list[tuple[Spine, Token]]):
         tokens = [(spine, token) for spine, token in tokens
                   if not isinstance(spine, IgnoredSpine)]
@@ -312,7 +273,7 @@ class NormHandler(BaseHandler):
         tokens = fixed_bars
         if self.output:
             self.output.write('\t'.join([
-                self.formatter.format(tok) for tok in self.flatten(tokens)
+                self.formatter.format(tok) for _, tok in tokens
             ]) + "\n")
 
     def done(self):

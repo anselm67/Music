@@ -378,9 +378,10 @@ class Parser(Generic[T]):
                         self.error(f"Unexpected token {
                                    next_token} within section labels.")
             case _ if (m := self.INSTRUMENT_RE.match(indicator)):
+                # https://www.humdrum.org/Humdrum/guide.append2.html
                 return Instrument(literal=m.group(2), is_canonical=m.group(1) is None)
             case _ if (m := self.INDICATOR_RE.match(indicator)):
-                # Noop spine indicator.
+                # Un-handled spine indicator.
                 if (indicator := m.group(1)):
                     self.handler.rename_spine(spine_holder.spine, indicator)
             case _:
