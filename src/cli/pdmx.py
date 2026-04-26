@@ -4,18 +4,13 @@
 PDMX Main repo is https://zenodo.org/records/14648209
 
 """
-import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
 
 import click
-import cv2
 
-from dataset import PDMX, Score
-from dataset.layout import Page
-from kern import KernReader
+from dataset import PDMX, MxlEditor
 from utils import print_histogram
 from verovio import mxl_to_kern
 from verovio import render as verovio_render
@@ -115,134 +110,25 @@ def from_mxl(mxl_file: Path, output: Path):
     print(f"Output written to {output}.")
 
 
-@dataclass
-class ClickParams:
-    page: Page
-    kern_reader: KernReader
-
-
-def mouse_positon_handler(event, x, y, _, click_params):
-    if event != cv2.EVENT_LBUTTONDOWN:
-        return
-    print(f"x: {x}, y: {y}")
-    # Converts the (x, y) into a system, staff and bar to highlight.
-    params = cast(ClickParams, click_params)
-    for system_index, system in enumerate(params.page.systems):
-        if system.box.contains((x, y)):
-            for staff_index, staff in enumerate(system.staves):
-                if staff.box.contains((x, y)):
-                    bar_number = system.bar_number
-                    bar_count = 0
-                    while bar_count+1 < len(staff.bars) and staff.bars[bar_count+1] < x:
-                        bar_count += 1
-                    print(
-                        f"   page number: {params.page.page_number}\n"
-                        f"        system: {system_index}\n"
-                        f"         staff: {staff_index}\n"
-                        f"    bar number: {bar_number + bar_count}"
-                        f"svg_bar_number: {system.svg_bar_number}"
-                    )
-                    tokens = params.kern_reader.get_text(
-                        bar_number + bar_count)
-                    if tokens:
-                        for line in tokens:
-                            print(line)
-                    else:
-                        print("*** No matching tokens.")
-                    return
-    print("Click on a bar to get its coordinates.")
-
-
 @click.command()
 @click.argument("any_path",
                 type=click.Path(dir_okay=False, file_okay=True,
                                 readable=True, path_type=Path),
-                required=True)
+                default=None)
 @click.option("--scale", "-s", default=0.8, show_default=True,
               help="Resize scale of image and structure for display.")
 @click.pass_obj
-def show(ctx: ClickContext, any_path: Path, scale: float):
+def show(ctx: ClickContext, any_path: Path | None, scale: float):
     """Displays the provided image and layout info when available.
 
 
         ANY_PATH: Any file that refers to a PDMX item, e.g. its mxl or svg path.
     """
     pdmx = ctx.pdmx
-    with open(pdmx.get_path(any_path, 'layout'), 'r') as f:
-        obj = json.load(f)
-    score = Score.from_json(obj)
-    kern_reader = KernReader(pdmx.get_path(any_path, 'tokens'))
-    page_index = 0
-    hide_truth: bool = False
-    while True:
-        page = score.pages[page_index]
-        # Loads the page image.
-        if score.page_count > 1:
-            img_path = pdmx.get_page_path(any_path, 'png', page.page_number)
-        else:
-            img_path = pdmx.get_path(any_path, 'png')
-        img = cv2.imread(img_path)
-        assert img is not None, f"Can't load image {img_path}"
-
-        # Resizes it according to provided scale.
-        # We could drawinto the un-resized image and then resize, but resizing
-        # them separately allows to check that Score.resize() works fine.
-        (height, width) = tuple(map(lambda x: int(x * scale), img.shape[:2]))
-        img = cv2.resize(img, (width, height))
-        page = page.resize(width, height)
-
-        # Renders the page layout on top of the image.
-        if not hide_truth:
-            print(
-                f"Page {page_index+1}: {page.image_width} x {page.image_height} px {len(page.systems)} systems...")
-            for index, system in enumerate(page.systems):
-                print(
-                    f"\tsystem {index+1}: {len(page.systems[0].staves)} staves.")
-            system_color = (255, 0, 0)
-            staff_color = (0, 255, 0)
-            bar_color = (0, 0, 255)
-            for system in page.systems:
-                cv2.rectangle(img, system.box.top_left,
-                              system.box.bot_right, system_color, 8)
-                for staff in system.staves:
-                    cv2.rectangle(img, staff.box.top_left,
-                                  staff.box.bot_right, staff_color, 4)
-                    for bar in staff.bars:
-                        cv2.line(img, (bar, staff.box.top),
-                                 (bar, staff.box.bottom), bar_color, 2)
-        cv2.imshow("layout", img)
-        cv2.setMouseCallback(
-            "layout",
-            mouse_positon_handler,
-            param=ClickParams(page, kern_reader)
-        )
-
-        if (key := cv2.waitKey()) == ord('q'):
-            break
-        elif key == ord('p'):
-            if (page_index := page_index - 1) < 0:
-                page_index = len(score.pages) - 1
-        elif key == ord('n'):
-            if (page_index := page_index + 1) >= score.page_count:
-                page_index = 0
-        elif key == ord('i'):
-            mxl_file = pdmx.get_path(any_path, 'mxl')
-            if (infos := pdmx.info(mxl_file)) is None:
-                print(f"{mxl_file}: not found.")
-            else:
-                for title, value in infos:
-                    print(f"{title}\n\t\033[1;31m{value}\033[0m")
-        elif key == ord('h'):
-            hide_truth = not hide_truth
-        else:
-            print(
-                "(p)revious page,\n"
-                "(n)ext page,\n"
-                "(i)nfos about tghe score,\n"
-                "(h)ide/show ground truth boxes."
-            )
-
-    cv2.destroyAllWindows()
+    mxl_path = None if any_path is None else pdmx.get_path(any_path, 'mxl')
+    editor = MxlEditor(pdmx, mxl_path)
+    editor.run()
+    editor.close()
 
 
 @click.command()

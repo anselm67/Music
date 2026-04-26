@@ -218,4 +218,11 @@ class PDMX:
                 return infos
         return None
 
+    def pick_mxl(self) -> Path:
+        while True:
+            row = self.df.sample()
+            mxl_str = row['mxl']
+            if isinstance(mxl_str, str):
+                return self.get_path(Path(mxl_str), 'mxl')
+
 # vscode - End of File
