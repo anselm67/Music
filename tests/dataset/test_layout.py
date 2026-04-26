@@ -5,7 +5,7 @@ from utils import from_json
 class TestScore:
 
     def test_save(self):
-        system = System(bar_number=1, svg_bar_number=None, staves=[
+        system = System(bar_number=1, svg_bar_numbers=[], staves=[
             Staff(box=Box((0, 0), (10, 10)), bars=[1, 2])
         ])
         page = Page(page_number=1, image_width=10, image_height=20,
@@ -18,7 +18,7 @@ class TestScore:
         assert saved == score
 
     def test_computed_properties(self):
-        system = System(bar_number=1, svg_bar_number=None, staves=[
+        system = System(bar_number=1, svg_bar_numbers=[], staves=[
             Staff(box=Box((0, 0), (10, 10)), bars=[1, 2]),
             Staff(box=Box((10, 0), (20, 10)), bars=[1, 2])
         ])
@@ -33,7 +33,7 @@ class TestScore:
 class TestScale:
 
     def test_scale(self):
-        system = System(bar_number=1, svg_bar_number=None, staves=[
+        system = System(bar_number=1, svg_bar_numbers=[], staves=[
             Staff(box=Box((0, 0), (10, 10)), bars=[1, 2])
         ])
         page = Page(page_number=1, image_width=10, image_height=20,

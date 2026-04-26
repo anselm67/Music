@@ -98,7 +98,7 @@ class System:
         _type_: A frozen dataclass describing the system layout.
     """
     bar_number: int
-    svg_bar_number: int | None
+    svg_bar_numbers: list[int | None]
     staves: list[Staff]
     box: Box = field(init=False)
 
@@ -138,7 +138,7 @@ class System:
     def scale(self, w_scale: float, h_scale: float) -> 'System':
         return System(
             self.bar_number,
-            self.svg_bar_number,
+            self.svg_bar_numbers,
             staves=[s.scale(w_scale, h_scale) for s in self.staves]
         )
 

@@ -70,9 +70,9 @@
             "args": [
                 "make",
                 "--num-workers",
-                "1"
-                // "--force",
-                // "mxl/1/30/QmbLm3iHw7MDoY6Jm75w5ZkBNTGvGVqcCiNh3DcK8HrCEU.mxl"
+                "1",
+                "--force",
+                "mxl/1/30/QmbLm3iHw7MDoY6Jm75w5ZkBNTGvGVqcCiNh3DcK8HrCEU.mxl"
             ]
         },
         {

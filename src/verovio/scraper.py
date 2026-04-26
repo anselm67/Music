@@ -77,11 +77,8 @@ class LayoutExtractor:
             Box((left, top), (right, bottom))
         )
 
-    def check_bar_number(self, system_group) -> int | None:
-        measure = system_group.find("svg:g[@class='measure']", self.ns)
-        if measure is None:
-            return None
-        for g in measure.findall(".//svg:g", self.ns):
+    def check_bar_number(self, measure_group) -> int | None:
+        for g in measure_group.findall(".//svg:g", self.ns):
             g_class = g.get("class") or ""
             if ("mNum" in g_class) or g_class == "reh":
                 text = g.find("svg:text", self.ns)
@@ -99,7 +96,9 @@ class LayoutExtractor:
         # Collects the bounding box for all bars within that system.
         boxes: dict[int, list[Box]] = dict()
         bar_count = 0
+        svg_bar_numbers: list[int | None] = list()
         for measure in system_group.findall(".//svg:g[@class='measure']", self.ns):
+            svg_bar_numbers.append(self.check_bar_number(measure))
             measure_bar_count: int = -1
             for group in measure.findall(".//svg:g[@class='staff']", self.ns):
                 count, box = self.parse_staff_group(group)
@@ -120,12 +119,17 @@ class LayoutExtractor:
                 bars=[bars[0].left, bars[0].right,
                       *[x.right for x in bars[1:]]]
             ))
-
-        # Parses and checks the bar number vs svg bar number when available:
-        svg_bar_number = self.check_bar_number(system_group)
+        # TODO Move the one and only bars[] for the system into the System and out of the Staff
         if not staves:
             raise ValueError(f"{self.svg_file} has a system with no staff.")
-        return bar_number + bar_count, System(bar_number, svg_bar_number, staves)
+        first_bars = staves[0].bars
+        if not all(staff.bars == first_bars for staff in staves):
+            raise ValueError(
+                f"{self.svg_file}: system has incompatible bar values.")
+        if len(svg_bar_numbers) != len(first_bars) - 1:
+            raise ValueError(
+                f"{self.svg_file}: svg bar numbers disagrees with stave bars.")
+        return bar_number + bar_count, System(bar_number, svg_bar_numbers, staves)
 
     def parse(self, page_number: int = 1, bar_number: int = 1) -> Page:
         root = self.tree.getroot()
