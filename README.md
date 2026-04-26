@@ -25,8 +25,9 @@ staffer --log-file logs/staffer.log train -e 12 --use-sampler
 
 TODO List:
 - Add a validate command to staffer that gives real metrics on full set validation; Requires a new DataLoader to pick from the samples not used during training.
-- Use WeightedRandomSampler to equalize the distribution of part count when training
 - Simplify the network output so staff becomes two coordinates only (top, bottom) derive other coordinates from the system
-- Add support for bar detection.
 - import editor from projects/Staffer or projects/OMR
+- Remove bar prediction from the model
+- move staffer model, dataset into a staffer package
+
 

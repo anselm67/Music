@@ -41,7 +41,6 @@ class StafferDataset(Dataset):
             v2.Normalize(mean=[0.9563435316085815], std=[0.16557540870879858]),
         ])
         # Build flat list of (mxl_path, page_number) pairs
-        # TODO We're loading te score twice: once here and once in __getitem__
         logging.info("Initializing StafferDataset...")
         self.items = []
         for _, row in tqdm(pdmx.df.iterrows(), total=len(pdmx.df), desc="Loading dataset"):
@@ -80,7 +79,6 @@ class StafferDataset(Dataset):
                 continue
 
             # Converts the Score to expected ground truth tensors.
-            # TODO We're loading te score twice: once here and once in __getitem__
             is_ok = True
             score = Score.from_json(json.loads(layout_path.read_text()))
             page = score.pages[page_number - 1]

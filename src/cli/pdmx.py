@@ -136,10 +136,11 @@ def mouse_positon_handler(event, x, y, _, click_params):
                     while bar_count+1 < len(staff.bars) and staff.bars[bar_count+1] < x:
                         bar_count += 1
                     print(
-                        f"page number: {params.page.page_number}\n"
-                        f"     system: {system_index}\n"
-                        f"      staff: {staff_index}\n"
-                        f" bar number: {bar_number + bar_count}"
+                        f"   page number: {params.page.page_number}\n"
+                        f"        system: {system_index}\n"
+                        f"         staff: {staff_index}\n"
+                        f"    bar number: {bar_number + bar_count}"
+                        f"svg_bar_number: {system.svg_bar_number}"
                     )
                     tokens = params.kern_reader.get_text(
                         bar_number + bar_count)
