@@ -19,7 +19,6 @@ class MxlEditor:
     kern_reader: KernReader
 
     scale: float
-    page_index: int
     hide_truth: bool = False
 
     def __init__(self, pdmx: PDMX, mxl_path: Path | None, scale: float = 0.8):
@@ -30,18 +29,21 @@ class MxlEditor:
         self.scale = scale
 
     def load(self, mxl_path: Path) -> None:
-        self.mxl_path = mxl_path
-        with open(self.pdmx.get_path(mxl_path, 'layout'), 'r') as f:
-            obj = json.load(f)
-        self.score = Score.from_json(obj)
-        self.kern_reader = KernReader(self.pdmx.get_path(mxl_path, 'tokens'))
-        # Reset the edit state.
-        self.page_index = 0
+        try:
+            with open(self.pdmx.get_path(mxl_path, 'layout'), 'r') as f:
+                obj = json.load(f)
+            self.score = Score.from_json(obj)
+            self.kern_reader = KernReader(
+                self.pdmx.get_path(mxl_path, 'tokens'))
+            self.mxl_path = mxl_path
+            print(f"{mxl_path} loaded, {self.score.page_count} pages.")
+        except Exception as e:
+            print(f"Failed to load {mxl_path}: {e}.")
 
     def load_page(self, page_index: int = 0) -> tuple[Page, MatLike]:
         assert page_index >= 0 and page_index < len(
             self.score.pages), f"Page index {page_index} out of bounds."
-        page = self.score.pages[self.page_index]
+        page = self.score.pages[page_index]
         # Loads the page image.
         if self.score.page_count > 1:
             img_path = self.pdmx.get_page_path(
@@ -58,6 +60,7 @@ class MxlEditor:
             map(lambda x: int(x * self.scale), img.shape[:2]))
         img = cv2.resize(img, (width, height))
         page = page.resize(width, height)
+        print(f"Loaded page {page_index} of {self.score.page_count}.")
         return page, img
 
     def open_kern_file(self) -> None:
@@ -81,7 +84,7 @@ class MxlEditor:
                             f"   page number: {page.page_number}\n"
                             f"        system: {system_index}\n"
                             f"         staff: {staff_index}\n"
-                            f"    bar number: {bar_number + bar_count}"
+                            f"    bar number: {bar_number + bar_count}\n"
                             f"svg_bar_number: {system.svg_bar_number}"
                         )
                         tokens = self.kern_reader.get_text(
@@ -95,8 +98,8 @@ class MxlEditor:
         print("Click on a bar to get its coordinates.")
 
     def run(self):
-        page, image = self.load_page()
-
+        page_index = 0
+        page, image = self.load_page(page_index)
         while True:
             img = image.copy()
             # Renders the page layout on top of the image.
@@ -126,15 +129,16 @@ class MxlEditor:
                 mxl_path = self.pdmx.pick_mxl()
                 print(f"Loading {mxl_path}")
                 self.load(mxl_path)
-                page, image = self.load_page()
+                page_index = 0
+                page, image = self.load_page(page_index)
             elif key == ord('p'):
                 if (page_index := page_index - 1) < 0:
                     page_index = len(self.score.pages) - 1
-                    page, img = self.load_page(page_index)
+                page, image = self.load_page(page_index)
             elif key == ord('n'):
                 if (page_index := page_index + 1) >= self.score.page_count:
                     page_index = 0
-                    page, img = self.load_page(page_index)
+                page, image = self.load_page(page_index)
             elif key == ord('i'):
                 if (infos := self.pdmx.info(self.mxl_path)) is None:
                     print(f"{self.mxl_path}: not found.")
