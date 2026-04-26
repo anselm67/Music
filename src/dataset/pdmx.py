@@ -220,7 +220,7 @@ class PDMX:
 
     def pick_mxl(self) -> Path:
         while True:
-            row = self.df.sample()
+            row = self.df.sample(n=1).iloc[0]
             mxl_str = row['mxl']
             if isinstance(mxl_str, str):
                 return self.get_path(Path(mxl_str), 'mxl')

@@ -1,5 +1,6 @@
 
 import json
+import subprocess
 from pathlib import Path
 
 import cv2
@@ -59,6 +60,10 @@ class MxlEditor:
         page = page.resize(width, height)
         return page, img
 
+    def open_kern_file(self) -> None:
+        kern_path = self.pdmx.get_path(self.mxl_path, 'krn')
+        subprocess.run(["code", kern_path.as_posix()])
+
     def on_click(self, event: int, page: Page, point: tuple[int, int]) -> None:
         if event != cv2.EVENT_LBUTTONDOWN:
             return
@@ -117,6 +122,11 @@ class MxlEditor:
 
             if (key := cv2.waitKey()) == ord('q'):
                 break
+            elif key == ord('r'):
+                mxl_path = self.pdmx.pick_mxl()
+                print(f"Loading {mxl_path}")
+                self.load(mxl_path)
+                page, image = self.load_page()
             elif key == ord('p'):
                 if (page_index := page_index - 1) < 0:
                     page_index = len(self.score.pages) - 1
@@ -133,12 +143,16 @@ class MxlEditor:
                         print(f"{title}\n\t\033[1;31m{value}\033[0m")
             elif key == ord('h'):
                 self.hide_truth = not self.hide_truth
+            elif key == ord('k'):
+                self.open_kern_file()
             else:
                 print(
+                    "(r)randomly pick a new score to show,\n"
                     "(p)revious page,\n"
                     "(n)ext page,\n"
-                    "(i)nfos about tghe score,\n"
-                    "(h)ide/show ground truth boxes."
+                    "(i)nfos about the score,\n"
+                    "(h)ide/show ground truth boxes.\n"
+                    "(k) open corresponding kern file in vscode."
                 )
 
     def close(self):
