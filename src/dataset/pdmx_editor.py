@@ -41,8 +41,7 @@ class MxlEditor:
             print(f"Failed to load {mxl_path}: {e}.")
 
     def load_page(self, page_index: int = 0) -> tuple[Page, MatLike]:
-        assert page_index >= 0 and page_index < len(
-            self.score.pages), f"Page index {page_index} out of bounds."
+        assert page_index >= 0 and page_index < self.score.page_count, f"Page index {page_index} out of bounds."
         page = self.score.pages[page_index]
         # Loads the page image.
         if self.score.page_count > 1:
