@@ -55,7 +55,7 @@ class LayoutExtractor:
             return None
 
     def parse_staff_group(self, staff_group) -> tuple[int, Box]:
-        """Returns the bafr count (multirest) and bounding box for the staff."""
+        """Returns the bar count (multirest) and bounding box for the staff."""
         (top, bottom, left, right) = (-1, -1, -1, -1)
         for path in staff_group.findall("svg:path", self.ns):
             d_attr = path.get('d', '')
@@ -96,6 +96,7 @@ class LayoutExtractor:
         # Collects the bounding box for all bars within that system.
         boxes: dict[int, list[Box]] = dict()
         bar_count = 0
+        bar_numbers: list[int] = list()
         svg_bar_numbers: list[int | None] = list()
         for measure in system_group.findall(".//svg:g[@class='measure']", self.ns):
             svg_bar_numbers.append(self.check_bar_number(measure))
@@ -109,6 +110,7 @@ class LayoutExtractor:
                         f"{self.svg_file}: measure {measure.get('id')} bar count mismatch."
                     )
                 boxes.setdefault(box.top, list()).append(box)
+            bar_numbers.append(bar_number + bar_count)
             bar_count += measure_bar_count
 
         # Transform bars bounding boxes into a list of staves.
@@ -129,7 +131,7 @@ class LayoutExtractor:
         if len(svg_bar_numbers) != len(first_bars) - 1:
             raise ValueError(
                 f"{self.svg_file}: svg bar numbers disagrees with stave bars.")
-        return bar_number + bar_count, System(bar_number, svg_bar_numbers, staves)
+        return bar_number + bar_count, System(bar_numbers, svg_bar_numbers, staves)
 
     def parse(self, page_number: int = 1, bar_number: int = 1) -> Page:
         root = self.tree.getroot()

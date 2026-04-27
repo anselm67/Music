@@ -76,7 +76,6 @@ class MxlEditor:
             if system.box.contains(point):
                 for staff_index, staff in enumerate(system.staves):
                     if staff.box.contains(point):
-                        bar_number = system.bar_number
                         bar_count = 0
                         while bar_count+1 < len(staff.bars) and staff.bars[bar_count+1] < point[0]:
                             bar_count += 1
@@ -84,11 +83,11 @@ class MxlEditor:
                             f"    page number: {page.page_number}\n"
                             f"         system: {system_index}\n"
                             f"          staff: {staff_index}\n"
-                            f"     bar number: {bar_number + bar_count}\n"
-                            f"svg_bar_numbers: {system.svg_bar_numbers}"
+                            f"     bar number: {system.bar_numbers[bar_count]}\n"
+                            f"svg_bar_numbers: {system.svg_bar_numbers[bar_count]}"
                         )
                         tokens = self.kern_reader.get_text(
-                            bar_number + bar_count)
+                            system.bar_numbers[bar_count])
                         if tokens:
                             for line in tokens:
                                 print(line)

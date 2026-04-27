@@ -97,7 +97,7 @@ class System:
     Returns:
         _type_: A frozen dataclass describing the system layout.
     """
-    bar_number: int
+    bar_numbers: list[int]
     svg_bar_numbers: list[int | None]
     staves: list[Staff]
     box: Box = field(init=False)
@@ -127,9 +127,13 @@ class System:
         return len(self.staves)
 
     @property
-    def bar_count(self):
+    def bar_count(self) -> int:
         return len(self.staves[0].bars) - 1
 
+    @property
+    def first_bar_number(self) -> int:
+        return self.bar_numbers[0]
+    
     def asdict(self) -> dict:
         obj = asdict(self)
         obj.pop("box", None)
@@ -137,7 +141,7 @@ class System:
 
     def scale(self, w_scale: float, h_scale: float) -> 'System':
         return System(
-            self.bar_number,
+            self.bar_numbers,
             self.svg_bar_numbers,
             staves=[s.scale(w_scale, h_scale) for s in self.staves]
         )
@@ -172,12 +176,12 @@ class Page:
 
     @property
     def first_bar_number(self):
-        return self.systems[0].bar_number
+        return self.systems[0].first_bar_number
 
     @property
     def next_bar_number(self):
         last_system = self.systems[-1]
-        return last_system.bar_number + last_system.bar_count
+        return last_system.first_bar_number + last_system.bar_count
 
     def resize(self, width: int, height: int) -> 'Page':
         w_scale = width / self.image_width

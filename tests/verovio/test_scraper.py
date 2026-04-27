@@ -171,12 +171,12 @@ class TestSystemParsing:
     def test_system_bar_number_starts_at_1(self, tmp_path):
         svg = write_svg(tmp_path, make_svg(one_staff_system()))
         page = LayoutExtractor(svg).parse()
-        assert page.systems[0].bar_number == 1
+        assert page.systems[0].first_bar_number == 1
 
     def test_system_bar_number_custom_start(self, tmp_path):
         svg = write_svg(tmp_path, make_svg(one_staff_system()))
         page = LayoutExtractor(svg).parse(bar_number=5)
-        assert page.systems[0].bar_number == 5
+        assert page.systems[0].first_bar_number == 5
 
     def test_two_systems_bar_numbers_increment(self, tmp_path):
         body = f"""\
@@ -199,8 +199,9 @@ class TestSystemParsing:
 </g>"""
         svg = write_svg(tmp_path, make_svg(body))
         page = LayoutExtractor(svg).parse()
-        assert page.systems[0].bar_number == 1
-        assert page.systems[1].bar_number == 1 + page.systems[0].bar_count
+        assert page.systems[0].first_bar_number == 1
+        assert page.systems[1].first_bar_number == 1 + \
+            page.systems[0].bar_count
 
 
 # ---------------------------------------------------------------------------
