@@ -30,4 +30,7 @@ TODO List:
 - Remove bar prediction from the model
 - move staffer model, dataset into a staffer package
 
-
+Pending fixes:
+- The tokenizer should check the length of the first bars against the metric and decide based on that where the number 1 falls.
+- In mxl/1/1/Qmb24DrN1PECaithcX1YzvEquFF4QDGLDoeEZUjJsF7Etk.mxl, there is a mutli-bar rest at the 
+end of the first page; The tokenizer needs to take it apart into separate bars.
