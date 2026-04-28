@@ -66,6 +66,10 @@ class MxlEditor:
         kern_path = self.pdmx.get_path(self.mxl_path, 'krn')
         subprocess.run(["code", kern_path.as_posix()])
 
+    def open_tokens_file(self) -> None:
+        tokens_path = self.pdmx.get_path(self.mxl_path, 'tokens')
+        subprocess.run(["code", tokens_path.as_posix()])
+
     def on_click(self, event: int, page: Page, point: tuple[int, int]) -> None:
         if event != cv2.EVENT_LBUTTONDOWN:
             return
@@ -147,6 +151,8 @@ class MxlEditor:
                 self.hide_truth = not self.hide_truth
             elif key == ord('k'):
                 self.open_kern_file()
+            elif key == ord('t'):
+                self.open_tokens_file()
             else:
                 print(
                     "(r)randomly pick a new score to show,\n"
@@ -154,7 +160,8 @@ class MxlEditor:
                     "(n)ext page,\n"
                     "(i)nfos about the score,\n"
                     "(h)ide/show ground truth boxes.\n"
-                    "(k) open corresponding kern file in vscode."
+                    "(k) open corresponding kern file in vscode,"
+                    "(t) open corresponding token file in vscode."
                 )
 
     def close(self):
