@@ -24,6 +24,10 @@ staffer --log-file logs/staffer.log train -e 12 --use-sampler
 ```
 
 TODO List:
+- pdmx: add a validate command to filter out from the underlying csv any row that isn't completly made (eg that's missing a tokens file  or carries broken images).
+```bash
+  # pdmx --csv Staff16.csv validate -o ValidStaff16.csv
+```
 - Add a validate command to staffer that gives real metrics on full set validation; Requires a new DataLoader to pick from the samples not used during training.
 - Simplify the network output so staff becomes two coordinates only (top, bottom) derive other coordinates from the system
 - import editor from projects/Staffer or projects/OMR
@@ -43,3 +47,4 @@ def fix_bad_kern_tokens(kern: str) -> str:
     return re.sub(r'(\d+)R[a-gA-G]+[#-]*/?(L|J)?', 
                   lambda m: f"{m.group(1)}r{m.group(2) or ''}", 
                   kern)
+- In /mxl/3/6/Qmd7UQFcdQg8fjqqCkJPHkc2N4PqQEkx6vh5sxqchozJu8.mxl the bar count mismatches likely because they are some invisible bars at the beginning of the svg file that the LayoutExtractor counts (it shouldn't).
