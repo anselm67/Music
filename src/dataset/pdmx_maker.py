@@ -164,6 +164,7 @@ class PDMXMaker:
             tokenize(krn_file, tok_file)
         except Exception as e:
             logging.warning(f"{tok_file}: {e}")
+            tok_file.unlink(missing_ok=True)
 
     async def mxl_krn_task(self, mxl_file: Path):
         # Converts the mxl file to svg by rendering it with verovio.
