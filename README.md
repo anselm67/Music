@@ -34,3 +34,12 @@ Pending fixes:
 - The tokenizer should check the length of the first bars against the metric and decide based on that where the number 1 falls.
 - In mxl/1/1/Qmb24DrN1PECaithcX1YzvEquFF4QDGLDoeEZUjJsF7Etk.mxl, there is a mutli-bar rest at the 
 end of the first page; The tokenizer needs to take it apart into separate bars.
+- In mxl/14/10/QmWAGXyEP8SJRRRPSy5jpFvX9MRGPqPUuHkUay19hAy8wM.mxl the rendering is missing the first few bars and is therefore out of sync.
+- In mxl/14/34/QmWNCrJLSs8HaHpCUKtvZUCb8nZLWL3R4cFV7ouf9Mei9r.mxl kern translation emits an invalid 8Rgg/L token. Claude suggests:
+
+def fix_bad_kern_tokens(kern: str) -> str:
+    # Replace standalone pitched R-rest tokens with plain rests
+    # e.g. 8Rgg/L -> 8rL, 4Rcc -> 4r
+    return re.sub(r'(\d+)R[a-gA-G]+[#-]*/?(L|J)?', 
+                  lambda m: f"{m.group(1)}r{m.group(2) or ''}", 
+                  kern)
