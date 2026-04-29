@@ -142,6 +142,7 @@ class MxlEditor:
                     page_index = 0
                 page, image = self.load_page(page_index)
             elif key == ord('i'):
+                print(f"Searching for {self.mxl_path} infos...")
                 if (infos := self.pdmx.info(self.mxl_path)) is None:
                     print(f"{self.mxl_path}: not found.")
                 else:
