@@ -11,8 +11,10 @@ class TestPDMX:
         (tmp_path / 'PDMX.csv').write_text("id\n1")
         pdmx = PDMX(tmp_path)
         assert pdmx.get_path(Path(tmp_path) / 'mxl' / 'abc',
-                             'svg') == Path(tmp_path) / 'svg' / 'abc.svg'
+                             'svg') == Path(tmp_path) / 'build' / 'svg' / 'abc.svg'
         assert pdmx.get_path(Path(tmp_path) / 'svg' / 'abc.svg',
+                             'mxl') == Path(tmp_path) / 'mxl' / 'abc.mxl'
+        assert pdmx.get_path(Path(tmp_path) / 'build' / 'svg' / 'abc.svg',
                              'mxl') == Path(tmp_path) / 'mxl' / 'abc.mxl'
 
         with pytest.raises(ValueError):
