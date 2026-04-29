@@ -147,12 +147,7 @@ class PDMX:
         return path
 
     def get_page_path(self, some: Path, dir_class: DirClass, page_number: int) -> Path:
-        relative = self.relative(some) if some.is_absolute() else some
-        if len(relative.parts) <= 1:
-            raise ValueError(f"Unexpected path structure: {some}")
-        relative = Path(*relative.parts[1:])
-        path = (self.home / dir_class /
-                relative).with_suffix(PDMX.EXTENSIONS[dir_class])
+        path = self.get_path(some, dir_class)
         stem = f"{path.stem}_{page_number:03d}"
         return path.with_stem(stem)
 
@@ -224,7 +219,7 @@ class PDMX:
                 infos: list[tuple[str, str]] = list()
                 for col in self.df.columns:
                     infos.append(
-                        (self.CSV_SCHEMA[col], row[col])
+                        (self.CSV_SCHEMA.get(col) or col, row[col])
                     )
                 return infos
         return None
