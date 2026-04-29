@@ -50,7 +50,7 @@ class SpineHolder[T](ABC):
 class KernSpineHolder[T](SpineHolder):
 
     OPEN_NOTE_RE = re.compile(r'^\.*([ZN\&<>\{\[\(\)\]\}\\/yqP]+)(.*)$')
-    NOTE_RE = re.compile(r'^(\d+%)?([\d]+)?(\.*)?([PQq]*)([a-gA-G]+)(.*)$')
+    NOTE_RE = re.compile(r'^(\d+%)?([\d]+)?(\.*)?([PQqR]*)([a-gA-G]+)(.*)$')
 
     def error(self, msg: str):
         raise SyntaxError(msg)
@@ -114,6 +114,7 @@ class KernSpineHolder[T](SpineHolder):
             has_right_beam="K" in additional,
             is_upper_thrill="T" in additional,
             is_lower_thrill="t" in additional,
+            is_drum="R" in additional,
         )
 
     CLEF_RE = re.compile(r'^\*clef([a-zA-Z])([0-9])$')

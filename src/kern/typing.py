@@ -266,7 +266,8 @@ class Note(DurationToken):
     has_right_beam: bool = False
     is_upper_thrill: bool = False
     is_lower_thrill: bool = False
-
+    is_drum: bool = False
+    
     def __lt__(self, other) -> bool:
         if isinstance(other, Note):
             return self.pitch < other.pitch

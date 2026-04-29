@@ -21,8 +21,10 @@ def newer(src_file: Path, dst_file: Path) -> bool:
 
 
 type DirClass = Literal[
-    'data', 'krn', 'tokens',
-    'layout', 'metadata', 'mxl', 'pdf', 'svg', 'png'
+    # Original dir classes form PDMX tar file.
+    'metadata', 'mxl', 'pdf', 'data',
+    # Derived one, will leave under PDNX/build.
+    'krn', 'tokens', 'layout',  'svg', 'png'
 ]
 
 
@@ -126,11 +128,20 @@ class PDMX:
 
     def get_path(self, some: Path, dir_class: DirClass, mkdirs: bool = False) -> Path:
         relative = self.relative(some) if some.is_absolute() else some
+        # Strips the optional 'build' component of the path.
+        if len(relative.parts) >= 1 and relative.parts[0] == "build":
+            relative = Path(*relative.parts[1:])
+        # Strips the dirclass component.
         if len(relative.parts) <= 1:
             raise ValueError(f"Unexpected path structure: {some}")
         relative = Path(*relative.parts[1:])
-        path = (self.home / dir_class /
-                relative).with_suffix(PDMX.EXTENSIONS[dir_class])
+        # Compose the path, under 'build' if dirclass isn't original.
+        if dir_class in ['metadata', 'mxl', 'pdf', 'data']:
+            path = (self.home / dir_class /
+                    relative).with_suffix(PDMX.EXTENSIONS[dir_class])
+        else:
+            path = (self.home / "build" / dir_class /
+                    relative).with_suffix(PDMX.EXTENSIONS[dir_class])
         if mkdirs:
             path.parent.mkdir(parents=True, exist_ok=True)
         return path

@@ -198,6 +198,15 @@ class TestHumdrumParser(unittest.TestCase):
             is_lower_thrill=True
         ))
 
+    def test_drum_note(self):
+        self.parse_one_token("4Rgg/L\n", Note(
+            pitch=Pitch.gg,
+            sharps=0, flats=0,
+            duration=Duration(4, 0),
+            starts_beam=True,
+            is_drum=True
+        ))
+
     def test_random_stuff_i_ve_run_into(self):
         self.parse_one_token("[</2b-\n", Note(
             pitch=Pitch.b,

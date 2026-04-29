@@ -113,7 +113,9 @@ class TokenFormatter:
         else:
             duration_text = f"/{self.format_duration(duration)}"
         text = (
-            self.format_pitch(note.pitch) + accidentals +
+            self.format_pitch(note.pitch) +
+            (":x" if note.is_drum else "") +
+            accidentals +
             duration_text
         )
         return text
