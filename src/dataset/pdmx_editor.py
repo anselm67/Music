@@ -50,6 +50,7 @@ class MxlEditor:
         else:
             img_path = self.pdmx.get_path(self.mxl_path, 'png')
         img = cv2.imread(img_path)
+        # TODO Don't fail when the image can't be loaded.
         assert img is not None, f"Can't load image {img_path}"
 
         # Resizes it according to provided scale.
