@@ -30,6 +30,14 @@ class Box:
     def right(self) -> int:
         return self.bot_right[0]
 
+    @property
+    def width(self) -> int:
+        return self.right - self.left
+
+    @property
+    def height(self) -> int:
+        return self.bottom - self.top
+
     def to_cxcywh(self, image_width: int, image_height: int) -> CenteredBox:
         cx = (self.left + self.right) / 2 / image_width
         cy = (self.top + self.bottom) / 2 / image_height
@@ -138,6 +146,10 @@ class System:
     @property
     def first_bar_number(self) -> int:
         return self.bar_numbers[0]
+
+    @property
+    def last_bar_number(self) -> int:
+        return self.first_bar_number + self.bar_count
 
     def asdict(self) -> dict:
         obj = asdict(self)

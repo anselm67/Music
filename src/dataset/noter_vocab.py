@@ -2,7 +2,6 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Iterable
 
 import torch
 from torch import Tensor
@@ -75,10 +74,17 @@ class Vocab:
             tensor[idx] = self.encode(tok)
         return tensor
 
-    def i2tok(self, ids: Tensor | Iterable[int]) -> list[str]:
-        if isinstance(ids, Tensor):
-            ids = ids.tolist()
-        return [self.decode(id) for id in ids]
+    def i2tok(self, ids: Tensor) -> list[str]:
+        tokens: list[str] = []
+        for i in range(0, len(ids)):
+            tokens.append(
+                " ".join(
+                    self.decode(int(id.item())) for id in ids[i, :] if id != self.SIL
+                )
+            )
+            if ids[i, 0] == self.EOS:
+                break
+        return tokens
 
     def save(self, path: Path) -> None:
         with open(path, "w+") as f:
@@ -90,7 +96,8 @@ class Vocab:
 
         returns: A Vocab instance.
         """
-        tok2i: dict[str, int] = dict()
+        tok2i: dict[str, int] = {s: i for i, s in Vocab.RESERVED_TOKENS}
+
         count = 0
         logging.info(f"Tokenizing all .tokens files in {dir}")
         for tokens_file in dir.rglob("*.tokens"):

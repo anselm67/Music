@@ -41,13 +41,17 @@ class KernReader:
     def has_bar_zero(self):
         return 0 in self.bars
 
-    def get_text(self, barno: int) -> Optional[list[str]]:
-        if barno < self.first_bar:
-            barno = 0
-        bos = self.bars.get(barno, -1)
+    def get_text(
+        self, start_barno: int, end_barno: int | None = None
+    ) -> Optional[list[str]]:
+        if start_barno < self.first_bar:
+            start_barno = 0
+        if end_barno is None:
+            end_barno = start_barno + 1
+        bos = self.bars.get(start_barno, -1)
         if bos >= 0:
             # Includes the marker for the next bar, feels more comfortable.
-            eos = self.bars.get(barno + 1, -1) + 1
+            eos = self.bars.get(end_barno, -1) + 1
             return self.lines[bos:eos] if eos > 0 else self.lines[bos:]
         else:
             return None

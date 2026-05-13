@@ -172,6 +172,20 @@
                 "fast",
                 "testing"
             ]
+        },
+        // noter debug configs.
+        {
+            "name": "noter show",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "cli.noter",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "args": [
+                "-n",
+                "10",
+                "show"
+            ]
         }
     ]
 }

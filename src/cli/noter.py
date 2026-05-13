@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 import logging
+import random
 from dataclasses import dataclass
 from pathlib import Path
 
 import click
+import cv2
 import torch
 
-from dataset import PDMX, Vocab
+from dataset import PDMX, NoterDataset, Vocab
+from models import Config
 
 HOME = Path("/home/anselm/datasets/PDMX")
 
@@ -15,6 +18,7 @@ HOME = Path("/home/anselm/datasets/PDMX")
 class ClickContext:
     home: Path
     pdmx: PDMX
+    config: Config
 
 
 @click.group()
@@ -78,7 +82,7 @@ def cli(
         datefmt="%Y-%m-%d %H:%M:%S",
     )
     pdmx = PDMX(home, csv, offset, count)
-    ctx.obj = ClickContext(home, pdmx)
+    ctx.obj = ClickContext(home, pdmx, Config())
 
 
 @click.command()
@@ -89,7 +93,27 @@ def vocab(ctx: ClickContext):
     vocab.save(ctx.home / "build" / "vocab.json")
 
 
+@click.command()
+@click.pass_obj
+def show(ctx: ClickContext):
+    """Displays random samples from the dataset."""
+    dataset = NoterDataset(ctx.config, ctx.pdmx)
+    vocab = Vocab.load(ctx.home / "build/vocab.json")
+    while True:
+        index = random.randint(0, len(dataset) - 1)
+        img_tensor, seq_tensor = dataset[index]
+        img = img_tensor.squeeze(0).cpu().numpy()
+        print(f"     Image size: {img.shape}")
+        print(f"Sequence length: {seq_tensor.shape}")
+        tokens = vocab.i2tok(seq_tensor)
+        print(tokens)
+        cv2.imshow("Staff", img)
+        if cv2.waitKey(0) == ord("q"):
+            break
+
+
 cli.add_command(vocab)
+cli.add_command(show)
 
 
 def main():
