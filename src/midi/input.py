@@ -2,7 +2,7 @@
 
 import array
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Literal, Optional
 
 from midi.typing import (
     Channel,
@@ -138,7 +138,7 @@ class MidiInput(ABC):
             # Parse key signature (two bytes).
             assert self.next() == 2, "Expecting key-signature meta event of length 2."
             sf = self.next()
-            mi = "Minor" if self.next() == 1 else "Major"
+            mi: Literal["Minor", "Major"]  = "Minor" if self.next() == 1 else "Major"
             self.handle(KeySignatureEvent(dt, sf, mi))
         elif meta_type == EventType.Sequencer.code():
             length = self.next()

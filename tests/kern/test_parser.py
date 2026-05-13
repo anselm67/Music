@@ -10,7 +10,7 @@ class TestHumdrumParser(unittest.TestCase):
         parser = Parser.from_text(text, EmptyHandler())
         parser.parse()
 
-    def fail(self, text: str):
+    def should_fail(self, text: str) -> None:
         parser = Parser.from_text(text, EmptyHandler())
         with self.assertRaises(ValueError):
             parser.parse()
@@ -26,7 +26,7 @@ class TestHumdrumParser(unittest.TestCase):
         )
 
     def test_kerns(self):
-        self.fail("")
+        self.should_fail("")
         self.ok("**kern\t**kern\n*clefF4\t*clefG2")
 
     def test_spine_indicators(self):

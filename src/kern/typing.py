@@ -145,9 +145,9 @@ class Duration:
 
     @classmethod
     def from_length(cls, length: float) -> "Duration":
-        duration = 1
+        duration = 1.0
         while duration > length:
-            duration /= 2
+            duration /= 2.0
         remaining = length - duration
         dot_length = duration / 2
         dot_count = 0

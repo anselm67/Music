@@ -9,7 +9,7 @@
 import re
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Generic, Iterable, Iterator, Optional, TypeVar, cast
+from typing import Generic, Iterable, Iterator, NoReturn, Optional, TypeVar, cast
 
 from kern.typing import (
     Bar,
@@ -42,7 +42,7 @@ class SpineHolder[T](ABC):
         self.enable_warnings = enable_warnings
 
     @abstractmethod
-    def parse_token(self, text: str) -> Token:
+    def parse_token(self, text: str) -> Optional[Token]:
         pass
 
 
@@ -50,7 +50,7 @@ class KernSpineHolder[T](SpineHolder):
     OPEN_NOTE_RE = re.compile(r"^\.*([ZN\&<>\{\[\(\)\]\}\\/yqP]+)(.*)$")
     NOTE_RE = re.compile(r"^(\d+%)?([\d]+)?(\.*)?([PQqR]*)([a-gA-G]+)(.*)$")
 
-    def error(self, msg: str):
+    def error(self, msg: str) -> NoReturn:
         raise SyntaxError(msg)
 
     def parse_note(self, token, suggested_duration: Optional[Duration] = None) -> Note:
@@ -211,9 +211,9 @@ class Parser(Generic[T]):
         ) -> T:
             """A new spine is opened.
 
-            This can happen either form the header of the score, in which case a spine_type
-            will be provided (e.g. '**kern' or '**dynam') or as a spine is splitted in which
-            case the parent spine is provided."""
+            This can happen either form the header of the score, in which case a 
+            spine_type will be provided (e.g. '**kern' or '**dynam') or as a spine is 
+            splitted in which case the parent spine is provided."""
             pass
 
         @abstractmethod
@@ -304,7 +304,7 @@ class Parser(Generic[T]):
         self.spines = spines
 
     def open_spine(self, at: int) -> SpineHolder:
-        spine_holder = KernSpineHolder(
+        spine_holder: SpineHolder = KernSpineHolder(
             self.handler.open_spine("*+"), self.enable_warnings
         )
         self.insert_spine(at, spine_holder)
@@ -347,7 +347,7 @@ class Parser(Generic[T]):
                 # Branch off into a new spine.
                 self.branch_spine(spine_holder)
             case "*v":
-                holder = spine_holder
+                holder: Optional[SpineHolder] = spine_holder
                 for next_spine, next_token in tokens_iterator:
                     if next_token == "*v":
                         if holder:
