@@ -468,7 +468,7 @@ def logs(
 
             fig.canvas.draw()
 
-        plt.pause(5000)
+        plt.pause(5.0)
     print("Bye!")
 
 

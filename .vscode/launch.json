@@ -167,8 +167,10 @@
             "python": "${workspaceFolder}/.venv/bin/python",
             "args": [
                 "logs",
-                "bilinear",
-                "epoch6x3"
+                "-a",
+                "loss",
+                "fast",
+                "testing"
             ]
         }
     ]
