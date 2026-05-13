@@ -23,19 +23,17 @@ class StafferModule(L.LightningModule):
 
     def forward(
         self, x: Tensor
-    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
         return self.model(x)
 
     def _step(self, batch: tuple, stage: str) -> Tensor:
-        images, gt_sys_boxes, gt_stave_boxes, gt_assign, gt_bar_xs = batch
+        images, gt_sys_boxes, gt_stave_boxes, gt_assign = batch
         (
             pred_sys_boxes,
             pred_sys_logits,
             pred_stave_boxes,
             pred_stave_logits,
             pred_assign,
-            pred_bar_xs,
-            pred_bar_logits,
         ) = self.model(images)
 
         loss = self.loss_fn.forward(
@@ -44,12 +42,9 @@ class StafferModule(L.LightningModule):
             pred_stave_boxes,
             pred_stave_logits,
             pred_assign,
-            pred_bar_xs,
-            pred_bar_logits,
             gt_sys_boxes,
             gt_stave_boxes,
             gt_assign,
-            gt_bar_xs,
         )
 
         # IoU metrics

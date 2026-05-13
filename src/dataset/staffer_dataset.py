@@ -74,7 +74,7 @@ class StafferDataset(Dataset):
     def __len__(self) -> int:
         return len(self.items)
 
-    def __getitem__(self, idx: int) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+    def __getitem__(self, idx: int) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         while True:
             layout_path, png_path, page_number, _, _ = self.items[idx]
             # Attempts to decode this image, or next one when that fails.
@@ -95,21 +95,11 @@ class StafferDataset(Dataset):
             sys_boxes = torch.zeros(self.config.num_system_queries, 4)
             staff_boxes = torch.zeros(self.config.num_stave_queries, 4)
             assigns = torch.full((self.config.num_stave_queries,), -1, dtype=torch.long)
-            bar_xs = torch.zeros(
-                self.config.num_system_queries, self.config.num_bar_queries
-            )
             staff_idx = 0
             for sys_idx, system in enumerate(page.systems):
                 sys_boxes[sys_idx] = torch.tensor(
                     system.box.to_cxcywh(page.image_width, page.image_height)
                 )
-                bars = torch.tensor(system.staves[0].bars) / page.image_width
-                if len(bars) >= self.config.num_bar_queries:
-                    logging.warning(f"{layout_path}: too many bars {len(bars)}.")
-                    is_ok = False
-                    idx += 1
-                    break
-                bar_xs[sys_idx, : len(bars)] = bars
                 for staff in system.staves:
                     # TODO Check all bar_xs in this page match bar_xs of the system.
                     staff_boxes[staff_idx] = torch.tensor(
@@ -119,7 +109,7 @@ class StafferDataset(Dataset):
                     staff_idx += 1
 
             if is_ok:
-                return image, sys_boxes, staff_boxes, assigns, bar_xs
+                return image, sys_boxes, staff_boxes, assigns
 
 
 def build_sampler(ds: Dataset, last_page_weight: float = 1.5) -> WeightedRandomSampler:

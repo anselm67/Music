@@ -136,7 +136,7 @@ def show(ctx: ClickContext):
     dataset = StafferDataset(ctx.config, ctx.pdmx)
     while True:
         index = random.randint(0, len(dataset) - 1)
-        img_tensor, sys, staff, assign, bar_xs = dataset[index]
+        img_tensor, sys, staff, assign = dataset[index]
         img = img_tensor.squeeze(0).cpu().numpy()
         img = np.stack([img] * 3, axis=-1) * 255
         width_height = img.shape[1], img.shape[0]
@@ -170,13 +170,13 @@ def show(ctx: ClickContext):
 def stats(ctx: ClickContext, num_workers: int):
     """Computes the mean and std of a subset of images from the dataset.."""
     ds = StafferDataset(ctx.config, ctx.pdmx)
-    loader = DataLoader[tuple[Tensor, Tensor, Tensor, Tensor, Tensor]](
+    loader = DataLoader[tuple[Tensor, Tensor, Tensor, Tensor]](
         ds, num_workers=num_workers, batch_size=ctx.config.batch_size
     )
     pix_sum = 0
     pix_sum2 = 0
     pix_count = 0
-    for images, _, _, _, _ in loader:
+    for images, _, _, _ in loader:
         for batch_index in range(len(images)):
             img = images[batch_index].squeeze(0).cpu().numpy()
             pix_sum += img.sum()
