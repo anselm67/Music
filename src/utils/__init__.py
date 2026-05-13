@@ -16,5 +16,5 @@ __all__ = [
     "print_histogram",
     "Walker",
     "compile_query",
-    "compile_filter"
+    "compile_filter",
 ]

@@ -1,4 +1,5 @@
 """Helpers to launch verovio and rsvg-convert sub-processes."""
+
 import subprocess
 from pathlib import Path
 
@@ -16,10 +17,15 @@ def safe_run(command: list[Path | str], timeout=60):
 
 def mxl_to_kern_command(mxl_file: Path, krn_file: Path) -> tuple[Path, list[str]]:
     return verovio_binary(), [
-        "-l", "off",
-        "-f", "musicxml-hum", "-t", "hum",
+        "-l",
+        "off",
+        "-f",
+        "musicxml-hum",
+        "-t",
+        "hum",
         mxl_file.as_posix(),
-        "-o", krn_file.as_posix()
+        "-o",
+        krn_file.as_posix(),
     ]
 
 
@@ -32,13 +38,16 @@ def mxl_to_kern(mxl_file: Path, krn_file: Path) -> bool:
 def render_command(src_file: Path, dst_file: Path) -> tuple[Path, list[str]]:
     return verovio_binary(), [
         # Log off!
-        "-l", "off",
+        "-l",
+        "off",
         # Outputs measure number on every bar, for sync with the kern file.
-        "--mnum-interval", "1",
+        "--mnum-interval",
+        "1",
         # Outputs all pages at once.
         "-a",
         src_file.as_posix(),
-        "-o", dst_file.as_posix()
+        "-o",
+        dst_file.as_posix(),
     ]
 
 
@@ -62,9 +71,15 @@ def render(src_file: Path, dst_file: Path) -> list[Path]:
 
 def svg_to_png_command(svg_file: Path, png_file: Path) -> tuple[Path, list[str]]:
     return rsvgconvert_binary(), [
-        "-f", "png", "-b", "white", "--width", "1024",
-        "-o", png_file.as_posix(),
-        svg_file.as_posix()
+        "-f",
+        "png",
+        "-b",
+        "white",
+        "--width",
+        "1024",
+        "-o",
+        png_file.as_posix(),
+        svg_file.as_posix(),
     ]
 
 

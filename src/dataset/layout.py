@@ -1,5 +1,5 @@
-"""Defines the dataclass hierarchy for encoding score layout information.
-"""
+"""Defines the dataclass hierarchy for encoding score layout information."""
+
 from dataclasses import asdict, dataclass, field
 from typing import Any, cast
 
@@ -37,12 +37,13 @@ class Box:
         h = (self.bottom - self.top) / image_height
         return (cx, cy, w, h)
 
-    def scale(self, w_scale: float, h_scale: float) -> 'Box':
+    def scale(self, w_scale: float, h_scale: float) -> "Box":
         return Box(
-            top_left=(int(self.top_left[0] * w_scale),
-                      int(self.top_left[1] * h_scale)),
-            bot_right=(int(self.bot_right[0] * w_scale),
-                       int(self.bot_right[1] * h_scale)),
+            top_left=(int(self.top_left[0] * w_scale), int(self.top_left[1] * h_scale)),
+            bot_right=(
+                int(self.bot_right[0] * w_scale),
+                int(self.bot_right[1] * h_scale),
+            ),
         )
 
     def contains(self, xy: tuple[int, int]) -> bool:
@@ -50,7 +51,9 @@ class Box:
         return x >= self.left and x <= self.right and y <= self.bottom and y >= self.top
 
     @staticmethod
-    def from_cxcywh(size: tuple[int, int], cx: float, cy: float, w: float, h: float) -> 'Box':
+    def from_cxcywh(
+        size: tuple[int, int], cx: float, cy: float, w: float, h: float
+    ) -> "Box":
         left = int((cx - w / 2) * size[0])
         top = int((cy - h / 2) * size[1])
         right = int((cx + w / 2) * size[0])
@@ -79,10 +82,10 @@ class Staff:
     def right(self) -> int:
         return self.box.right
 
-    def scale(self, w_scale: float, h_scale: float) -> 'Staff':
+    def scale(self, w_scale: float, h_scale: float) -> "Staff":
         return Staff(
             box=self.box.scale(w_scale, h_scale),
-            bars=[int(b * w_scale) for b in self.bars]
+            bars=[int(b * w_scale) for b in self.bars],
         )
 
 
@@ -97,14 +100,16 @@ class System:
     Returns:
         _type_: A frozen dataclass describing the system layout.
     """
+
     bar_numbers: list[int]
     svg_bar_numbers: list[int | None]
     staves: list[Staff]
     box: Box = field(init=False)
 
     def __post_init__(self):
-        object.__setattr__(self, "box", Box(
-            self.staves[0].box.top_left, self.staves[-1].box.bot_right))
+        object.__setattr__(
+            self, "box", Box(self.staves[0].box.top_left, self.staves[-1].box.bot_right)
+        )
 
     @property
     def top(self) -> int:
@@ -133,17 +138,17 @@ class System:
     @property
     def first_bar_number(self) -> int:
         return self.bar_numbers[0]
-    
+
     def asdict(self) -> dict:
         obj = asdict(self)
         obj.pop("box", None)
         return obj
 
-    def scale(self, w_scale: float, h_scale: float) -> 'System':
+    def scale(self, w_scale: float, h_scale: float) -> "System":
         return System(
             self.bar_numbers,
             self.svg_bar_numbers,
-            staves=[s.scale(w_scale, h_scale) for s in self.staves]
+            staves=[s.scale(w_scale, h_scale) for s in self.staves],
         )
 
 
@@ -183,7 +188,7 @@ class Page:
         last_system = self.systems[-1]
         return last_system.first_bar_number + last_system.bar_count
 
-    def resize(self, width: int, height: int) -> 'Page':
+    def resize(self, width: int, height: int) -> "Page":
         w_scale = width / self.image_width
         h_scale = height / self.image_height
         return Page(
@@ -192,7 +197,7 @@ class Page:
             image_height=height,
             systems=[s.scale(w_scale, h_scale) for s in self.systems],
             validated=self.validated,
-            image_rotation=self.image_rotation
+            image_rotation=self.image_rotation,
         )
 
 
@@ -220,14 +225,14 @@ class Score:
     def asdict(self):
         obj = asdict(self)
         # Hack out the 'box' attribute from all systems.
-        for page in obj['pages']:
-            for system in page['systems']:
-                system.pop('box', None)
+        for page in obj["pages"]:
+            for system in page["systems"]:
+                system.pop("box", None)
         return obj
 
-    def resize(self, width: int, height: int) -> 'Score':
+    def resize(self, width: int, height: int) -> "Score":
         return Score(self.id, [p.resize(width, height) for p in self.pages])
 
     @staticmethod
-    def from_json(obj: Any) -> 'Score':
+    def from_json(obj: Any) -> "Score":
         return cast(Score, from_json(Score, obj))

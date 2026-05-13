@@ -1,13 +1,13 @@
-"""Parses a Kern _token_ file to align it with bar numbers to a pdf/png score.
-"""
+"""Parses a Kern _token_ file to align it with bar numbers to a pdf/png score."""
+
 import re
 from pathlib import Path
 from typing import Optional
 
 
 class KernReader:
-    """Parses a kern token file for bars, and create a bar number to record index.
-    """
+    """Parses a kern token file for bars, and create a bar number to record index."""
+
     lines: list[str]
     bars: dict[int, int]
     first_bar: int
@@ -23,7 +23,7 @@ class KernReader:
         self.first_bar = -1
         self.load_tokens()
 
-    BAR_RE = re.compile(r'^=+\s*(\d+)?.*$')
+    BAR_RE = re.compile(r"^=+\s*(\d+)?.*$")
 
     def load_tokens(self):
         with open(self.path.with_suffix(".tokens"), "r") as fp:
@@ -31,7 +31,7 @@ class KernReader:
         # Constructs the bars index.
         for lineno in range(0, len(self.lines)):
             line = self.lines[lineno]
-            if (m := self.BAR_RE.match(line)):
+            if m := self.BAR_RE.match(line):
                 if m.group(1) is not None:
                     bar_number = int(m.group(1))
                     if bar_number > 0 and self.first_bar < 0:

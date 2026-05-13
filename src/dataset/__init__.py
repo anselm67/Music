@@ -16,5 +16,5 @@ __all__ = [
     "CenteredBox",
     "StafferDataset",
     "StafferDataModule",
-    "MxlEditor"
+    "MxlEditor",
 ]

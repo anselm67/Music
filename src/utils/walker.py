@@ -1,4 +1,5 @@
 """An efficient(?) engine to apply shell commands to a hierarchy of files."""
+
 import logging
 import os
 from asyncio import (
@@ -15,10 +16,7 @@ from typing import Callable
 
 
 class Walker:
-    type CommandBuilder = Callable[
-        [Path],
-        None | tuple[str | bytes | Path, list[str]]
-    ]
+    type CommandBuilder = Callable[[Path], None | tuple[str | bytes | Path, list[str]]]
     root: Path
     limit: int
     total_count: int
@@ -36,9 +34,7 @@ class Walker:
                 return
             (binary, args) = command
             proc = await create_subprocess_exec(
-                binary, *args,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
+                binary, *args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
             )
             returncode = await proc.wait()
             if returncode != 0:

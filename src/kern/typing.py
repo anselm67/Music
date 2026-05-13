@@ -1,5 +1,5 @@
-"""Types for the kern module.
-"""
+"""Types for the kern module."""
+
 import re
 from dataclasses import dataclass
 from enum import Enum
@@ -103,12 +103,12 @@ class Pitch(Enum):
 
 
 def pitch_from_note_and_octave(note: str, octave: int) -> Pitch:
-    index = ['c', 'd', 'e', 'f', 'g', 'a', 'b'].index(note.lower())
+    index = ["c", "d", "e", "f", "g", "a", "b"].index(note.lower())
     assert index >= 0, f"Invalid note name: {note}, expected [A-Za-z]."
-    return Pitch((octave, 1+index))
+    return Pitch((octave, 1 + index))
 
 
-CLEF_RE = re.compile(r'^\*clef([a-zA-Z])([0-9])$')
+CLEF_RE = re.compile(r"^\*clef([a-zA-Z])([0-9])$")
 
 
 def pitch_from_clef(clef: str) -> Pitch:
@@ -133,18 +133,18 @@ class Duration:
     def length(self) -> float:
         return (1 / self.duration) * sum(1 / (2**i) for i in range(self.dots + 1))
 
-    def __add__(self, other) -> 'Duration':
+    def __add__(self, other) -> "Duration":
         if isinstance(other, Duration):
             return Duration.from_length(self.length + other.length)
         return NotImplemented
 
-    def __sub__(self, other) -> 'Duration':
+    def __sub__(self, other) -> "Duration":
         if isinstance(other, Duration):
             return Duration.from_length(self.length - other.length)
         return NotImplemented
 
     @classmethod
-    def from_length(cls, length: float) -> 'Duration':
+    def from_length(cls, length: float) -> "Duration":
         duration = 1
         while duration > length:
             duration /= 2
@@ -199,10 +199,10 @@ class Bar(Token):
 
     def requires_valid_bar_number(self):
         return not (
-            self.is_final or
-            self.is_repeat_start or
-            self.is_repeat_end or
-            self.is_invisible
+            self.is_final
+            or self.is_repeat_start
+            or self.is_repeat_end
+            or self.is_invisible
         )
 
 
@@ -224,9 +224,10 @@ class SpinePath(Token):
 @dataclass(frozen=True)
 class Instrument(Token):
     """Encodes an instrument tabdem interpretation.
-    The literal field is either the literal instrument name as quoted with either ' or ", 
+    The literal field is either the literal instrument name as quoted with either ' or ",
     or the canonical name as defined in the appendix 2 in which case is_canonical is True.
     """
+
     # https://www.humdrum.org/Humdrum/guide.append2.html
     literal: str
     is_canonical: bool
@@ -267,7 +268,7 @@ class Note(DurationToken):
     is_upper_thrill: bool = False
     is_lower_thrill: bool = False
     is_drum: bool = False
-    
+
     def __lt__(self, other) -> bool:
         if isinstance(other, Note):
             return self.pitch < other.pitch

@@ -4,7 +4,6 @@ from utils import compile_filter, compile_query
 
 
 class TestCompileQuery(unittest.TestCase):
-
     def test_simple_key(self):
         q = compile_query("name")
         self.assertEqual(q({"name": "Alice"}), "Alice")
@@ -31,13 +30,11 @@ class TestCompileQuery(unittest.TestCase):
 
     def test_list_index(self):
         q = compile_query("people.0.name")
-        self.assertEqual(
-            q({"people": [{"name": "Alice"}, {"name": "Bob"}]}), "Alice")
+        self.assertEqual(q({"people": [{"name": "Alice"}, {"name": "Bob"}]}), "Alice")
 
     def test_list_index_last(self):
         q = compile_query("people.1.name")
-        self.assertEqual(
-            q({"people": [{"name": "Alice"}, {"name": "Bob"}]}), "Bob")
+        self.assertEqual(q({"people": [{"name": "Alice"}, {"name": "Bob"}]}), "Bob")
 
     def test_integer_value(self):
         q = compile_query("age")
@@ -54,7 +51,6 @@ class TestCompileQuery(unittest.TestCase):
 
 
 class TestCompileFilter(unittest.TestCase):
-
     def test_str_equality_match(self):
         f = compile_filter("name == 'Alice'")
         self.assertTrue(f({"name": "Alice"}))
@@ -112,20 +108,18 @@ class TestCompileFilter(unittest.TestCase):
     def test_compile_once_reuse(self):
         f = compile_filter("age > 28")
         records = [{"age": 25}, {"age": 30}, {"age": 35}]
-        self.assertEqual([r for r in records if f(r)],
-                         [{"age": 30}, {"age": 35}])
+        self.assertEqual([r for r in records if f(r)], [{"age": 30}, {"age": 35}])
 
 
 class TestCompileQueryWildcard(unittest.TestCase):
-
     def test_wildcard_simple(self):
         q = compile_query("pages.*")
-        self.assertEqual(q({"pages": [1, 2, 3]}), ('*', [1, 2, 3]))
+        self.assertEqual(q({"pages": [1, 2, 3]}), ("*", [1, 2, 3]))
 
     def test_wildcard_nested(self):
         q = compile_query("pages.*.staff_count")
         data = {"pages": [{"staff_count": 10}, {"staff_count": 40}]}
-        self.assertEqual(q(data), ('*', [10, 40]))
+        self.assertEqual(q(data), ("*", [10, 40]))
 
     def test_wildcard_not_a_list_returns_none(self):
         q = compile_query("pages.*.staff_count")
@@ -133,16 +127,15 @@ class TestCompileQueryWildcard(unittest.TestCase):
 
     def test_wildcard_empty_list(self):
         q = compile_query("pages.*.staff_count")
-        self.assertEqual(q({"pages": []}), ('*', []))
+        self.assertEqual(q({"pages": []}), ("*", []))
 
     def test_wildcard_missing_key_in_items(self):
         q = compile_query("pages.*.staff_count")
         data = {"pages": [{"staff_count": 10}, {}]}
-        self.assertEqual(q(data), ('*', [10, None]))
+        self.assertEqual(q(data), ("*", [10, None]))
 
 
 class TestCompileFilterWildcard(unittest.TestCase):
-
     def test_any_match(self):
         f = compile_filter("pages.?.staff_count > 30")
         data = {"pages": [{"staff_count": 10}, {"staff_count": 40}]}

@@ -94,7 +94,7 @@ class TokenFormatter:
 
     def format_key(self, token: Token) -> str:
         key = cast(Key, token)
-        return f"key{("-" if key.is_flats else "#") * key.count}"
+        return f"key{('-' if key.is_flats else '#') * key.count}"
 
     def format_meter(self, token: Token) -> str:
         meter = cast(Meter, token)
@@ -108,15 +108,17 @@ class TokenFormatter:
         accidentals = ("#" * note.sharps) or ("-" * note.flats)
         duration_text = ""
         if (duration := note.duration) is None:
-            assert note.is_gracenote or note.is_groupetto, "Only gracenotes don't have duration."
+            assert note.is_gracenote or note.is_groupetto, (
+                "Only gracenotes don't have duration."
+            )
             duration_text = "/q"
         else:
             duration_text = f"/{self.format_duration(duration)}"
         text = (
-            self.format_pitch(note.pitch) +
-            (":x" if note.is_drum else "") +
-            accidentals +
-            duration_text
+            self.format_pitch(note.pitch)
+            + (":x" if note.is_drum else "")
+            + accidentals
+            + duration_text
         )
         return text
 
@@ -139,7 +141,6 @@ class TokenFormatter:
 
 
 class BaseHandler(Parser[Spine].Handler):
-
     spines: list[Spine]
 
     def __init__(self):
@@ -149,9 +150,9 @@ class BaseHandler(Parser[Spine].Handler):
     def position(self, spine) -> int:
         return self.spines.index(spine)
 
-    def open_spine(self,
-                   spine_type: str | None = None,
-                   parent: Spine | None = None) -> Spine:
+    def open_spine(
+        self, spine_type: str | None = None, parent: Spine | None = None
+    ) -> Spine:
         match spine_type:
             case "**dynam" | "**dynam/2" | "**mxhm" | "**recip" | "**fb" | "**text":
                 spine = IgnoredSpine()
@@ -185,7 +186,6 @@ class BaseHandler(Parser[Spine].Handler):
 
 
 class NormHandler(BaseHandler):
-
     formatter: TokenFormatter
     output: TextIO | None
 
@@ -197,7 +197,7 @@ class NormHandler(BaseHandler):
 
     def __init__(self, output_path: Path | None):
         super(NormHandler, self).__init__()
-        self.output = output_path and open(output_path, 'w+')
+        self.output = output_path and open(output_path, "w+")
         self.formatter = TokenFormatter()
         self.bar_numbering = False
         self.bar_number = 1
@@ -226,7 +226,9 @@ class NormHandler(BaseHandler):
             return True
         return False
 
-    def fix_bar(self, tokens: list[tuple[Spine, Token]]) -> list[tuple[Spine, Token]] | None:
+    def fix_bar(
+        self, tokens: list[tuple[Spine, Token]]
+    ) -> list[tuple[Spine, Token]] | None:
 
         def requires_bar(t: Token) -> bool:
             if isinstance(t, (Note, Chord, Rest)):
@@ -241,16 +243,19 @@ class NormHandler(BaseHandler):
             if any([requires_bar(t) for _, t in tokens]):
                 bar = Bar("*fake*", 0, False, False, False, False)
                 if self.output:
-                    self.output.write('\t'.join([
-                        self.formatter.format(bar)for _, _ in tokens
-                    ]) + "\n")
+                    self.output.write(
+                        "\t".join([self.formatter.format(bar) for _, _ in tokens])
+                        + "\n"
+                    )
                 self.bar_zero = True
 
         # Adjusts the bar number when none provided.
         if self.check_type((t for _, t in tokens), Bar):
             bars = [cast(Bar, token) for _, token in tokens]
             if self.bar_number <= 2:
-                if all([bar.barno < 0 and bar.requires_valid_bar_number() for bar in bars]):
+                if all(
+                    [bar.barno < 0 and bar.requires_valid_bar_number() for bar in bars]
+                ):
                     self.bar_numbering = True
                 self.bar_zero = True
 
@@ -259,12 +264,15 @@ class NormHandler(BaseHandler):
                 self.bar_number += 1
             elif (barno := max((bar.barno for bar in bars))) >= 0:
                 self.bar_number = barno + 1
-            elif any((bar.requires_valid_bar_number() for bar in bars if bar.barno < 0)):
+            elif any(
+                (bar.requires_valid_bar_number() for bar in bars if bar.barno < 0)
+            ):
                 self.bar_number += 1
 
             bars = [
-                replace(
-                    bar, barno=self.bar_number) if bar.is_final and bar.barno < 0 else bar
+                replace(bar, barno=self.bar_number)
+                if bar.is_final and bar.barno < 0
+                else bar
                 for bar in bars
             ]
             # TODO We're not supposed to see any more bars, so it's ok
@@ -310,8 +318,11 @@ class NormHandler(BaseHandler):
         return [" ".join(toks) for toks in formatted_output]
 
     def append(self, tokens: list[tuple[Spine, Token]]):
-        tokens = [(spine, token) for spine, token in tokens
-                  if not isinstance(spine, IgnoredSpine)]
+        tokens = [
+            (spine, token)
+            for spine, token in tokens
+            if not isinstance(spine, IgnoredSpine)
+        ]
         if self.should_skip(tokens):
             return
         if not (fixed_bars := self.fix_bar(tokens)):
@@ -319,7 +330,7 @@ class NormHandler(BaseHandler):
         tokens = fixed_bars
         output = self.merge_tokens(tokens)
         if self.output:
-            self.output.write('\t'.join(tok for tok in output if tok) + "\n")
+            self.output.write("\t".join(tok for tok in output if tok) + "\n")
 
     def done(self):
         if self.output:

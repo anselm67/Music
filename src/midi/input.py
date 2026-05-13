@@ -1,5 +1,5 @@
-"""Midi stream parser.
-"""
+"""Midi stream parser."""
+
 import array
 from abc import ABC, abstractmethod
 from typing import Optional
@@ -28,7 +28,6 @@ from midi.typing import (
 
 
 class MidiInput(ABC):
-
     buf: array.array
     pos: int = 0
 
@@ -38,7 +37,7 @@ class MidiInput(ABC):
     def debug(self, start_off: int = 5, end_off: int = 5):
         start = max(0, self.pos - start_off)
         end = min(self.pos + end_off, len(self.buf))
-        print(''.join([f"{hex(self.buf[pos])} " for pos in range(start, end)]))
+        print("".join([f"{hex(self.buf[pos])} " for pos in range(start, end)]))
 
     def parse(self):
         self.decode_header()
@@ -56,43 +55,40 @@ class MidiInput(ABC):
 
     def read_varlen(self):
         byte = self.next()
-        value = (byte & 0x7F)
+        value = byte & 0x7F
         while (byte & 0x80) != 0:
             byte = self.next()
             value = (value << 7) + (byte & 0x7F)
         return value
 
     def read_u16(self):
-        return (
-            ((self.next() & 0xFF) << 8) +
-            (self.next() & 0xFF)
-        )
+        return ((self.next() & 0xFF) << 8) + (self.next() & 0xFF)
 
     def read_u24(self):
         return (
-            ((self.next() & 0xFF) << 16) +
-            ((self.next() & 0xFF) << 8) +
-            (self.next() & 0xFF)
+            ((self.next() & 0xFF) << 16)
+            + ((self.next() & 0xFF) << 8)
+            + (self.next() & 0xFF)
         )
 
     def read_u32(self):
         return (
-            ((self.next() & 0xFF) << 24) +
-            ((self.next() & 0xFF) << 16) +
-            ((self.next() & 0xFF) << 8) +
-            (self.next() & 0xFF)
+            ((self.next() & 0xFF) << 24)
+            + ((self.next() & 0xFF) << 16)
+            + ((self.next() & 0xFF) << 8)
+            + (self.next() & 0xFF)
         )
 
     def read_text(self, length: int) -> str:
         ascii = [self.next() for _ in range(length)]
-        return ''.join([chr(ch) for ch in ascii])
+        return "".join([chr(ch) for ch in ascii])
 
     def decode_header(self):
         while not self.done():
-            chunk_type = ''.join([chr(self.next()) for _ in range(4)])
-            if chunk_type == 'MThd':
+            chunk_type = "".join([chr(self.next()) for _ in range(4)])
+            if chunk_type == "MThd":
                 self.parse_mthd()
-            elif chunk_type == 'MTrk':
+            elif chunk_type == "MTrk":
                 self.parse_mtrk()
             else:
                 raise ValueError(f"Invalid chunk type {chunk_type}")
@@ -142,60 +138,64 @@ class MidiInput(ABC):
             # Parse key signature (two bytes).
             assert self.next() == 2, "Expecting key-signature meta event of length 2."
             sf = self.next()
-            mi = 'Minor' if self.next() == 1 else 'Major'
+            mi = "Minor" if self.next() == 1 else "Major"
             self.handle(KeySignatureEvent(dt, sf, mi))
         elif meta_type == EventType.Sequencer.code():
             length = self.next()
-            self.handle(DataEvent(dt, EventType.Sequencer,
-                        self.buf[self.pos:self.pos+length]))
+            self.handle(
+                DataEvent(
+                    dt, EventType.Sequencer, self.buf[self.pos : self.pos + length]
+                )
+            )
             self.skip(length)
         else:
-            raise ValueError(
-                f"Unnown meta-event type {hex(meta_type)}")
+            raise ValueError(f"Unnown meta-event type {hex(meta_type)}")
 
     last_status: Optional[int] = None
 
     def parse_channel_message(self, dt: int, event_type: int):
         self.last_status = None
-        channel = (event_type & 0x7)
-        message_type = (event_type & 0xF0)
+        channel = event_type & 0x7
+        message_type = event_type & 0xF0
         if message_type == EventType.ProgramChange.code():
             # Channel program change, supports running status.
-            channel = (event_type & 0x7)
+            channel = event_type & 0x7
             program = self.next() & 0x7F
-            self.handle(ProgramChangeEvent(
-                dt, Channel(channel), Instrument(program)))
+            self.handle(ProgramChangeEvent(dt, Channel(channel), Instrument(program)))
         elif (event_type & 0xF0) == EventType.NoteOn.code():
             # Note on event, supports running status.
             self.last_status = event_type
-            channel = (event_type & 0x7)
+            channel = event_type & 0x7
             key = self.next()
             vel = self.next()
             # Converts 0-velocity NoteOn into NoteOff.
             self.handle(
-                NoteOnEvent(
-                    dt,
-                    Channel(channel),
-                    Pitch(key), vel) if vel > 0 else NoteOffEvent
-                (dt, Channel(channel), Pitch(key), vel))
+                NoteOnEvent(dt, Channel(channel), Pitch(key), vel)
+                if vel > 0
+                else NoteOffEvent(dt, Channel(channel), Pitch(key), vel)
+            )
         elif (event_type & 0xF0) == EventType.NoteOff.code():
             # Note on event, supports running status.
             self.last_status = event_type
-            channel = (event_type & 0x7)
+            channel = event_type & 0x7
             key = self.next()
             vel = self.next()
             self.handle(NoteOffEvent(dt, Channel(channel), Pitch(key), vel))
         elif (event_type & 0xF0) == EventType.ControlChange.code():
             self.last_status = event_type
             # Todo this includes pedal settings (controller number 64 or 91)
-            channel = (event_type & 0x07)
+            channel = event_type & 0x07
             controller_number = self.next()
             value = self.next()
-            self.handle(ControlChangeEvent(
-                dt, Channel(channel), controller_number, value))
+            self.handle(
+                ControlChangeEvent(dt, Channel(channel), controller_number, value)
+            )
         else:
-            raise ValueError(f"[{Channel(channel).name}] Unknown channel message type {
-                hex(message_type)}.")
+            raise ValueError(
+                f"[{Channel(channel).name}] Unknown channel message type {
+                    hex(message_type)
+                }."
+            )
 
     def parse_running_status(self, dt: int) -> bool:
         if self.last_status:
@@ -210,10 +210,13 @@ class MidiInput(ABC):
         if EventType.is_sysex_code(event_type):
             # System exclusive message.
             length = self.read_varlen()
-            self.handle(DataEvent(
-                dt, EventType(event_type),
-                data=self.buf[self.pos:self.pos+length]
-            ))
+            self.handle(
+                DataEvent(
+                    dt,
+                    EventType(event_type),
+                    data=self.buf[self.pos : self.pos + length],
+                )
+            )
             self.skip(length)
         elif EventType.is_meta_code(event_type):
             self.parse_meta_event(dt)
@@ -226,7 +229,7 @@ class MidiInput(ABC):
         self.handle(OpenTrackEvent())
         length = self.read_u32()
         start = self.pos
-        while (self.pos - start < length):
+        while self.pos - start < length:
             self.parse_event()
         self.handle(CloseTrackEvent())
 

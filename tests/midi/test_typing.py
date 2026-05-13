@@ -5,7 +5,6 @@ from midi.typing import EventType, Pitch, Velocity
 
 
 class TestMidiTyping(unittest.TestCase):
-
     def test_event_type_meta_helpers(self):
         # Test helper methods for Meta events
         self.assertTrue(EventType.Tempo.is_meta())
@@ -35,5 +34,5 @@ class TestMidiTyping(unittest.TestCase):
         self.assertEqual(Velocity.Standard.value, 64)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -7,5 +7,5 @@ __all__ = [
     "HierarchicalDETR",
     "HierarchicalLoss",
     "LossDict",
-    "StafferModule"
+    "StafferModule",
 ]

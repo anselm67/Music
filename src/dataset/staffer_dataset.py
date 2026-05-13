@@ -1,5 +1,5 @@
-"""Torch Dataset for training models against the PDMX dataset.
-"""
+"""Torch Dataset for training models against the PDMX dataset."""
+
 import json
 import logging
 import math
@@ -19,7 +19,6 @@ from models import Config
 
 
 class StafferDataset(Dataset):
-
     pdmx: PDMX
     # layout path, png path, page number, part_count, is_last_page
     # The last two items are used when use_sampler is enabled.
@@ -30,33 +29,43 @@ class StafferDataset(Dataset):
     def __init__(self, config: Config, pdmx: PDMX, count: int = -1):
         self.config = config
         self.pdmx = pdmx
-        self.transform = v2.Compose([
-            v2.Grayscale(),
-            v2.Resize(
-                config.image_shape,
-                interpolation=config.interpolation,
-                antialias=config.antialias),
-            v2.ToDtype(torch.float, scale=True),
-            # Values from running: staffer stats
-            v2.Normalize(mean=[0.9563435316085815], std=[0.16557540870879858]),
-        ])
+        self.transform = v2.Compose(
+            [
+                v2.Grayscale(),
+                v2.Resize(
+                    config.image_shape,
+                    interpolation=config.interpolation,
+                    antialias=config.antialias,
+                ),
+                v2.ToDtype(torch.float, scale=True),
+                # Values from running: staffer stats
+                v2.Normalize(mean=[0.9563435316085815], std=[0.16557540870879858]),
+            ]
+        )
         # Build flat list of (mxl_path, page_number) pairs
         logging.info("Initializing StafferDataset...")
         self.items = []
-        for _, row in tqdm(pdmx.df.iterrows(), total=len(pdmx.df), desc="Loading dataset"):
-            mxl_file = pdmx.home / row['mxl']
-            layout_file = pdmx.get_path(mxl_file, 'layout')
+        for _, row in tqdm(
+            pdmx.df.iterrows(), total=len(pdmx.df), desc="Loading dataset"
+        ):
+            mxl_file = pdmx.home / row["mxl"]
+            layout_file = pdmx.get_path(mxl_file, "layout")
             score = Score.from_json(json.loads(layout_file.read_text()))
             part_count = score.staff_count // score.system_count
             for page in score.pages:
                 if score.page_count > 1:
-                    png_file = pdmx.get_page_path(
-                        mxl_file, 'png', page.page_number)
+                    png_file = pdmx.get_page_path(mxl_file, "png", page.page_number)
                 else:
-                    png_file = pdmx.get_path(mxl_file, 'png')
-                self.items.append((layout_file, png_file, page.page_number,
-                                  part_count,
-                                  (page.page_number == score.page_count - 1)))
+                    png_file = pdmx.get_path(mxl_file, "png")
+                self.items.append(
+                    (
+                        layout_file,
+                        png_file,
+                        page.page_number,
+                        part_count,
+                        (page.page_number == score.page_count - 1),
+                    )
+                )
             if count >= 0 and len(self.items) >= count:
                 self.items = self.items[:count]
                 break
@@ -73,7 +82,7 @@ class StafferDataset(Dataset):
                 image = decode_image(png_path.as_posix())
                 image = self.transform(image)
             except Exception as e:
-                mxl_path = self.pdmx.get_path(layout_path, 'mxl')
+                mxl_path = self.pdmx.get_path(layout_path, "mxl")
                 logging.error(f"{mxl_path}: {e}")
                 idx += 1
                 continue
@@ -85,26 +94,27 @@ class StafferDataset(Dataset):
 
             sys_boxes = torch.zeros(self.config.num_system_queries, 4)
             staff_boxes = torch.zeros(self.config.num_stave_queries, 4)
-            assigns = torch.full(
-                (self.config.num_stave_queries,), -1, dtype=torch.long)
+            assigns = torch.full((self.config.num_stave_queries,), -1, dtype=torch.long)
             bar_xs = torch.zeros(
-                self.config.num_system_queries, self.config.num_bar_queries)
+                self.config.num_system_queries, self.config.num_bar_queries
+            )
             staff_idx = 0
             for sys_idx, system in enumerate(page.systems):
-                sys_boxes[sys_idx] = torch.tensor(system.box.to_cxcywh(
-                    page.image_width, page.image_height))
+                sys_boxes[sys_idx] = torch.tensor(
+                    system.box.to_cxcywh(page.image_width, page.image_height)
+                )
                 bars = torch.tensor(system.staves[0].bars) / page.image_width
                 if len(bars) >= self.config.num_bar_queries:
-                    logging.warning(
-                        f"{layout_path}: too many bars {len(bars)}.")
+                    logging.warning(f"{layout_path}: too many bars {len(bars)}.")
                     is_ok = False
                     idx += 1
                     break
-                bar_xs[sys_idx, :len(bars)] = bars
+                bar_xs[sys_idx, : len(bars)] = bars
                 for staff in system.staves:
                     # TODO Should we check that all bar_xs in this page match bar_xs pf the system.
-                    staff_boxes[staff_idx] = torch.tensor(staff.box.to_cxcywh(
-                        page.image_width, page.image_height))
+                    staff_boxes[staff_idx] = torch.tensor(
+                        staff.box.to_cxcywh(page.image_width, page.image_height)
+                    )
                     assigns[staff_idx] = sys_idx
                     staff_idx += 1
 
@@ -116,7 +126,7 @@ def build_sampler(ds: Dataset, last_page_weight: float = 1.5) -> WeightedRandomS
     logging.info("Computing sample weights...")
     part_counts: list[int] = []
     is_last_pages: list[bool] = []
-    part_histo = Counter()
+    part_histo: Counter[int] = Counter()
     dataset = cast(StafferDataset, ds.dataset)  # type: ignore
     for i in ds.indices:  # type: ignore
         _, _, _, part_count, is_last_page = dataset.items[i]
@@ -124,9 +134,7 @@ def build_sampler(ds: Dataset, last_page_weight: float = 1.5) -> WeightedRandomS
         is_last_pages.append(is_last_page)
         part_histo[part_count] += 1
 
-    sqrt_inv: dict[int, float] = {
-        n: 1.0 / math.sqrt(c) for n, c in part_histo.items()
-    }
+    sqrt_inv: dict[int, float] = {n: 1.0 / math.sqrt(c) for n, c in part_histo.items()}
 
     weights = [
         sqrt_inv[count] * (last_page_weight if last_page else 1.0)
@@ -134,7 +142,5 @@ def build_sampler(ds: Dataset, last_page_weight: float = 1.5) -> WeightedRandomS
     ]
 
     return WeightedRandomSampler(
-        weights=weights,
-        num_samples=dataset.config.train_len,
-        replacement=True
+        weights=weights, num_samples=dataset.config.train_len, replacement=True
     )

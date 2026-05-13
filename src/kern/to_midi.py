@@ -1,5 +1,4 @@
-"""Converts a kern file to a playable midi file.
-"""
+"""Converts a kern file to a playable midi file."""
 
 from collections import deque
 from pathlib import Path
@@ -39,15 +38,14 @@ def note_to_midi(note: Note) -> MidiPitch:
     return MidiPitch(octave * 12 + number - 1)
 
 
-class Spine():
-
+class Spine:
     def append(self, token: Token):
         pass
 
     def close(self) -> MidiOutput | None:
         pass
 
-    def branch(self, channel: Channel) -> 'Spine':
+    def branch(self, channel: Channel) -> "Spine":
         raise ValueError("Can't clone a basic Spine.")
 
 
@@ -59,12 +57,14 @@ class MidiSpine(Spine):
     track: MidiOutput
     header_offset: int
 
-    def __init__(self,
-                 channel: Channel,
-                 ticks_per_quarter: int,
-                 time_signature: tuple[int, int],
-                 tempo: int,
-                 pending_delta: int = 0):
+    def __init__(
+        self,
+        channel: Channel,
+        ticks_per_quarter: int,
+        time_signature: tuple[int, int],
+        tempo: int,
+        pending_delta: int = 0,
+    ):
         self.channel = channel
         self.clock = 0
         self.ticks_per_quarter = ticks_per_quarter
@@ -72,14 +72,18 @@ class MidiSpine(Spine):
         self.tempo = tempo
         self.pending_delta = pending_delta
         self.track = MidiOutput()
-        self.header_offset = self.track.open_chunk('MTrk')
+        self.header_offset = self.track.open_chunk("MTrk")
         self.track.time_signature(time_signature)
         self.track.tempo(tempo)
 
-    def branch(self, channel: Channel) -> 'MidiSpine':
-        return MidiSpine(channel, self.ticks_per_quarter,
-                         self.time_signature, self.tempo,
-                         self.clock + self.pending_delta)
+    def branch(self, channel: Channel) -> "MidiSpine":
+        return MidiSpine(
+            channel,
+            self.ticks_per_quarter,
+            self.time_signature,
+            self.tempo,
+            self.clock + self.pending_delta,
+        )
 
     def close(self) -> MidiOutput:
         self.track.track_end()
@@ -113,8 +117,7 @@ class MidiSpine(Spine):
         first, *rest = chord
         # Emits the first note on, then the rest.
         midi_note = note_to_midi(first)
-        self.track.note_on(self.channel, midi_note,
-                           Velocity.Forte, delta_time)
+        self.track.note_on(self.channel, midi_note, Velocity.Forte, delta_time)
         for note in rest:
             midi_note = note_to_midi(note)
             self.track.note_on(self.channel, midi_note, Velocity.Forte, 0)
@@ -169,14 +172,17 @@ class MidiHandler(Parser[Spine].Handler):
     def free_channel(self, channel: Channel):
         self.channels.appendleft(channel)
 
-    def open_spine(self, spine_type: str | None = None, parent: Spine | None = None) -> Spine:
+    def open_spine(
+        self, spine_type: str | None = None, parent: Spine | None = None
+    ) -> Spine:
         match spine_type:
             case "**dynam" | "**dynam/2" | "**mxhm" | "**recip" | "**fb":
                 spine = Spine()
             case _:
                 channel = self.allocate_channel()
-                spine = MidiSpine(channel, self.ticks_per_quarter,
-                                  self.time_signature, self.tempo)
+                spine = MidiSpine(
+                    channel, self.ticks_per_quarter, self.time_signature, self.tempo
+                )
         self.spines.append(spine)
         return spine
 
@@ -202,7 +208,7 @@ class MidiHandler(Parser[Spine].Handler):
 
     def append(self, tokens: list[tuple[Spine, Token]]):
         pass
-        for (spine, token) in tokens:
+        for spine, token in tokens:
             spine.append(token)
 
     def done(self):
@@ -218,7 +224,7 @@ def to_midi(kern_file: Path, midi_file: Path, tempo=60):
     output = MidiOutput()
     # Header: Format 1, 2 Tracks
     tracks = handler.tracks
-    hd = output.open_chunk('MThd')
+    hd = output.open_chunk("MThd")
     output.write_u16(1)
     output.write_u16(len(tracks))
     output.write_u16(ticks_per_quarter)

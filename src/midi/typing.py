@@ -1,5 +1,4 @@
-"""Typings for the midi package.
-"""
+"""Typings for the midi package."""
 # https://www.music.mcgill.ca/~ich/classes/mumt306/StandardMIDIfileformat.html
 
 import array
@@ -123,7 +122,7 @@ class Velocity(Enum):
 
 
 class Instrument(Enum):
-    ACOUSTIC_GRAND_PIANO_0 = 0        # According to chatgpt
+    ACOUSTIC_GRAND_PIANO_0 = 0  # According to chatgpt
     ACOUSTIC_GRAND_PIANO = 1
     BRIGHT_ACOUSTIC_PIANO = 2
     ELECTRIC_GRAND_PIANO = 3
@@ -262,20 +261,20 @@ class Format(Enum):
 
 class EventType(Enum):
     # Meta events uses MetaEventType
-    Meta = 0xff
+    Meta = 0xFF
     SequenceNumber = (Meta, 0)
     Text = (Meta, 1)
     Copyright = (Meta, 2)
     TrackName = (Meta, 3)
-    EndTrack = (Meta, 0x2f)
+    EndTrack = (Meta, 0x2F)
     Tempo = (Meta, 0x51)
     TimeSignature = (Meta, 0x58)
     KeySignature = (Meta, 0x59)
-    Sequencer = (Meta, 0x7f)
+    Sequencer = (Meta, 0x7F)
 
     # Additional top level event types.
-    SysExclusiveFirst = 0xf0
-    SysExclusiveNext = 0xf7
+    SysExclusiveFirst = 0xF0
+    SysExclusiveNext = 0xF7
 
     # Channel event type uses ChannelEventType.
     ChannelRange = (0x80, 0xEF)
@@ -329,7 +328,6 @@ class Event:
 
 @dataclass
 class HeaderDataEvent(Event):
-
     format: Format
     number_of_tracks: int
     divisions: int
@@ -343,14 +341,12 @@ class HeaderDataEvent(Event):
 
 @dataclass
 class OpenTrackEvent(Event):
-
     def __init__(self):
         super(OpenTrackEvent, self).__init__(0, EventType.OpenTrack)
 
 
 @dataclass
 class CloseTrackEvent(Event):
-
     def __init__(self):
         super(CloseTrackEvent, self).__init__(0, EventType.CloseTrack)
 
@@ -393,10 +389,10 @@ class TempoEvent(Event):
 
 @dataclass
 class TimeSignatureEvent(Event):
-    nn: int     # Numerator.
-    dd: int     # Denominator.
-    cc: int     # Midi clocks per metronom tick.
-    bb: int     # 32nd notes per midi quarter notes (24 midi clocks)
+    nn: int  # Numerator.
+    dd: int  # Denominator.
+    cc: int  # Midi clocks per metronom tick.
+    bb: int  # 32nd notes per midi quarter notes (24 midi clocks)
 
     def __init__(self, dt: int, nn: int, dd: int, cc: int, bb: int):
         super(TimeSignatureEvent, self).__init__(dt, EventType.TimeSignature)
@@ -405,10 +401,10 @@ class TimeSignatureEvent(Event):
 
 @dataclass
 class KeySignatureEvent(Event):
-    sf: int     # 0 -> C, > 0 -> sharps, < 0 -> flats
-    mi: Literal['Minor', 'Major']
+    sf: int  # 0 -> C, > 0 -> sharps, < 0 -> flats
+    mi: Literal["Minor", "Major"]
 
-    def __init__(self, dt: int, sf: int, mi: Literal['Major', 'Minor']):
+    def __init__(self, dt: int, sf: int, mi: Literal["Major", "Minor"]):
         super(KeySignatureEvent, self).__init__(dt, EventType.KeySignature)
         self.sf = sf
         self.mi = mi
@@ -428,8 +424,7 @@ class ProgramChangeEvent(ChannelEvent):
     program: Instrument
 
     def __init__(self, dt: int, channel: Channel, program: Instrument):
-        super(ProgramChangeEvent, self).__init__(
-            dt, EventType.ProgramChange, channel)
+        super(ProgramChangeEvent, self).__init__(dt, EventType.ProgramChange, channel)
         self.program = program
 
 
@@ -439,8 +434,7 @@ class ControlChangeEvent(ChannelEvent):
     value: int
 
     def __init__(self, dt: int, channel: Channel, controller_number: int, value: int):
-        super(ControlChangeEvent, self).__init__(
-            dt, EventType.ProgramChange, channel)
+        super(ControlChangeEvent, self).__init__(dt, EventType.ProgramChange, channel)
         self.controller_number = controller_number
         self.value = value
 
@@ -450,7 +444,14 @@ class NoteEvent(ChannelEvent):
     note: Pitch
     velocity: int
 
-    def __init__(self, dt: int, event_type: EventType, channel: Channel, note: Pitch, velocity: int):
+    def __init__(
+        self,
+        dt: int,
+        event_type: EventType,
+        channel: Channel,
+        note: Pitch,
+        velocity: int,
+    ):
         super(NoteEvent, self).__init__(dt, event_type, channel)
         self.note = note
         self.velocity = velocity
@@ -458,15 +459,13 @@ class NoteEvent(ChannelEvent):
 
 @dataclass
 class NoteOnEvent(NoteEvent):
-
     def __init__(self, dt: int, channel: Channel, note: Pitch, velocity: int):
-        super(NoteOnEvent, self).__init__(
-            dt, EventType.NoteOn, channel, note, velocity)
+        super(NoteOnEvent, self).__init__(dt, EventType.NoteOn, channel, note, velocity)
 
 
 @dataclass
 class NoteOffEvent(NoteEvent):
-
     def __init__(self, dt: int, channel: Channel, note: Pitch, velocity: int):
         super(NoteOffEvent, self).__init__(
-            dt, EventType.NoteOff, channel, note, velocity)
+            dt, EventType.NoteOff, channel, note, velocity
+        )

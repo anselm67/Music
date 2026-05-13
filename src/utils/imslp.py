@@ -1,4 +1,5 @@
 """Looks up and fetches imslp pdf score."""
+
 import logging
 import re
 from asyncio import run
@@ -18,7 +19,7 @@ class IMSLP:
 
     IMSLP_BASE_URL = "https://imslp.org"
 
-    URL_LINK_RE = re.compile(r'^.*\?uddg=([^\&]*)\&.*$')
+    URL_LINK_RE = re.compile(r"^.*\?uddg=([^\&]*)\&.*$")
 
     def __init__(self):
         self.session = ClientSession()
@@ -37,7 +38,7 @@ class IMSLP:
             url="https://www.duckduckgo.com/html",
             headers={
                 "User-Agent": "Lynx/2.8.9rel.1 libwww-FM/2.14 SSL-MM/1.4.1 OpenSSL/1.0.0a",
-                "Accept": "*/*"
+                "Accept": "*/*",
             },
             params={
                 "q": query + " site:imslp.org",
@@ -46,22 +47,22 @@ class IMSLP:
                 "ie": "UTF-8",
             },
             cookies={
-                'CONSENT': 'PENDING+987',  # Bypasses the consent page
-                'SOCS': 'CAESHAgBEhIaAB',
-            }
+                "CONSENT": "PENDING+987",  # Bypasses the consent page
+                "SOCS": "CAESHAgBEhIaAB",
+            },
         ) as resp:
             resp.raise_for_status()
             text = await resp.text()
             soup = BeautifulSoup(text, "html.parser")
             for a in soup.find_all("a", {"class": "result__a"}):
-                if (m := self.URL_LINK_RE.match(str(a.get("href", "")))):
+                if m := self.URL_LINK_RE.match(str(a.get("href", ""))):
                     url = unquote(m.group(1))
                     if url.startswith("https://imslp.org/"):
                         return url
         return None
 
-    COMPLETE_SCORE_RE = re.compile(r'^.*Complete Score.*$')
-    DOWNLOADS_RE = re.compile(r'^Total number of downloads:\s*([0-9]+)\s*$')
+    COMPLETE_SCORE_RE = re.compile(r"^.*Complete Score.*$")
+    DOWNLOADS_RE = re.compile(r"^Total number of downloads:\s*([0-9]+)\s*$")
 
     def _extract_download_links(self, content: bytes) -> list[tuple[str, int]]:
         links: list[tuple[str, int]] = list([])
@@ -73,11 +74,14 @@ class IMSLP:
             # Find the download counter:
             span = file.find(
                 "span",
-                title=lambda t: t and self.DOWNLOADS_RE.match(
-                    str(t))  # type: ignore
+                title=lambda t: t and self.DOWNLOADS_RE.match(str(t)),  # type: ignore
             )
             downloads: int = -1
-            if span and (title := span["title"]) and (m := self.DOWNLOADS_RE.match(str(title))):
+            if (
+                span
+                and (title := span["title"])
+                and (m := self.DOWNLOADS_RE.match(str(title)))
+            ):
                 downloads = int(m.group(1))
             if downloads < 0:
                 continue
@@ -85,7 +89,11 @@ class IMSLP:
             for a in file.find_all("a"):
                 if a.has_attr("rel") and "nofollow" in a["rel"]:
                     span = a.find("span")
-                    if span and span.has_attr('title') and span["title"] == "Download this file":
+                    if (
+                        span
+                        and span.has_attr("title")
+                        and span["title"] == "Download this file"
+                    ):
                         if self.COMPLETE_SCORE_RE.match(span.text):
                             # Got it: add to results,
                             links.append((str(a["href"]), downloads))
@@ -96,7 +104,7 @@ class IMSLP:
         "imslp_wikiLanguageSelectorLanguage": "en",
         "chatbase_anon_id": "d8925c94-d976-492a-9649-e563f973d8a2",
         "imslpdisclaimeraccepted": "yes",
-        "redirectPassed": "1"
+        "redirectPassed": "1",
     }
 
     async def find_pdf_links(self, imslp_page: str) -> list[tuple[str, int]]:
@@ -124,19 +132,19 @@ class IMSLP:
             url=pdf_link,
             headers={
                 "User-Agent": "Lynx/2.8.9rel.1 libwww-FM/2.14 SSL-MM/1.4.1 OpenSSL/1.0.0a",
-                "Accept": "*/*"
+                "Accept": "*/*",
             },
-            cookies=self.IMSLP_COOKIES
+            cookies=self.IMSLP_COOKIES,
         ) as resp:
             resp.raise_for_status()
             content = await resp.read()
             soup = BeautifulSoup(content, "html.parser")
             span = cast(Tag, soup.find("span", id="sm_dl_wait"))
             a = soup.find("a", string=self.ANCHOR_TEXT)  # type:ignore
-            if span and span.has_attr('data-id'):
-                return cast(str, span['data-id'])
+            if span and span.has_attr("data-id"):
+                return cast(str, span["data-id"])
             elif a and a.has_attr("href"):
-                return "https://imslp.eu" + str(a['href'])
+                return "https://imslp.eu" + str(a["href"])
             return None
 
     async def save_pdf(self, download_url: str, into: Path):
@@ -153,14 +161,16 @@ class IMSLP:
 async def async_run():
     imslp = IMSLP()
     # imslp_page = await imslp.find_imslp("bach invention no 1")
-    imslp_page = "https://imslp.org/wiki/Invention_in_C_major,_BWV_772_(Bach,_Johann_Sebastian)"
+    imslp_page = (
+        "https://imslp.org/wiki/Invention_in_C_major,_BWV_772_(Bach,_Johann_Sebastian)"
+    )
     if imslp_page is None:
         return None
 
     print(f"Fetching {imslp_page} for pdf links...")
     links = await imslp.find_pdf_links(imslp_page)
     print("Found imslp links: ")
-    for (url, count) in links:
+    for url, count in links:
         print(f"\t{count}: {url}")
     selected_link, _ = links[0]
     pdf_link = await imslp.download_link(selected_link)

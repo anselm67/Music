@@ -10,7 +10,6 @@ from midi import Velocity
 
 
 class TestToMidi(unittest.TestCase):
-
     def test_note_to_midi_octave(self):
         note = Note(Duration(4, 0), KernPitch.CCCC)
         midi = note_to_midi(note)
@@ -77,8 +76,7 @@ class TestToMidi(unittest.TestCase):
             call.note_on(Channel.Chan0, MidiPitch.D3, Velocity.Forte, 0),
             call.note_off(Channel.Chan0, MidiPitch.D3, Velocity.Forte, 480),
         ]
-        mock_midi_output.return_value.assert_has_calls(
-            expected_calls, any_order=False)
+        mock_midi_output.return_value.assert_has_calls(expected_calls, any_order=False)
 
     @patch("kern.to_midi.MidiOutput")
     def test_chord_conversion(self, mock_midi_output):
@@ -94,5 +92,4 @@ class TestToMidi(unittest.TestCase):
             call.note_off(Channel.Chan0, MidiPitch.E3, Velocity.Forte, 0),
             call.note_off(Channel.Chan0, MidiPitch.G3, Velocity.Forte, 0),
         ]
-        mock_midi_output.return_value.assert_has_calls(
-            expected_calls, any_order=False)
+        mock_midi_output.return_value.assert_has_calls(expected_calls, any_order=False)

@@ -18,5 +18,5 @@ __all__ = [
     "svg_to_png",
     "svg_to_png_command",
     "verovio_binary",
-    "rsvgconvert_binary"
+    "rsvgconvert_binary",
 ]

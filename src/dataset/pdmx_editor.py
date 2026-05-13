@@ -1,4 +1,3 @@
-
 import json
 import subprocess
 from pathlib import Path
@@ -30,25 +29,25 @@ class MxlEditor:
 
     def load(self, mxl_path: Path) -> None:
         try:
-            with open(self.pdmx.get_path(mxl_path, 'layout'), 'r') as f:
+            with open(self.pdmx.get_path(mxl_path, "layout"), "r") as f:
                 obj = json.load(f)
             self.score = Score.from_json(obj)
-            self.kern_reader = KernReader(
-                self.pdmx.get_path(mxl_path, 'tokens'))
+            self.kern_reader = KernReader(self.pdmx.get_path(mxl_path, "tokens"))
             self.mxl_path = mxl_path
             print(f"{mxl_path} loaded, {self.score.page_count} pages.")
         except Exception as e:
             print(f"Failed to load {mxl_path}: {e}.")
 
     def load_page(self, page_index: int = 0) -> tuple[Page, MatLike]:
-        assert page_index >= 0 and page_index < self.score.page_count, f"Page index {page_index} out of bounds."
+        assert page_index >= 0 and page_index < self.score.page_count, (
+            f"Page index {page_index} out of bounds."
+        )
         page = self.score.pages[page_index]
         # Loads the page image.
         if self.score.page_count > 1:
-            img_path = self.pdmx.get_page_path(
-                self.mxl_path, 'png', page.page_number)
+            img_path = self.pdmx.get_page_path(self.mxl_path, "png", page.page_number)
         else:
-            img_path = self.pdmx.get_path(self.mxl_path, 'png')
+            img_path = self.pdmx.get_path(self.mxl_path, "png")
         img = cv2.imread(img_path)
         # TODO Don't fail when the image can't be loaded.
         assert img is not None, f"Can't load image {img_path}"
@@ -56,19 +55,18 @@ class MxlEditor:
         # Resizes it according to provided scale.
         # We could drawinto the un-resized image and then resize, but resizing
         # them separately allows to check that Score.resize() works fine.
-        (height, width) = tuple(
-            map(lambda x: int(x * self.scale), img.shape[:2]))
+        (height, width) = tuple(map(lambda x: int(x * self.scale), img.shape[:2]))
         img = cv2.resize(img, (width, height))
         page = page.resize(width, height)
         print(f"Loaded page {page_index} of {self.score.page_count}.")
         return page, img
 
     def open_kern_file(self) -> None:
-        kern_path = self.pdmx.get_path(self.mxl_path, 'krn')
+        kern_path = self.pdmx.get_path(self.mxl_path, "krn")
         subprocess.run(["code", kern_path.as_posix()])
 
     def open_tokens_file(self) -> None:
-        tokens_path = self.pdmx.get_path(self.mxl_path, 'tokens')
+        tokens_path = self.pdmx.get_path(self.mxl_path, "tokens")
         subprocess.run(["code", tokens_path.as_posix()])
 
     def on_click(self, event: int, page: Page, point: tuple[int, int]) -> None:
@@ -81,7 +79,10 @@ class MxlEditor:
                 for staff_index, staff in enumerate(system.staves):
                     if staff.box.contains(point):
                         bar_count = 0
-                        while bar_count+1 < len(staff.bars) and staff.bars[bar_count+1] < point[0]:
+                        while (
+                            bar_count + 1 < len(staff.bars)
+                            and staff.bars[bar_count + 1] < point[0]
+                        ):
                             bar_count += 1
                         print(
                             f"    page number: {page.page_number}\n"
@@ -91,7 +92,8 @@ class MxlEditor:
                             f"svg_bar_numbers: {system.svg_bar_numbers[bar_count]}"
                         )
                         tokens = self.kern_reader.get_text(
-                            system.bar_numbers[bar_count])
+                            system.bar_numbers[bar_count]
+                        )
                         if tokens:
                             for line in tokens:
                                 print(line)
@@ -111,49 +113,55 @@ class MxlEditor:
                 staff_color = (0, 255, 0)
                 bar_color = (0, 0, 255)
                 for system in page.systems:
-                    cv2.rectangle(img, system.box.top_left,
-                                  system.box.bot_right, system_color, 3)
+                    cv2.rectangle(
+                        img, system.box.top_left, system.box.bot_right, system_color, 3
+                    )
                     for staff in system.staves:
-                        cv2.rectangle(img, staff.box.top_left,
-                                      staff.box.bot_right, staff_color, 2)
+                        cv2.rectangle(
+                            img, staff.box.top_left, staff.box.bot_right, staff_color, 2
+                        )
                         for bar in staff.bars:
-                            cv2.line(img, (bar, staff.box.top),
-                                     (bar, staff.box.bottom), bar_color, 1)
+                            cv2.line(
+                                img,
+                                (bar, staff.box.top),
+                                (bar, staff.box.bottom),
+                                bar_color,
+                                1,
+                            )
             cv2.imshow("layout", img)
             cv2.setMouseCallback(
                 "layout",
-                lambda event, x, y, flags, param: self.on_click(
-                    event, page, (x, y))
+                lambda event, x, y, flags, param: self.on_click(event, page, (x, y)),
             )
 
-            if (key := cv2.waitKey()) == ord('q'):
+            if (key := cv2.waitKey()) == ord("q"):
                 break
-            elif key == ord('r'):
+            elif key == ord("r"):
                 mxl_path = self.pdmx.pick_mxl()
                 print(f"Loading {mxl_path}")
                 self.load(mxl_path)
                 page_index = 0
                 page, image = self.load_page(page_index)
-            elif key == ord('p'):
+            elif key == ord("p"):
                 if (page_index := page_index - 1) < 0:
                     page_index = len(self.score.pages) - 1
                 page, image = self.load_page(page_index)
-            elif key == ord('n'):
+            elif key == ord("n"):
                 if (page_index := page_index + 1) >= self.score.page_count:
                     page_index = 0
                 page, image = self.load_page(page_index)
-            elif key == ord('i'):
+            elif key == ord("i"):
                 print(f"Searching for {self.mxl_path} infos...")
                 if (infos := self.pdmx.info(self.mxl_path)) is None:
                     print(f"{self.mxl_path}: not found.")
                 else:
                     for title, value in infos:
                         print(f"{title}\n\t\033[1;31m{value}\033[0m")
-            elif key == ord('h'):
+            elif key == ord("h"):
                 self.hide_truth = not self.hide_truth
-            elif key == ord('k'):
+            elif key == ord("k"):
                 self.open_kern_file()
-            elif key == ord('t'):
+            elif key == ord("t"):
                 self.open_tokens_file()
             else:
                 print(
@@ -168,6 +176,7 @@ class MxlEditor:
 
     def close(self):
         cv2.destroyAllWindows()
+
 
 # vscode - End of File
 

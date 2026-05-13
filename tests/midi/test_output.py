@@ -7,7 +7,6 @@ from midi import Channel, MidiOutput, Pitch, Velocity
 
 
 class TestMidiOutput(unittest.TestCase):
-
     def test_append(self):
         output = MidiOutput()
         output.append([0x01, 0x02, 0x03])
@@ -25,11 +24,7 @@ class TestMidiOutput(unittest.TestCase):
         for val, expected in cases:
             output = MidiOutput()
             output.varlen(val)
-            self.assertEqual(
-                output.buf.tolist(),
-                expected,
-                f"Failed for value {val}"
-            )
+            self.assertEqual(output.buf.tolist(), expected, f"Failed for value {val}")
 
     def test_write_ints(self):
         output = MidiOutput()
@@ -47,15 +42,22 @@ class TestMidiOutput(unittest.TestCase):
     def test_chunks(self):
         output = MidiOutput()
         # Start a header chunk
-        off = output.open_chunk('MThd')
+        off = output.open_chunk("MThd")
         # Write format (2 bytes)
         output.write_u16(0x0001)
         output.close_chunk(off)
 
         expected = [
-            ord('M'), ord('T'), ord('h'), ord('d'),
-            0, 0, 0, 2,  # Length of the chunk content (2 bytes written)
-            0, 1         # Payload
+            ord("M"),
+            ord("T"),
+            ord("h"),
+            ord("d"),
+            0,
+            0,
+            0,
+            2,  # Length of the chunk content (2 bytes written)
+            0,
+            1,  # Payload
         ]
         self.assertEqual(output.buf.tolist(), expected)
 
@@ -99,7 +101,7 @@ class TestMidiOutput(unittest.TestCase):
             tmp.close()
             try:
                 output.save(Path(tmp.name))
-                with open(tmp.name, 'rb') as f:
+                with open(tmp.name, "rb") as f:
                     content = f.read()
                 self.assertEqual(list(content), [0x90, 60, 64])
             finally:
@@ -116,5 +118,5 @@ class TestMidiOutput(unittest.TestCase):
         self.assertEqual(output1.buf.tolist(), [1, 2, 3, 4])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

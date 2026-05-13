@@ -1,4 +1,5 @@
 """Misc utilities, too small to live in ther own module."""
+
 import os
 import subprocess
 from collections import Counter
@@ -12,7 +13,7 @@ DeviceType = Union[str, torch.device]
 
 
 def iterable_from_file(path: str | Path) -> Iterable[str]:
-    with open(path, 'r') as file:
+    with open(path, "r") as file:
         yield from (line.rstrip() for line in file)
 
 
@@ -61,10 +62,12 @@ def from_json(cls: type, data: Any):
     """
     if is_dataclass(cls):
         field_types = {f.name: f.type for f in fields(cls)}
-        return cls(**{
-            key: from_json(cast(type, field_types[key]), value)
-            for key, value in data.items()
-        })
+        return cls(
+            **{
+                key: from_json(cast(type, field_types[key]), value)
+                for key, value in data.items()
+            }
+        )
 
     origin = get_origin(cls)
 
@@ -73,10 +76,7 @@ def from_json(cls: type, data: Any):
         return [from_json(item_type, item) for item in data]
     elif origin is dict:
         item_type = get_args(cls)[1]
-        return {
-            key: from_json(item_type, value)
-            for key, value in data.items()
-        }
+        return {key: from_json(item_type, value) for key, value in data.items()}
     else:
         return data
 
@@ -88,5 +88,5 @@ def print_histogram(counter: Counter, title: str, width: int = 80):
     cover = 0.0
     for key, count in sorted(counter.items()):
         bar = "█" * int(count / max_val * width)
-        cover += (count / total)
+        cover += count / total
         print(f"{key:4d} | {bar} {count:,} {cover:.1%}")

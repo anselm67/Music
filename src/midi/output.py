@@ -1,5 +1,5 @@
-"""Midi stream output generation.
-"""
+"""Midi stream output generation."""
+
 import array
 from math import log2
 from pathlib import Path
@@ -8,26 +8,25 @@ from typing import Iterable, Literal
 from midi.typing import Channel, Pitch, Velocity
 
 
-class MidiOutput():
-
+class MidiOutput:
     buf: array.array
 
     def __init__(self):
-        self.buf = array.array('B')
+        self.buf = array.array("B")
 
     def append(self, bytes: Iterable[int]):
         self.buf.extend(bytes)
 
     def varlen(self, value: int):
-        buffer: list[int] = [value & 0x7f]
+        buffer: list[int] = [value & 0x7F]
         value >>= 7
         while value > 0:
-            buffer.append(0x80 | (value & 0x7f))
+            buffer.append(0x80 | (value & 0x7F))
             value >>= 7
         buffer.reverse()
         self.append(buffer)
 
-    def open_chunk(self, type: Literal['MThd', 'MTrk']):
+    def open_chunk(self, type: Literal["MThd", "MTrk"]):
         self.append([ord(b) for b in type])
         # Reserve 4 bytes for chunk length to be filled on completion of chunk.
         _, off = self.buf.buffer_info()
@@ -39,7 +38,7 @@ class MidiOutput():
             _, off = self.buf.buffer_info()
             self.buf.extend([0, 0, 0, 0])
         for idx in range(3, -1, -1):
-            self.buf[off+idx] = (value & 0xFF)
+            self.buf[off + idx] = value & 0xFF
             value >>= 8
 
     def write_u24(self, value: int, off: int = -1):
@@ -47,7 +46,7 @@ class MidiOutput():
             _, off = self.buf.buffer_info()
             self.buf.extend([0, 0, 0])
         for idx in range(2, -1, -1):
-            self.buf[off+idx] = (value & 0xFF)
+            self.buf[off + idx] = value & 0xFF
             value >>= 8
 
     def write_u16(self, value: int, off: int = -1):
@@ -55,7 +54,7 @@ class MidiOutput():
             _, off = self.buf.buffer_info()
             self.buf.extend([0, 0])
         for idx in range(1, -1, -1):
-            self.buf[off+idx] = (value & 0xFF)
+            self.buf[off + idx] = value & 0xFF
             value >>= 8
 
     def close_chunk(self, off: int):
@@ -100,21 +99,27 @@ class MidiOutput():
 
     def program_change(self, chan: Channel, prog_number: int, dt: int = 0):
         self.delta_time(dt)
-        assert prog_number < 128, f"Invalid program number {
-            prog_number} must be < 128."
+        assert prog_number < 128, f"Invalid program number {prog_number} must be < 128."
         self.append([0xC0 | chan.value, prog_number])
 
-    def note_on(self, chan: Channel, pitch: Pitch, v: Velocity = Velocity.Standard, dt: int = 0):
+    def note_on(
+        self, chan: Channel, pitch: Pitch, v: Velocity = Velocity.Standard, dt: int = 0
+    ):
         self.delta_time(dt)
         assert pitch.value >= 0 and pitch.value < 128, f"Invalid note {
-            pitch} must be >= 0 amd < 128."
+            pitch
+        } must be >= 0 amd < 128."
         assert v.value >= 0 and v.value < 128, f"Invalid velocity {
-            v} must be >= 0 and < 128."
+            v
+        } must be >= 0 and < 128."
         self.append([0x90 | chan.value, pitch.value, v.value])
 
-    def note_off(self, chan: Channel, pitch: Pitch, v: Velocity = Velocity.Standard, dt: int = 0):
+    def note_off(
+        self, chan: Channel, pitch: Pitch, v: Velocity = Velocity.Standard, dt: int = 0
+    ):
         assert pitch.value >= 0 and pitch.value < 128, f"Invalid note {
-            pitch.value} must be >= 0 amd < 128."
+            pitch.value
+        } must be >= 0 amd < 128."
         self.delta_time(dt)
         self.append([0x80 | chan.value, pitch.value, v.value])
 

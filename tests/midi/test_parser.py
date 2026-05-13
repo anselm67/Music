@@ -31,7 +31,6 @@ class CapturingMidiInput(MidiInput):
 
 
 class TestMidiParser(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         TEST_IODIR.mkdir(parents=True, exist_ok=True)
@@ -46,14 +45,14 @@ class TestMidiParser(unittest.TestCase):
     def create_mono_file(cls):
         output = MidiOutput()
         # Header: Format 0, 1 Track
-        hd = output.open_chunk('MThd')
+        hd = output.open_chunk("MThd")
         output.write_u16(0)
         output.write_u16(1)
         output.write_u16(480)
         output.close_chunk(hd)
 
         # Track
-        trk = output.open_chunk('MTrk')
+        trk = output.open_chunk("MTrk")
         output.time_signature((4, 4))
         output.tempo(120)
         output.note_on(Channel.Chan1, Pitch.C4, Velocity.Standard, 0)
@@ -67,21 +66,21 @@ class TestMidiParser(unittest.TestCase):
     def create_multi_file(cls):
         output = MidiOutput()
         # Header: Format 1, 2 Tracks
-        hd = output.open_chunk('MThd')
+        hd = output.open_chunk("MThd")
         output.write_u16(1)
         output.write_u16(2)
         output.write_u16(480)
         output.close_chunk(hd)
 
         # Track 1: Meta
-        trk1 = output.open_chunk('MTrk')
+        trk1 = output.open_chunk("MTrk")
         output.time_signature((4, 4))
         output.tempo(120)
         output.track_end(0)
         output.close_chunk(trk1)
 
         # Track 2: Notes
-        trk2 = output.open_chunk('MTrk')
+        trk2 = output.open_chunk("MTrk")
         # Channel 1 Note
         output.note_on(Channel.Chan1, Pitch.C4, Velocity.Standard, 0)
         # Channel 2 Note (Simultaneous start, dt=0)
@@ -99,7 +98,7 @@ class TestMidiParser(unittest.TestCase):
     def test_parse_mono(self):
         path = TEST_IODIR / "mono.mid"
         with open(path, "rb") as f:
-            buf = array.array('B', f.read())
+            buf = array.array("B", f.read())
 
         parser = CapturingMidiInput(buf)
         parser.parse()
@@ -118,7 +117,7 @@ class TestMidiParser(unittest.TestCase):
     def test_parse_multi(self):
         path = TEST_IODIR / "multi.mid"
         with open(path, "rb") as f:
-            buf = array.array('B', f.read())
+            buf = array.array("B", f.read())
 
         parser = CapturingMidiInput(buf)
         parser.parse()
@@ -136,5 +135,5 @@ class TestMidiParser(unittest.TestCase):
         self.assertEqual(channels, {Channel.Chan1, Channel.Chan2})
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

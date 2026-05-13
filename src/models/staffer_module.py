@@ -1,4 +1,5 @@
 """Lignhtning module for the Staffer model."""
+
 import math
 from dataclasses import fields
 
@@ -13,7 +14,6 @@ from .staffer_model import Config, HierarchicalDETR
 
 
 class StafferModule(L.LightningModule):
-
     def __init__(self, config: Config):
         super().__init__()
         self.config = config
@@ -21,31 +21,42 @@ class StafferModule(L.LightningModule):
         self.loss_fn = HierarchicalLoss(config)
         self.save_hyperparameters(config.asdict())
 
-    def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+    def forward(
+        self, x: Tensor
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
         return self.model(x)
 
     def _step(self, batch: tuple, stage: str) -> Tensor:
         images, gt_sys_boxes, gt_stave_boxes, gt_assign, gt_bar_xs = batch
         (
-            pred_sys_boxes, pred_sys_logits, 
-            pred_stave_boxes, pred_stave_logits, pred_assign, 
-            pred_bar_xs, pred_bar_logits
+            pred_sys_boxes,
+            pred_sys_logits,
+            pred_stave_boxes,
+            pred_stave_logits,
+            pred_assign,
+            pred_bar_xs,
+            pred_bar_logits,
         ) = self.model(images)
 
         loss = self.loss_fn.forward(
-            pred_sys_boxes, pred_sys_logits,
-            pred_stave_boxes, pred_stave_logits, pred_assign,
-            pred_bar_xs, pred_bar_logits,
-            gt_sys_boxes, 
-            gt_stave_boxes, gt_assign,
-            gt_bar_xs
+            pred_sys_boxes,
+            pred_sys_logits,
+            pred_stave_boxes,
+            pred_stave_logits,
+            pred_assign,
+            pred_bar_xs,
+            pred_bar_logits,
+            gt_sys_boxes,
+            gt_stave_boxes,
+            gt_assign,
+            gt_bar_xs,
         )
 
         # IoU metrics
-        sys_iou = self._mean_iou(
-            pred_sys_boxes, gt_sys_boxes, gt_assign, is_sys=True)
+        sys_iou = self._mean_iou(pred_sys_boxes, gt_sys_boxes, gt_assign, is_sys=True)
         stave_iou = self._mean_iou(
-            pred_stave_boxes, gt_stave_boxes, gt_assign, is_sys=False)
+            pred_stave_boxes, gt_stave_boxes, gt_assign, is_sys=False
+        )
 
         self.log(f"{stage}/loss", loss.total(), prog_bar=True)
         self.log(f"{stage}/sys_iou", sys_iou)
@@ -53,17 +64,16 @@ class StafferModule(L.LightningModule):
         for f in fields(loss):
             self.log(f"{stage}/{f.name}", getattr(loss, f.name))
 
-        if stage == 'train':
-            self.log(
-                "train/lr", self.trainer.optimizers[0].param_groups[0]['lr'])
+        if stage == "train":
+            self.log("train/lr", self.trainer.optimizers[0].param_groups[0]["lr"])
 
         return loss.total()
 
     def _mean_iou(
         self,
-        pred_boxes: Tensor,        # (B, N, 4)
-        gt_boxes: list[Tensor],    # list of (N, 4) padded
-        gt_assign: list[Tensor],   # list of (M,) padded with -1
+        pred_boxes: Tensor,  # (B, N, 4)
+        gt_boxes: list[Tensor],  # list of (N, 4) padded
+        gt_assign: list[Tensor],  # list of (M,) padded with -1
         is_sys: bool,
     ) -> Tensor:
         ious = []
@@ -85,14 +95,16 @@ class StafferModule(L.LightningModule):
         self._step(batch, "val")
 
     def configure_optimizers(self):
-        optimizer = AdamW(self.parameters(), lr=self.config.lr,
-                          weight_decay=self.config.weight_decay)
+        optimizer = AdamW(
+            self.parameters(), lr=self.config.lr, weight_decay=self.config.weight_decay
+        )
 
         def lr_lambda(step: int) -> float:
             if step < self.config.warmup_steps:
                 return step / max(1, self.config.warmup_steps)
-            progress = (step - self.config.warmup_steps) / \
-                max(1, self.config.max_steps - self.config.warmup_steps)
+            progress = (step - self.config.warmup_steps) / max(
+                1, self.config.max_steps - self.config.warmup_steps
+            )
             return 0.5 * (1.0 + math.cos(math.pi * progress))
 
         scheduler = LambdaLR(optimizer, lr_lambda)
@@ -101,5 +113,5 @@ class StafferModule(L.LightningModule):
             "lr_scheduler": {
                 "scheduler": scheduler,
                 "interval": "step",
-            }
+            },
         }

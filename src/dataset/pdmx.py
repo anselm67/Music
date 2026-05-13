@@ -4,6 +4,7 @@ This class manages tghe patgh of files within a PDMX dataset, in addition:
 - It generates the files needed for training models,
 - It can computes various statistics about the underlying dataset.
 """
+
 import json
 import os
 from pathlib import Path
@@ -22,23 +23,30 @@ def newer(src_file: Path, dst_file: Path) -> bool:
 
 type DirClass = Literal[
     # Original dir classes form PDMX tar file.
-    'metadata', 'mxl', 'pdf', 'data',
+    "metadata",
+    "mxl",
+    "pdf",
+    "data",
     # Derived one, will leave under PDNX/build.
-    'krn', 'tokens', 'layout',  'svg', 'png'
+    "krn",
+    "tokens",
+    "layout",
+    "svg",
+    "png",
 ]
 
 
 class PDMX:
     EXTENSIONS: dict[DirClass, str] = {
-        'data': '.json',
-        'krn': '.krn',
-        'tokens': '.tokens',
-        'layout': '.json',
-        'metadata': '.json',
-        'mxl': '.mxl',
-        'pdf': '.pdf',
-        'svg': '.svg',
-        'png': '.png'
+        "data": ".json",
+        "krn": ".krn",
+        "tokens": ".tokens",
+        "layout": ".json",
+        "metadata": ".json",
+        "mxl": ".mxl",
+        "pdf": ".pdf",
+        "svg": ".svg",
+        "png": ".png",
     }
     CSV_SCHEMA = {
         "path": "Path to the data (MusicRender JSON) file.",
@@ -102,7 +110,7 @@ class PDMX:
         "subset:rated": "Whether the song is part of the Rated subset (the song has a non-zero rating).",
         "subset:rated_deduplicated": "Whether the song is both part of the Rated and Deduplicated subsets.",
         "subset:no_license_conflict": "Whether the song's public-facing copyright metadata license agrees with the internal copyright license data of the original MuseScore file (the negation of the license_conflict column).",
-        "subset:all_valid": "Whether the song's associated compressed MusicXML (MXL), sheet music (PDF), and MIDI (MID) files are all valid (non-N/A)."
+        "subset:all_valid": "Whether the song's associated compressed MusicXML (MXL), sheet music (PDF), and MIDI (MID) files are all valid (non-N/A).",
     }
     home: Path
 
@@ -120,7 +128,7 @@ class PDMX:
         if count < 0:
             self.df = self.df.iloc[offset:]
         else:
-            self.df = self.df.iloc[offset: offset + count]
+            self.df = self.df.iloc[offset : offset + count]
         return self
 
     def relative(self, path) -> Path:
@@ -136,12 +144,14 @@ class PDMX:
             raise ValueError(f"Unexpected path structure: {some}")
         relative = Path(*relative.parts[1:])
         # Compose the path, under 'build' if dirclass isn't original.
-        if dir_class in ['metadata', 'mxl', 'pdf', 'data']:
-            path = (self.home / dir_class /
-                    relative).with_suffix(PDMX.EXTENSIONS[dir_class])
+        if dir_class in ["metadata", "mxl", "pdf", "data"]:
+            path = (self.home / dir_class / relative).with_suffix(
+                PDMX.EXTENSIONS[dir_class]
+            )
         else:
-            path = (self.home / "build" / dir_class /
-                    relative).with_suffix(PDMX.EXTENSIONS[dir_class])
+            path = (self.home / "build" / dir_class / relative).with_suffix(
+                PDMX.EXTENSIONS[dir_class]
+            )
         if mkdirs:
             path.parent.mkdir(parents=True, exist_ok=True)
         return path
@@ -152,14 +162,16 @@ class PDMX:
         return path.with_stem(stem)
 
     def get_err_path(self, path: Path) -> Path:
-        return path.with_suffix('.err')
+        return path.with_suffix(".err")
 
     def touch_err_path(self, path: Path):
         err_path = self.get_err_path(path)
         err_path.parent.mkdir(parents=True, exist_ok=True)
         err_path.touch()
 
-    def query(self, query_string, metadata: str | None, score: str | None) -> pd.DataFrame:
+    def query(
+        self, query_string, metadata: str | None, score: str | None
+    ) -> pd.DataFrame:
         metadata_filter, score_filter = (
             compile_filter(metadata) if metadata else None,
             compile_filter(score) if score else None,
@@ -167,36 +179,40 @@ class PDMX:
 
         df = self.df.query(query_string)
         if metadata_filter is not None or score_filter is not None:
+
             def filter_row(row) -> bool:
-                if not isinstance(row['mxl'], str) or not isinstance(row['metadata'], str):
+                if not isinstance(row["mxl"], str) or not isinstance(
+                    row["metadata"], str
+                ):
                     return False
                 try:
                     if metadata_filter is not None:
-                        metadata_file = (self.home / row['metadata'])
+                        metadata_file = self.home / row["metadata"]
                         obj = json.loads(metadata_file.read_text())
                         if not metadata_filter(obj):
                             return False
                     if score_filter is not None:
-                        layout_file = self.get_path(
-                            (self.home / row['mxl']), 'layout')
-                        obj = Score.from_json(
-                            json.loads(layout_file.read_text()))
+                        layout_file = self.get_path((self.home / row["mxl"]), "layout")
+                        obj = Score.from_json(json.loads(layout_file.read_text()))
                         if not score_filter(obj):
                             return False
                     return True
                 except (FileNotFoundError, json.JSONDecodeError):
                     return False
+
             return df[df.apply(filter_row, axis=1)]
         else:
             return df
 
-    def make(self,
-             mxl_file: Path | None = None,
-             num_workers: int | None = None,
-             force: bool = False,
-             dry_run: bool = False
-             ):
+    def make(
+        self,
+        mxl_file: Path | None = None,
+        num_workers: int | None = None,
+        force: bool = False,
+        dry_run: bool = False,
+    ):
         from .pdmx_maker import PDMXMaker
+
         if num_workers is None:
             num_workers = os.cpu_count() or 4
         maker = PDMXMaker(self, force=force, dry_run=dry_run)
@@ -204,6 +220,7 @@ class PDMX:
 
     def stats(self, num_worker: int | None = None):
         from .pdmx_stater import PDMXStater
+
         if num_worker is None:
             num_worker = os.cpu_count() or 4
         stater = PDMXStater(self)
@@ -212,23 +229,22 @@ class PDMX:
     def info(self, mxl_file: Path) -> list[tuple[str, str]] | None:
         value = mxl_file.name
         for _, row in self.df.iterrows():
-            mxl_str = row['mxl']
+            mxl_str = row["mxl"]
             if not isinstance(mxl_str, str):
                 continue
             elif Path(mxl_str).name == value:
                 infos: list[tuple[str, str]] = list()
                 for col in self.df.columns:
-                    infos.append(
-                        (self.CSV_SCHEMA.get(col) or col, row[col])
-                    )
+                    infos.append((self.CSV_SCHEMA.get(col) or col, row[col]))
                 return infos
         return None
 
     def pick_mxl(self) -> Path:
         while True:
             row = self.df.sample(n=1).iloc[0]
-            mxl_str = row['mxl']
+            mxl_str = row["mxl"]
             if isinstance(mxl_str, str):
-                return self.get_path(Path(mxl_str), 'mxl')
+                return self.get_path(Path(mxl_str), "mxl")
+
 
 # vscode - End of File

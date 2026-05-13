@@ -34,6 +34,7 @@ packages = ["src/kern", "src/utils", "src/dataset" ]
 dev = [
     "pytest>=9.0.3",
     "ruff>=0.15.12",
+    "types-tqdm>=4.67.3.20260508",
 ]
 
 [tool.ruff]
@@ -63,3 +64,11 @@ explicit = true
 [tool.uv.sources]
 torch = { index = "pytorch-cu130" }
 torchvision = { index = "pytorch-cu130" }
+
+[tool.mypy]
+[[tool.mypy.overrides]]
+module = [
+    "torchvision.*",
+    "torch.*",
+]
+ignore_missing_imports = true

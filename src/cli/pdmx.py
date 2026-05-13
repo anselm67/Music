@@ -4,6 +4,7 @@
 PDMX Main repo is https://zenodo.org/records/14648209
 
 """
+
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,27 +26,59 @@ class ClickContext:
 
 
 @click.group()
-@click.option("--home", "-h", type=click.Path(dir_okay=True, file_okay=False,
-                                              exists=True, readable=True,
-                                              path_type=Path),
-              default=HOME, show_default=True)
-@click.option("--log-file", type=click.Path(file_okay=True, writable=True, path_type=Path),
-              help="Name of pdmx's log file.")
-@click.option("--csv", default="PDMX.csv", show_default=True,
-              help="Name of the .csv master file.")
-@click.option("--log-level", default="INFO",
-              type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"], case_sensitive=False))
-@click.option("--count", "-n", type=int, default=-1, show_default="all",
-              help="How many rows of the dataset should we consider.")
-@click.option("--offset", "-o", type=int, default=-1, show_default="start",
-              help="Offset at which to start picking rows from the dataset.")
+@click.option(
+    "--home",
+    "-h",
+    type=click.Path(
+        dir_okay=True, file_okay=False, exists=True, readable=True, path_type=Path
+    ),
+    default=HOME,
+    show_default=True,
+)
+@click.option(
+    "--log-file",
+    type=click.Path(file_okay=True, writable=True, path_type=Path),
+    help="Name of pdmx's log file.",
+)
+@click.option(
+    "--csv", default="PDMX.csv", show_default=True, help="Name of the .csv master file."
+)
+@click.option(
+    "--log-level",
+    default="INFO",
+    type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"], case_sensitive=False),
+)
+@click.option(
+    "--count",
+    "-n",
+    type=int,
+    default=-1,
+    show_default="all",
+    help="How many rows of the dataset should we consider.",
+)
+@click.option(
+    "--offset",
+    "-o",
+    type=int,
+    default=-1,
+    show_default="start",
+    help="Offset at which to start picking rows from the dataset.",
+)
 @click.pass_context
-def cli(ctx, home: Path, csv: str, log_file: None | Path, log_level: str, offset: int, count: int):
+def cli(
+    ctx,
+    home: Path,
+    csv: str,
+    log_file: None | Path,
+    log_level: str,
+    offset: int,
+    count: int,
+):
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
         filename=log_file,
         format="%(asctime)s | %(levelname)s | %(module)s.%(funcName)s:%(lineno)d | %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
     pdmx = PDMX(home, csv, offset, count)
     ctx.obj = ClickContext(home=home, pdmx=pdmx)
@@ -53,18 +86,29 @@ def cli(ctx, home: Path, csv: str, log_file: None | Path, log_level: str, offset
 
 @click.command()
 @click.argument("query_string")
-@click.option("--metadata", "-m", type=str, default=None,
-              help="Metadata query as a json filter.")
-@click.option("--score", "-s", type=str, default=None,
-              help="Score query as a json filter.")
-@click.option("--columns", "-c", multiple=True,
-              help="Names of columns to display")
-@click.option("--output", "-o",
-              type=click.Path(dir_okay=False, file_okay=True, path_type=Path),
-              default=None,
-              help="Save the filtered set to the given output file.")
+@click.option(
+    "--metadata", "-m", type=str, default=None, help="Metadata query as a json filter."
+)
+@click.option(
+    "--score", "-s", type=str, default=None, help="Score query as a json filter."
+)
+@click.option("--columns", "-c", multiple=True, help="Names of columns to display")
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(dir_okay=False, file_okay=True, path_type=Path),
+    default=None,
+    help="Save the filtered set to the given output file.",
+)
 @click.pass_obj
-def query(ctx: ClickContext, query_string: str, metadata: str | None, score: str | None, columns: tuple[str], output: Path | None):
+def query(
+    ctx: ClickContext,
+    query_string: str,
+    metadata: str | None,
+    score: str | None,
+    columns: tuple[str],
+    output: Path | None,
+):
     """Query the underlying PDMX.csv database as a DataFrame.
 
     QUERY_STRING: The base panda query to run.
@@ -79,12 +123,16 @@ def query(ctx: ClickContext, query_string: str, metadata: str | None, score: str
 
 
 @click.command()
-@click.argument("mxl_file",
-                type=click.Path(dir_okay=False, file_okay=True,
-                                exists=True, readable=True, path_type=Path),
-                required=True)
-@click.option("--output", "-o",
-              type=click.Path(dir_okay=False, file_okay=True, path_type=Path))
+@click.argument(
+    "mxl_file",
+    type=click.Path(
+        dir_okay=False, file_okay=True, exists=True, readable=True, path_type=Path
+    ),
+    required=True,
+)
+@click.option(
+    "--output", "-o", type=click.Path(dir_okay=False, file_okay=True, path_type=Path)
+)
 def render(mxl_file: Path, output: Path):
     """Renders MXL_FILE into .svg files, one per page."""
     svg_file = output or mxl_file.with_suffix(".svg")
@@ -93,17 +141,23 @@ def render(mxl_file: Path, output: Path):
 
 
 @click.command()
-@click.argument("mxl_file",
-                type=click.Path(dir_okay=False, file_okay=True,
-                                exists=True, readable=True, path_type=Path),
-                required=True)
-@click.option("--output", "-o",
-              type=click.Path(dir_okay=False, file_okay=True, path_type=Path),
-              help="Output file, defaults to the mxl file with .krn extension.")
+@click.argument(
+    "mxl_file",
+    type=click.Path(
+        dir_okay=False, file_okay=True, exists=True, readable=True, path_type=Path
+    ),
+    required=True,
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(dir_okay=False, file_okay=True, path_type=Path),
+    help="Output file, defaults to the mxl file with .krn extension.",
+)
 def from_mxl(mxl_file: Path, output: Path):
     """Converts MXL_FILE into a kern file.
 
-        MXL_FILE: The mxl file to convert to kern.
+    MXL_FILE: The mxl file to convert to kern.
     """
     output = output or mxl_file.with_suffix(".krn")
     mxl_to_kern(mxl_file, output)
@@ -111,39 +165,69 @@ def from_mxl(mxl_file: Path, output: Path):
 
 
 @click.command()
-@click.argument("any_path",
-                type=click.Path(dir_okay=False, file_okay=True,
-                                readable=True, path_type=Path),
-                default=None)
-@click.option("--scale", "-s", default=0.8, show_default=True,
-              help="Resize scale of image and structure for display.")
+@click.argument(
+    "any_path",
+    type=click.Path(dir_okay=False, file_okay=True, readable=True, path_type=Path),
+    default=None,
+)
+@click.option(
+    "--scale",
+    "-s",
+    default=0.8,
+    show_default=True,
+    help="Resize scale of image and structure for display.",
+)
 @click.pass_obj
 def show(ctx: ClickContext, any_path: Path | None, scale: float):
     """Displays the provided image and layout info when available.
 
 
-        ANY_PATH: Any file that refers to a PDMX item, e.g. its mxl or svg path.
+    ANY_PATH: Any file that refers to a PDMX item, e.g. its mxl or svg path.
     """
     pdmx = ctx.pdmx
-    mxl_path = None if any_path is None else pdmx.get_path(any_path, 'mxl')
+    mxl_path = None if any_path is None else pdmx.get_path(any_path, "mxl")
     editor = MxlEditor(pdmx, mxl_path)
     editor.run()
     editor.close()
 
 
 @click.command()
-@click.option("--force", "-f", default=False, is_flag=True, show_default=True,
-              help="Recomputes all dependent files even if they're newer than their mxl source.")
-@click.option("--dry-run", "-n", default=False, is_flag=True, show_default=True,
-              help="Say what you'd do but don't do it.")
-@click.option("--num-workers", type=int, default=None,
-              help="Number of workers for the dataset loader.")
-@click.argument("mxl_file",
-                type=click.Path(dir_okay=False, file_okay=True,
-                                path_type=Path),
-                required=False, default=None)
+@click.option(
+    "--force",
+    "-f",
+    default=False,
+    is_flag=True,
+    show_default=True,
+    help="Recomputes all dependent files even if they're newer than their mxl source.",
+)
+@click.option(
+    "--dry-run",
+    "-n",
+    default=False,
+    is_flag=True,
+    show_default=True,
+    help="Say what you'd do but don't do it.",
+)
+@click.option(
+    "--num-workers",
+    type=int,
+    default=None,
+    help="Number of workers for the dataset loader.",
+)
+@click.argument(
+    "mxl_file",
+    type=click.Path(dir_okay=False, file_okay=True, path_type=Path),
+    required=False,
+    default=None,
+)
 @click.pass_obj
-def make(ctx: ClickContext, mxl_file: Path | None, force: bool, dry_run: bool, num_workers: int | None):
+def make(
+    ctx: ClickContext,
+    mxl_file: Path | None,
+    force: bool,
+    dry_run: bool,
+    num_workers: int | None,
+):
     """Computes all dependent files from PDMX mxl files.
 
     \b
@@ -159,17 +243,20 @@ def make(ctx: ClickContext, mxl_file: Path | None, force: bool, dry_run: bool, n
     pdmx = ctx.pdmx
     # Resolves relative path if needed.
     if mxl_file is not None:
-        mxl_file = pdmx.get_path(mxl_file, 'mxl')
+        mxl_file = pdmx.get_path(mxl_file, "mxl")
     pdmx.make(mxl_file, force=force, dry_run=dry_run, num_workers=num_workers)
 
 
 @click.command()
-@click.option("--num-workers", type=int, default=None,
-              help="Number of workers for the dataset loader.")
+@click.option(
+    "--num-workers",
+    type=int,
+    default=None,
+    help="Number of workers for the dataset loader.",
+)
 @click.pass_obj
 def stats(ctx: ClickContext, num_workers: int | None):
-    """Computes layout statistics for the PDMX dataset.
-    """
+    """Computes layout statistics for the PDMX dataset."""
     stats = ctx.pdmx.stats(num_worker=num_workers)
     print(f"{stats.layout_count:,} layout files, {stats.score_count:,} scores:")
     print(f"  Page count: {stats.page_count:,}")
@@ -188,10 +275,12 @@ def stats(ctx: ClickContext, num_workers: int | None):
 
 
 @click.command()
-@click.argument("mxl_file",
-                type=click.Path(dir_okay=False, file_okay=True,
-                                path_type=Path),
-                required=False, default=None)
+@click.argument(
+    "mxl_file",
+    type=click.Path(dir_okay=False, file_okay=True, path_type=Path),
+    required=False,
+    default=None,
+)
 @click.pass_obj
 def info(ctx: ClickContext, mxl_file: Path):
     """Displays all infos about a given PDMX score.
@@ -201,7 +290,7 @@ def info(ctx: ClickContext, mxl_file: Path):
     pdmx = ctx.pdmx
     # Resolves relative path if needed.
     if mxl_file is not None:
-        mxl_file = pdmx.get_path(mxl_file, 'mxl')
+        mxl_file = pdmx.get_path(mxl_file, "mxl")
     if (infos := pdmx.info(mxl_file)) is None:
         print(f"{mxl_file}: not found.")
     else:

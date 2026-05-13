@@ -1,4 +1,5 @@
 """Tests for LayoutExtractor (verovio scraper)."""
+
 from __future__ import annotations
 
 import textwrap
@@ -22,12 +23,18 @@ def write_svg(tmp_path: Path, content: str, name: str = "test.svg") -> Path:
     return p
 
 
-def make_svg(body: str, width: int = 2100, height: int = 2970,
-             margin: tuple[int, int] | None = (0, 0)) -> str:
+def make_svg(
+    body: str,
+    width: int = 2100,
+    height: int = 2970,
+    margin: tuple[int, int] | None = (0, 0),
+) -> str:
     margin_open = ""
     margin_close = ""
     if margin is not None:
-        margin_open = f'<g class="page-margin" transform="translate({margin[0]}, {margin[1]})">'
+        margin_open = (
+            f'<g class="page-margin" transform="translate({margin[0]}, {margin[1]})">'
+        )
         margin_close = "</g>"
     return f"""\
 <svg width="{width}px" height="{height}px" version="1.1" {SVG_NS}>
@@ -55,8 +62,9 @@ def one_staff_system(top_y: int = 200, bot_y: int = 600) -> str:
 </g>"""
 
 
-def two_staff_system(top1: int = 200, bot1: int = 600,
-                     top2: int = 1200, bot2: int = 1600) -> str:
+def two_staff_system(
+    top1: int = 200, bot1: int = 600, top2: int = 1200, bot2: int = 1600
+) -> str:
     return f"""\
 <g class="system">
  <g class="measure">
@@ -74,6 +82,7 @@ def two_staff_system(top1: int = 200, bot1: int = 600,
 # Translation / margin
 # ---------------------------------------------------------------------------
 
+
 class TestTranslation:
     def test_zero_margin(self, tmp_path):
         svg = write_svg(tmp_path, make_svg(one_staff_system()))
@@ -81,21 +90,21 @@ class TestTranslation:
         assert ex.translation == (0, 0)
 
     def test_nonzero_margin_parsed(self, tmp_path):
-        svg = write_svg(tmp_path, make_svg(
-            one_staff_system(), margin=(500, 300)))
+        svg = write_svg(tmp_path, make_svg(one_staff_system(), margin=(500, 300)))
         ex = LayoutExtractor(svg)
         assert ex.translation == (500, 300)
 
     def test_no_margin_element(self, tmp_path):
         body = one_staff_system()
-        content = f'<svg width="2100px" height="2970px" version="1.1" {SVG_NS}>{body}</svg>'
+        content = (
+            f'<svg width="2100px" height="2970px" version="1.1" {SVG_NS}>{body}</svg>'
+        )
         svg = write_svg(tmp_path, content)
         ex = LayoutExtractor(svg)
         assert ex.translation == (0, 0)
 
     def test_translate_applies_offset(self, tmp_path):
-        svg = write_svg(tmp_path, make_svg(
-            one_staff_system(), margin=(500, 300)))
+        svg = write_svg(tmp_path, make_svg(one_staff_system(), margin=(500, 300)))
         ex = LayoutExtractor(svg)
         # (100 + 500) // 10 = 60, (200 + 300) // 10 = 50
         assert ex.translate((100, 200)) == (60, 50)
@@ -110,6 +119,7 @@ class TestTranslation:
 # Page dimensions
 # ---------------------------------------------------------------------------
 
+
 class TestPageDimensions:
     def test_image_size(self, tmp_path):
         svg = write_svg(tmp_path, make_svg(one_staff_system()))
@@ -118,8 +128,7 @@ class TestPageDimensions:
         assert page.image_height == 2970
 
     def test_custom_dimensions(self, tmp_path):
-        svg = write_svg(tmp_path, make_svg(
-            one_staff_system(), width=1200, height=800))
+        svg = write_svg(tmp_path, make_svg(one_staff_system(), width=1200, height=800))
         page = LayoutExtractor(svg).parse()
         assert page.image_width == 1200
         assert page.image_height == 800
@@ -149,6 +158,7 @@ class TestPageDimensions:
 # ---------------------------------------------------------------------------
 # System parsing
 # ---------------------------------------------------------------------------
+
 
 class TestSystemParsing:
     def test_single_system(self, tmp_path):
@@ -200,13 +210,13 @@ class TestSystemParsing:
         svg = write_svg(tmp_path, make_svg(body))
         page = LayoutExtractor(svg).parse()
         assert page.systems[0].first_bar_number == 1
-        assert page.systems[1].first_bar_number == 1 + \
-            page.systems[0].bar_count
+        assert page.systems[1].first_bar_number == 1 + page.systems[0].bar_count
 
 
 # ---------------------------------------------------------------------------
 # Staff parsing
 # ---------------------------------------------------------------------------
+
 
 class TestStaffParsing:
     def test_single_staff_top_bottom(self, tmp_path):
@@ -248,8 +258,9 @@ class TestStaffParsing:
         assert staff.bars[-1] == 500
 
     def test_staff_with_margin_offset(self, tmp_path):
-        svg = write_svg(tmp_path, make_svg(
-            one_staff_system(200, 600), margin=(500, 300)))
+        svg = write_svg(
+            tmp_path, make_svg(one_staff_system(200, 600), margin=(500, 300))
+        )
         staff = LayoutExtractor(svg).parse().systems[0].staves[0]
         # top: (200 + 300) // 10 = 50, bottom: (600 + 300) // 10 = 90
         assert staff.top == 50
@@ -260,6 +271,7 @@ class TestStaffParsing:
 # System box
 # ---------------------------------------------------------------------------
 
+
 class TestSystemBox:
     def test_single_staff_system_box_matches_staff(self, tmp_path):
         svg = write_svg(tmp_path, make_svg(one_staff_system(200, 600)))
@@ -268,8 +280,7 @@ class TestSystemBox:
         assert system.bottom == system.staves[0].bottom
 
     def test_two_staff_system_box_spans_both(self, tmp_path):
-        svg = write_svg(tmp_path, make_svg(
-            two_staff_system(200, 600, 1200, 1600)))
+        svg = write_svg(tmp_path, make_svg(two_staff_system(200, 600, 1200, 1600)))
         system = LayoutExtractor(svg).parse().systems[0]
         assert system.top == system.staves[0].top
         assert system.bottom == system.staves[-1].bottom
@@ -284,6 +295,7 @@ class TestSystemBox:
 # ---------------------------------------------------------------------------
 # Return types
 # ---------------------------------------------------------------------------
+
 
 class TestReturnTypes:
     def test_returns_page(self, tmp_path):

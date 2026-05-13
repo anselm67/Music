@@ -1,4 +1,5 @@
 """Unit tests for the Prepare pipeline class."""
+
 from __future__ import annotations
 
 import asyncio
@@ -21,10 +22,12 @@ from verovio import rsvgconvert_binary, verovio_binary
 def make_pdmx(tmp_path: Path) -> PDMX:
     """Creates a minimal PDMX instance with a fake CSV."""
     csv = tmp_path / "PDMX.csv"
-    csv.write_text("id,title,n_tracks,mxl,metadata\n"
-                   "1,Sonata,2,mxl/1/aa/score.mxl,metadata/1/aa/score.json\n"
-                   "2,Fugue,1,mxl/2/bb/fugue.mxl,metadata/2/bb/fugue.json\n"
-                   "3,Bad Row,1,,\n")  # row with missing mxl
+    csv.write_text(
+        "id,title,n_tracks,mxl,metadata\n"
+        "1,Sonata,2,mxl/1/aa/score.mxl,metadata/1/aa/score.json\n"
+        "2,Fugue,1,mxl/2/bb/fugue.mxl,metadata/2/bb/fugue.json\n"
+        "3,Bad Row,1,,\n"
+    )  # row with missing mxl
     pdmx = MagicMock(spec=PDMX)
     pdmx.home = tmp_path
     pdmx.df = pd.read_csv(csv)
@@ -32,7 +35,7 @@ def make_pdmx(tmp_path: Path) -> PDMX:
         tmp_path / kind / Path(*src.relative_to(tmp_path).parts[1:])
     ).with_suffix(PDMX.EXTENSIONS[kind])
     pdmx.relative.side_effect = lambda p: p.relative_to(tmp_path)
-    pdmx.get_err_path.side_effect = lambda p: p.with_suffix('.err')
+    pdmx.get_err_path.side_effect = lambda p: p.with_suffix(".err")
     return pdmx
 
 
@@ -46,12 +49,14 @@ def touch(path: Path, mtime: float | None = None):
     path.touch()
     if mtime is not None:
         import os
+
         os.utime(path, (mtime, mtime))
 
 
 # ---------------------------------------------------------------------------
 # newer()
 # ---------------------------------------------------------------------------
+
 
 class TestNewer:
     def test_binaries(self):
@@ -87,6 +92,7 @@ class TestNewer:
 # ---------------------------------------------------------------------------
 # should_refresh_svg
 # ---------------------------------------------------------------------------
+
 
 class TestShouldRefreshSvg:
     def test_force_always_refreshes(self, tmp_path):
@@ -128,6 +134,7 @@ class TestShouldRefreshSvg:
 # collect_svg_files
 # ---------------------------------------------------------------------------
 
+
 class TestCollectSvgFiles:
     def test_single_page(self, tmp_path):
         p = make_maker(tmp_path)
@@ -152,6 +159,7 @@ class TestCollectSvgFiles:
 # ---------------------------------------------------------------------------
 # should_refresh_layout
 # ---------------------------------------------------------------------------
+
 
 class TestShouldRefreshLayout:
     def test_force_always_refreshes(self, tmp_path):
@@ -188,6 +196,7 @@ class TestShouldRefreshLayout:
 # exec
 # ---------------------------------------------------------------------------
 
+
 class TestExec:
     @pytest.mark.asyncio
     async def test_successful_command(self, tmp_path):
@@ -197,6 +206,7 @@ class TestExec:
     @pytest.mark.asyncio
     async def test_failed_command_logs_error(self, tmp_path, caplog):
         import logging
+
         p = make_maker(tmp_path)
         with caplog.at_level(logging.ERROR):
             await p.exec(Path("/usr/bin/false"), [])
@@ -205,9 +215,7 @@ class TestExec:
     @pytest.mark.asyncio
     async def test_cancelled_kills_process(self, tmp_path):
         p = make_maker(tmp_path)
-        task = asyncio.create_task(
-            p.exec(Path("/usr/bin/sleep"), ["10"])
-        )
+        task = asyncio.create_task(p.exec(Path("/usr/bin/sleep"), ["10"]))
         await asyncio.sleep(0.05)
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
@@ -217,6 +225,7 @@ class TestExec:
 # ---------------------------------------------------------------------------
 # run — queue population
 # ---------------------------------------------------------------------------
+
 
 class TestRun:
     @pytest.mark.asyncio
@@ -244,7 +253,7 @@ class TestRun:
         mxl = tmp_path / "mxl/1/aa/score.mxl"
         touch(mxl)
 
-        with patch.object(p, 'worker', new_callable=AsyncMock):
+        with patch.object(p, "worker", new_callable=AsyncMock):
             await p.async_run(mxl_file=mxl, num_worker=1)
 
         task = p.queue.get_nowait()
@@ -254,10 +263,11 @@ class TestRun:
     @pytest.mark.asyncio
     async def test_invalid_mxl_row_skipped(self, tmp_path, caplog):
         import logging
+
         p = make_maker(tmp_path)
 
         with caplog.at_level(logging.INFO):
-            with patch.object(p, 'worker', new_callable=AsyncMock):
+            with patch.object(p, "worker", new_callable=AsyncMock):
                 await p.async_run(mxl_file=None, num_worker=1)
 
         # row 3 with empty mxl should be logged
@@ -268,16 +278,20 @@ class TestRun:
 # mxl_task / svg_task — dry run
 # ---------------------------------------------------------------------------
 
+
 class TestDryRun:
     @pytest.mark.asyncio
     async def test_mxl_task_dry_run_logs_command(self, tmp_path, caplog):
         import logging
+
         p = make_maker(tmp_path, dry_run=True)
         mxl = tmp_path / "mxl/1/aa/score.mxl"
         touch(mxl)
 
-        with patch("dataset.pdmx_maker.render_command",
-                   return_value=(Path("/usr/bin/verovio"), ["--arg"])):
+        with patch(
+            "dataset.pdmx_maker.render_command",
+            return_value=(Path("/usr/bin/verovio"), ["--arg"]),
+        ):
             with patch.object(p, "collect_svg_files", return_value=[]):
                 with caplog.at_level(logging.INFO):
                     await p.mxl_svg_task(mxl)
@@ -288,12 +302,14 @@ class TestDryRun:
     async def test_svg_task_dry_run_no_exec(self, tmp_path):
         p = make_maker(tmp_path, dry_run=True)
         svg = tmp_path / "svg/1/aa/score.svg"
-        json_file = p.pdmx.get_path(svg, 'layout')
+        json_file = p.pdmx.get_path(svg, "layout")
         touch(svg)
 
         with patch.object(p, "exec", new_callable=AsyncMock) as mock_exec:
-            with patch("dataset.pdmx_maker.svg_to_png_command",
-                       return_value=(Path("/usr/bin/rsvg"), ["--arg"])):
+            with patch(
+                "dataset.pdmx_maker.svg_to_png_command",
+                return_value=(Path("/usr/bin/rsvg"), ["--arg"]),
+            ):
                 with patch.object(p, "make_layout", new_callable=AsyncMock):
                     await p.svg_layout_task([svg], json_file)
 

@@ -1,5 +1,5 @@
-"""Base empy handle class for the Humdrum Kern parser.
-"""
+"""Base empy handle class for the Humdrum Kern parser."""
+
 from typing import List, Optional, Tuple
 
 from kern.parser import Parser
@@ -11,11 +11,8 @@ class EmptySpine:
 
 
 class EmptyHandler(Parser[EmptySpine].Handler):
-
     def open_spine(
-        self,
-        spine_type: Optional[str] = None,
-        parent: Optional[EmptySpine] = None
+        self, spine_type: Optional[str] = None, parent: Optional[EmptySpine] = None
     ) -> EmptySpine:
         return EmptySpine()
 

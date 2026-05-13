@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""CLI to manipulate kern files.
-"""
+"""CLI to manipulate kern files."""
+
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,10 +25,12 @@ def cli(ctx, silent: bool):
 
 
 @click.command()
-@click.argument("files", nargs=-1,
-                type=click.Path(dir_okay=False, file_okay=True,
-                                exists=True, readable=True),
-                required=True)
+@click.argument(
+    "files",
+    nargs=-1,
+    type=click.Path(dir_okay=False, file_okay=True, exists=True, readable=True),
+    required=True,
+)
 @click.pass_obj
 def validate(ctx: ClickContext, files: list[Path]):
     """Parse and validate one or more kern files, reporting any errors found."""
@@ -49,12 +51,16 @@ def validate(ctx: ClickContext, files: list[Path]):
 
 
 @click.command()
-@click.argument("kern_file",
-                type=click.Path(dir_okay=False, file_okay=True,
-                                exists=True, readable=True, path_type=Path),
-                required=True)
-@click.option("--output", "-o",
-              type=click.Path(dir_okay=False, file_okay=True, path_type=Path))
+@click.argument(
+    "kern_file",
+    type=click.Path(
+        dir_okay=False, file_okay=True, exists=True, readable=True, path_type=Path
+    ),
+    required=True,
+)
+@click.option(
+    "--output", "-o", type=click.Path(dir_okay=False, file_okay=True, path_type=Path)
+)
 @click.option("--tempo", "-t", type=click.IntRange(1, 279), default=60)
 @click.pass_obj
 def midi(ctx: ClickContext, kern_file: Path, output: Path, tempo: int):
@@ -64,13 +70,19 @@ def midi(ctx: ClickContext, kern_file: Path, output: Path, tempo: int):
 
 
 @click.command()
-@click.argument("kern_file",
-                type=click.Path(dir_okay=False, file_okay=True,
-                                exists=True, readable=True, path_type=Path),
-                required=True)
-@click.option("--output", "-o",
-              type=click.Path(dir_okay=False, file_okay=True, path_type=Path),
-              default=None)
+@click.argument(
+    "kern_file",
+    type=click.Path(
+        dir_okay=False, file_okay=True, exists=True, readable=True, path_type=Path
+    ),
+    required=True,
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(dir_okay=False, file_okay=True, path_type=Path),
+    default=None,
+)
 @click.pass_obj
 def tokenize(ctx: ClickContext, kern_file: Path, output: Path | None):
     """Tokenize a kern file into a unique normal form."""

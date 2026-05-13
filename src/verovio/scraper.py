@@ -1,5 +1,5 @@
-"""Verivio scrapper: scrapes page layout from verovio svg output
-"""
+"""Verivio scrapper: scrapes page layout from verovio svg output"""
+
 from __future__ import annotations
 
 import logging
@@ -20,28 +20,32 @@ class LayoutExtractor:
         self.svg_file = svg_file
         self.tree = ET.parse(svg_file)
         self.ns = {
-            'svg': 'http://www.w3.org/2000/svg',
-            'xlink': 'http://www.w3.org/1999/xlink'
+            "svg": "http://www.w3.org/2000/svg",
+            "xlink": "http://www.w3.org/1999/xlink",
         }
         self.parse_translation()
 
     def parse_translation(self):
         self.translation = (0, 0)
         page_margin = self.tree.getroot().find(
-            ".//svg:g[@class='page-margin']", self.ns)
+            ".//svg:g[@class='page-margin']", self.ns
+        )
         if page_margin is not None:
-            attr = page_margin.attrib.get('transform')
-            if attr is not None and (match := re.search(r"translate\((\d+),\s*(\d+)\)", attr)):
+            attr = page_margin.attrib.get("transform")
+            if attr is not None and (
+                match := re.search(r"translate\((\d+),\s*(\d+)\)", attr)
+            ):
                 self.translation = int(match.group(1)), int(match.group(2))
 
     def translate(self, point: tuple[int, int]) -> tuple[int, int]:
-        return (point[0] + self.translation[0]) // 10, (point[1] + self.translation[1]) // 10
+        return (point[0] + self.translation[0]) // 10, (
+            point[1] + self.translation[1]
+        ) // 10
 
     MULTIREST_RE = re.compile(r"^#E08(?P<digit>\d)-.*$")
 
     def check_multirest(self, staff_group) -> int | None:
-        multirest = staff_group.find(
-            ".//svg:g[@class='multiRest']", self.ns)
+        multirest = staff_group.find(".//svg:g[@class='multiRest']", self.ns)
         if multirest is None:
             return None
         digits: list[str] = list()
@@ -58,7 +62,7 @@ class LayoutExtractor:
         """Returns the bar count (multirest) and bounding box for the staff."""
         (top, bottom, left, right) = (-1, -1, -1, -1)
         for path in staff_group.findall("svg:path", self.ns):
-            d_attr = path.get('d', '')
+            d_attr = path.get("d", "")
             match = re.match(r"^M(\d+)\s+(\d+)\s+L(\d+)\s+(\d+)$", d_attr)
             if match is None:
                 continue
@@ -74,7 +78,7 @@ class LayoutExtractor:
         bar_count = self.check_multirest(staff_group)
         return (
             1 if bar_count is None else bar_count,
-            Box((left, top), (right, bottom))
+            Box((left, top), (right, bottom)),
         )
 
     def check_bar_number(self, measure_group) -> int | None:
@@ -116,21 +120,22 @@ class LayoutExtractor:
         # Transform bars bounding boxes into a list of staves.
         staves: list[Staff] = list()
         for _, bars in sorted(boxes.items()):
-            staves.append(Staff(
-                box=Box(bars[0].top_left, bars[-1].bot_right),
-                bars=[bars[0].left, bars[0].right,
-                      *[x.right for x in bars[1:]]]
-            ))
+            staves.append(
+                Staff(
+                    box=Box(bars[0].top_left, bars[-1].bot_right),
+                    bars=[bars[0].left, bars[0].right, *[x.right for x in bars[1:]]],
+                )
+            )
         # TODO Move the one and only bars[] for the system into the System and out of the Staff
         if not staves:
             raise ValueError(f"{self.svg_file} has a system with no staff.")
         first_bars = staves[0].bars
         if not all(staff.bars == first_bars for staff in staves):
-            raise ValueError(
-                f"{self.svg_file}: system has incompatible bar values.")
+            raise ValueError(f"{self.svg_file}: system has incompatible bar values.")
         if len(svg_bar_numbers) != len(first_bars) - 1:
             raise ValueError(
-                f"{self.svg_file}: svg bar numbers disagrees with stave bars.")
+                f"{self.svg_file}: svg bar numbers disagrees with stave bars."
+            )
         return bar_number + bar_count, System(bar_numbers, svg_bar_numbers, staves)
 
     def parse(self, page_number: int = 1, bar_number: int = 1) -> Page:
@@ -138,11 +143,12 @@ class LayoutExtractor:
 
         # Collects the dimensions of the page.
         try:
-            image_width = int(root.attrib['width'].removesuffix('px'))
-            image_height = int(root.attrib['height'].removesuffix('px'))
+            image_width = int(root.attrib["width"].removesuffix("px"))
+            image_height = int(root.attrib["height"].removesuffix("px"))
         except KeyError as e:
             raise ValueError(
-                f"{self.svg_file}: missing {e} attribute on root element.") from e
+                f"{self.svg_file}: missing {e} attribute on root element."
+            ) from e
 
         # Collects the bounding box for all bars on that page.
         systems: list[System] = list()
@@ -155,7 +161,8 @@ class LayoutExtractor:
             image_width=image_width,
             image_height=image_height,
             systems=systems,
-            validated=True
+            validated=True,
         )
+
 
 # vscode - End of File

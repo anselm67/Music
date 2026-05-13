@@ -9,7 +9,6 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 class TestUtils(unittest.TestCase):
-
     def test_reads_lines(self):
         path = FIXTURES / "sample.txt"
         lines = list(iterable_from_file(path))
@@ -44,8 +43,8 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(result.children[0].name, "A")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

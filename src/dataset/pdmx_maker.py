@@ -6,6 +6,7 @@ From a PDMX xxx.mxl file, this class will generate:
 - A set of png/<path>/xxx_ddd.png images, one per page of the score.
 - A layout file layout/<path>/xxx.json describing the score layout info.
 """
+
 import json
 import logging
 from asyncio import (
@@ -71,22 +72,25 @@ class PDMXMaker:
     def erred(self, dst_file: Path):
         return self.pdmx.get_err_path(dst_file).exists()
 
-    def newer(self, src_file: Path, dst_file: Path, check_err_file: bool = True) -> bool:
+    def newer(
+        self, src_file: Path, dst_file: Path, check_err_file: bool = True
+    ) -> bool:
         # Returns None if a up-to-date err file exists.
         if dst_file.exists():
             return dst_file.stat().st_mtime >= src_file.stat().st_mtime
         elif check_err_file:
             err_file = self.pdmx.get_err_path(dst_file)
-            return err_file.exists() and err_file.stat().st_mtime >= src_file.stat().st_mtime
+            return (
+                err_file.exists()
+                and err_file.stat().st_mtime >= src_file.stat().st_mtime
+            )
         return False
 
     async def exec(self, binary: Path, args: list[str]) -> int:
         proc = None
         try:
             proc = await create_subprocess_exec(
-                binary, *args,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
+                binary, *args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
             )
             return_code = await proc.wait()
             if return_code != 0:
@@ -132,7 +136,7 @@ class PDMXMaker:
     async def mxl_svg_task(self, mxl_file: Path):
         svg_files = None
         # Converts the mxl file to svg by rendering it with verovio.
-        svg_file = self.pdmx.get_path(mxl_file, 'svg', mkdirs=True)
+        svg_file = self.pdmx.get_path(mxl_file, "svg", mkdirs=True)
         if not self.should_refresh_svg(mxl_file, svg_file):
             logging.debug(f"-> {svg_file}")
             if not self.erred(svg_file):
@@ -148,14 +152,14 @@ class PDMXMaker:
                 else:
                     svg_files = self.collect_svg_files(svg_file)
         if svg_files is not None:
-            json_file = self.pdmx.get_path(mxl_file, 'layout', mkdirs=True)
+            json_file = self.pdmx.get_path(mxl_file, "layout", mkdirs=True)
             self.queue.put_nowait(SvgLayoutTask(svg_files, json_file))
 
     def krn_to_tokens(self, krn_file: Path):
         # If the krn file doesn't exist, assume verovio failed to produced it.
         if not krn_file.exists():
             return
-        tok_file = self.pdmx.get_path(krn_file, 'tokens', mkdirs=True)
+        tok_file = self.pdmx.get_path(krn_file, "tokens", mkdirs=True)
         if not self.force and self.newer(krn_file, tok_file):
             logging.debug(f"-> {tok_file}")
             return
@@ -168,7 +172,7 @@ class PDMXMaker:
 
     async def mxl_krn_task(self, mxl_file: Path):
         # Converts the mxl file to svg by rendering it with verovio.
-        krn_file = self.pdmx.get_path(mxl_file, 'krn', mkdirs=True)
+        krn_file = self.pdmx.get_path(mxl_file, "krn", mkdirs=True)
         if not self.force and self.newer(mxl_file, krn_file):
             logging.debug(f"-> {krn_file}")
             self.krn_to_tokens(krn_file)
@@ -204,17 +208,13 @@ class PDMXMaker:
             bar_number = 1
             try:
                 for svg_file in svg_files:
-                    page = LayoutExtractor(
-                        svg_file).parse(page_number, bar_number)
+                    page = LayoutExtractor(svg_file).parse(page_number, bar_number)
                     pages.append(page)
                     bar_number = page.next_bar_number
                     page_number += 1
                 # Saves the final json file.
-                score = Score(
-                    id=str(self.pdmx.get_path(json_file, 'mxl')),
-                    pages=pages
-                )
-                async with aiofiles.open(json_file, 'w') as f:
+                score = Score(id=str(self.pdmx.get_path(json_file, "mxl")), pages=pages)
+                async with aiofiles.open(json_file, "w") as f:
                     await f.write(json.dumps(score.asdict(), indent=2))
             except Exception as e:
                 json_file.unlink(missing_ok=True)
@@ -222,7 +222,7 @@ class PDMXMaker:
                 logging.error(f"make_layout {svg_file}: {e}")
 
     async def make_png(self, svg_file: Path):
-        png_file = self.pdmx.get_path(svg_file, 'png', mkdirs=True)
+        png_file = self.pdmx.get_path(svg_file, "png", mkdirs=True)
         if not self.force and self.newer(svg_file, png_file):
             logging.debug(f"-> {png_file}")
         else:
@@ -259,10 +259,9 @@ class PDMXMaker:
     async def async_run(self, mxl_file: Path | None, num_worker: int):
         if mxl_file is None:
             for index, row in self.pdmx.df.iterrows():
-                mxl_str = row['mxl']
+                mxl_str = row["mxl"]
                 if not isinstance(mxl_str, str):
-                    logging.info(
-                        f"PDMX.csv@{index}: invalid mxl path {mxl_str}")
+                    logging.info(f"PDMX.csv@{index}: invalid mxl path {mxl_str}")
                 else:
                     self.queue.put_nowait(MxlSvgTask(self.pdmx.home / mxl_str))
                     self.queue.put_nowait(MxlKrnTask(self.pdmx.home / mxl_str))

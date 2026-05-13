@@ -1,5 +1,5 @@
-"""Lightning dataset module for PDMX.
-"""
+"""Lightning dataset module for PDMX."""
+
 import logging
 
 import lightning as L
@@ -17,27 +17,26 @@ class StafferDataModule(L.LightningDataModule):
     use_sampler: bool
     num_workers: int
 
-    def __init__(self, config: Config, pdmx: PDMX, use_sampler: bool, num_workers: int = 8):
+    def __init__(
+        self, config: Config, pdmx: PDMX, use_sampler: bool, num_workers: int = 8
+    ):
         super().__init__()
         self.config = config
-        self.pdmx = pdmx.slice(
-            0, self.config.train_len + self.config.valid_len)
+        self.pdmx = pdmx.slice(0, self.config.train_len + self.config.valid_len)
         self.use_sampler = use_sampler
         self.num_workers = num_workers
 
     def setup(self, stage: str | None = None):
         full = StafferDataset(
-            self.config,
-            self.pdmx,
-            count=self.config.train_len + self.config.valid_len
+            self.config, self.pdmx, count=self.config.train_len + self.config.valid_len
         )
         self.train_ds, self.val_ds = random_split(
-            full, [self.config.train_len, self.config.valid_len])
+            full, [self.config.train_len, self.config.valid_len]
+        )
 
     def train_dataloader(self):
         if self.use_sampler:
-            logging.info(
-                f"train_dataloader: {self.num_workers} workers with sampler.")
+            logging.info(f"train_dataloader: {self.num_workers} workers with sampler.")
             return DataLoader(
                 self.train_ds,
                 batch_size=self.config.batch_size,
@@ -46,8 +45,7 @@ class StafferDataModule(L.LightningDataModule):
                 pin_memory=True,
             )
         else:
-            logging.info(
-                f"train_dataloader: {self.num_workers} workers no sampler.")
+            logging.info(f"train_dataloader: {self.num_workers} workers no sampler.")
             return DataLoader(
                 self.train_ds,
                 batch_size=self.config.batch_size,
@@ -64,5 +62,6 @@ class StafferDataModule(L.LightningDataModule):
             num_workers=4,
             pin_memory=True,
         )
+
 
 # vscode - End of File

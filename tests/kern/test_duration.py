@@ -4,7 +4,6 @@ from kern.typing import Duration
 
 
 class TestDuration(unittest.TestCase):
-
     def test_length(self):
         # Test length calculation for a Duration object
         d = Duration(4, 0)

@@ -1,4 +1,3 @@
-
 from .empty import EmptyHandler, EmptySpine
 from .kern_reader import KernReader
 from .parser import Parser
@@ -41,7 +40,7 @@ __all__ = [
     "SpinePath",
     "Token",
     "to_midi",
-    "tokenize"
+    "tokenize",
 ]
 
 # vscode - End of File

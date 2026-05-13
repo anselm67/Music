@@ -1,4 +1,5 @@
 """A HierarchicalDETR model to compute the layout of a page of sheet music."""
+
 from dataclasses import asdict, dataclass, field
 
 import torch.nn.functional as F
@@ -20,10 +21,10 @@ class Config:
 
     in_channels: int = 1
     divider: float = 1.5
-    embed_dim: int = 256                # Also known as D
+    embed_dim: int = 256  # Also known as D
     mlp_dim: int = 1024
 
-    num_heads: int = 8                  # Also known as H
+    num_heads: int = 8  # Also known as H
     patch_size: int = 16
     dropout: float = 0.1
     num_encoder_layers: int = 4
@@ -34,8 +35,8 @@ class Config:
     # pdmx query -o Stafff16.csv 'index==index' --score 'pages.*.staff_count < 16'
     # pdmx --csv Staff16.csv stats
 
-    num_system_queries: int = 16        # Also known as N
-    num_stave_queries: int = 16         # Also known as M
+    num_system_queries: int = 16  # Also known as N
+    num_stave_queries: int = 16  # Also known as M
     num_bar_queries: int = 16
 
     interpolation: InterpolationMode = InterpolationMode.BILINEAR
@@ -51,7 +52,7 @@ class Config:
     warmup_steps: int = 4000
     box_loss_multiplier: int = 2
     bar_loss_multiplier: int = 5
-    
+
     def scale_to_patch(self, value: int) -> int:
         ret = value // self.divider
         return int(round(ret / self.patch_size) * self.patch_size)
@@ -72,7 +73,6 @@ class Config:
 
 
 class PatchEmbedding(nn.Module):
-
     config: Config
 
     def __init__(self, config: Config):
@@ -80,11 +80,17 @@ class PatchEmbedding(nn.Module):
         self.config = config
         self.num_patch = (
             config.image_shape[0] // config.patch_size,
-            config.image_shape[1] // config.patch_size)
-        self.proj = nn.Conv2d(config.in_channels, config.embed_dim,
-                              kernel_size=config.patch_size, stride=config.patch_size)
-        self.pos_embed = nn.Parameter(0.02 * randn(
-            self.num_patch[0] * self.num_patch[1], config.embed_dim))
+            config.image_shape[1] // config.patch_size,
+        )
+        self.proj = nn.Conv2d(
+            config.in_channels,
+            config.embed_dim,
+            kernel_size=config.patch_size,
+            stride=config.patch_size,
+        )
+        self.pos_embed = nn.Parameter(
+            0.02 * randn(self.num_patch[0] * self.num_patch[1], config.embed_dim)
+        )
 
         self.dropout = nn.Dropout(config.dropout)
 
@@ -96,7 +102,6 @@ class PatchEmbedding(nn.Module):
 
 
 class TransformerBlock(nn.Module):
-
     def __init__(self, config: Config):
         super().__init__()
         self.config = config
@@ -106,7 +111,7 @@ class TransformerBlock(nn.Module):
             nn.Linear(config.embed_dim, config.mlp_dim),
             nn.GELU(),
             nn.Linear(config.mlp_dim, config.embed_dim),
-            nn.Dropout(config.dropout)
+            nn.Dropout(config.dropout),
         )
         self.norm1 = nn.LayerNorm(config.embed_dim)
         self.norm2 = nn.LayerNorm(config.embed_dim)
@@ -115,12 +120,17 @@ class TransformerBlock(nn.Module):
         B, N, D = x.shape
         x_norm = self.norm1(x)
         qkv = self.qkv(x_norm).reshape(
-            B, N, 3, self.config.num_heads, D // self.config.num_heads)
+            B, N, 3, self.config.num_heads, D // self.config.num_heads
+        )
         q, k, v = qkv.unbind(2)  # each (B, N, num_heads, head_dim)
-        q, k, v = q.transpose(1, 2), k.transpose(
-            1, 2), v.transpose(1, 2)  # (B, num_heads, N, head_dim)
+        q, k, v = (
+            q.transpose(1, 2),
+            k.transpose(1, 2),
+            v.transpose(1, 2),
+        )  # (B, num_heads, N, head_dim)
         x_attn = F.scaled_dot_product_attention(
-            q, k, v, dropout_p=self.config.dropout if self.training else 0.0)
+            q, k, v, dropout_p=self.config.dropout if self.training else 0.0
+        )
         x_attn = x_attn.transpose(1, 2).reshape(B, N, D)
         x = x + self.proj(x_attn)
         x = x + self.mlp(self.norm2(x))
@@ -128,7 +138,6 @@ class TransformerBlock(nn.Module):
 
 
 class ViT(nn.Module):
-
     config: Config
 
     def __init__(self, config: Config):
@@ -147,7 +156,6 @@ class ViT(nn.Module):
 
 
 class DecoderLayer(nn.Module):
-
     def __init__(self, config: Config):
         super().__init__()
         D = config.embed_dim
@@ -156,11 +164,13 @@ class DecoderLayer(nn.Module):
         # System stream
         self.sys_self_attn_norm = nn.LayerNorm(D)
         self.sys_self_attn = nn.MultiheadAttention(
-            D, H, dropout=config.dropout, batch_first=True)
+            D, H, dropout=config.dropout, batch_first=True
+        )
 
         self.sys_cross_attn_norm = nn.LayerNorm(D)
         self.sys_cross_attn = nn.MultiheadAttention(
-            D, H, dropout=config.dropout, batch_first=True)
+            D, H, dropout=config.dropout, batch_first=True
+        )
 
         self.sys_ffn_norm = nn.LayerNorm(D)
         self.sys_ffn = nn.Sequential(
@@ -173,15 +183,18 @@ class DecoderLayer(nn.Module):
         # Stave stream
         self.stave_self_attn_norm = nn.LayerNorm(D)
         self.stave_self_attn = nn.MultiheadAttention(
-            D, H, dropout=config.dropout, batch_first=True)
+            D, H, dropout=config.dropout, batch_first=True
+        )
 
         self.stave_cross_attn_norm = nn.LayerNorm(D)
         self.stave_cross_attn = nn.MultiheadAttention(
-            D, H, dropout=config.dropout, batch_first=True)
+            D, H, dropout=config.dropout, batch_first=True
+        )
 
         self.stave_group_norm = nn.LayerNorm(D)
         self.stave_group_attn = nn.MultiheadAttention(
-            D, H, dropout=config.dropout, batch_first=True)
+            D, H, dropout=config.dropout, batch_first=True
+        )
 
         self.stave_ffn_norm = nn.LayerNorm(D)
         self.stave_ffn = nn.Sequential(
@@ -191,7 +204,9 @@ class DecoderLayer(nn.Module):
             nn.Dropout(config.dropout),
         )
 
-    def forward(self, sys_q: Tensor, stave_q: Tensor, memory: Tensor) -> tuple[Tensor, Tensor]:
+    def forward(
+        self, sys_q: Tensor, stave_q: Tensor, memory: Tensor
+    ) -> tuple[Tensor, Tensor]:
         # System stream
         normed = self.sys_self_attn_norm(sys_q)
         sys_q = sys_q + self.sys_self_attn(normed, normed, normed)[0]
@@ -215,15 +230,13 @@ class DecoderLayer(nn.Module):
 
 
 class HierarchicalDecoder(nn.Module):
-
     def __init__(self, config: Config):
         super().__init__()
-        self.sys_queries = nn.Embedding(
-            config.num_system_queries, config.embed_dim)
-        self.stave_queries = nn.Embedding(
-            config.num_stave_queries, config.embed_dim)
-        self.layers = nn.ModuleList([DecoderLayer(config)
-                                    for _ in range(config.num_decoder_layers)])
+        self.sys_queries = nn.Embedding(config.num_system_queries, config.embed_dim)
+        self.stave_queries = nn.Embedding(config.num_stave_queries, config.embed_dim)
+        self.layers = nn.ModuleList(
+            [DecoderLayer(config) for _ in range(config.num_decoder_layers)]
+        )
 
     def forward(self, memory: Tensor) -> tuple[Tensor, Tensor]:
         B = memory.shape[0]
@@ -235,7 +248,6 @@ class HierarchicalDecoder(nn.Module):
 
 
 class BarDecoderLayer(nn.Module):
-
     def __init__(self, config: Config):
         super().__init__()
         D = config.embed_dim
@@ -243,20 +255,25 @@ class BarDecoderLayer(nn.Module):
 
         self.self_attn_norm = nn.LayerNorm(D)
         self.self_attn = nn.MultiheadAttention(
-            D, H, dropout=config.dropout, batch_first=True)
+            D, H, dropout=config.dropout, batch_first=True
+        )
 
         self.cross_attn_norm = nn.LayerNorm(D)
         self.cross_attn = nn.MultiheadAttention(
-            D, H, dropout=config.dropout, batch_first=True)
+            D, H, dropout=config.dropout, batch_first=True
+        )
 
         self.group_norm = nn.LayerNorm(D)
         self.group_attn = nn.MultiheadAttention(
-            D, H, dropout=config.dropout, batch_first=True)
+            D, H, dropout=config.dropout, batch_first=True
+        )
 
         self.ffn_norm = nn.LayerNorm(D)
         self.ffn = nn.Sequential(
-            nn.Linear(D, config.mlp_dim), nn.GELU(),
-            nn.Linear(config.mlp_dim, D), nn.Dropout(config.dropout),
+            nn.Linear(D, config.mlp_dim),
+            nn.GELU(),
+            nn.Linear(config.mlp_dim, D),
+            nn.Dropout(config.dropout),
         )
 
     def forward(self, bar_q: Tensor, sys_q: Tensor, memory: Tensor) -> Tensor:
@@ -277,13 +294,12 @@ class BarDecoderLayer(nn.Module):
 
 
 class BarDecoder(nn.Module):
-
     def __init__(self, config: Config):
         super().__init__()
-        self.bar_queries = nn.Embedding(
-            config.num_bar_queries, config.embed_dim)
+        self.bar_queries = nn.Embedding(config.num_bar_queries, config.embed_dim)
         self.layers = nn.ModuleList(
-            [BarDecoderLayer(config) for _ in range(config.num_decoder_layers)])
+            [BarDecoderLayer(config) for _ in range(config.num_decoder_layers)]
+        )
 
     def forward(self, sys_q: Tensor, memory: Tensor) -> Tensor:
         """
@@ -293,14 +309,14 @@ class BarDecoder(nn.Module):
         """
         B_N = sys_q.shape[0]
         bar_q = self.bar_queries.weight.unsqueeze(0).expand(
-            B_N, -1, -1)  # (B*N, num_bar_queries, D)
+            B_N, -1, -1
+        )  # (B*N, num_bar_queries, D)
         for layer in self.layers:
             bar_q = layer(bar_q, sys_q, memory)
         return bar_q
 
 
 class PredictionHeads(nn.Module):
-
     def __init__(self, config: Config):
         super().__init__()
         D = config.embed_dim
@@ -329,20 +345,28 @@ class PredictionHeads(nn.Module):
 
     def forward(
         self,
-        sys_feats: Tensor,    # (B, N, D)
+        sys_feats: Tensor,  # (B, N, D)
         stave_feats: Tensor,  # (B, M, D)
-        bar_feats: Tensor,    # (B, N, num_bar_queries, D)
+        bar_feats: Tensor,  # (B, N, num_bar_queries, D)
     ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
-        sys_boxes = self.sys_box_head(sys_feats).sigmoid()       # (B, N, 4)
-        sys_logits = self.sys_obj_head(sys_feats)                # (B, N, 1)
+        sys_boxes = self.sys_box_head(sys_feats).sigmoid()  # (B, N, 4)
+        sys_logits = self.sys_obj_head(sys_feats)  # (B, N, 1)
         stave_boxes = self.stave_box_head(stave_feats).sigmoid()  # (B, M, 4)
-        stave_logits = self.stave_obj_head(stave_feats)          # (B, M, 1)
-        assign_logits = self.assign_head(stave_feats)            # (B, M, N)
+        stave_logits = self.stave_obj_head(stave_feats)  # (B, M, 1)
+        assign_logits = self.assign_head(stave_feats)  # (B, M, N)
         # (B, N, num_bar_queries, 1)
         bar_x = self.bar_x_head(bar_feats).sigmoid()
         # (B, N, num_bar_queries, 1)
         bar_logits = self.bar_obj_head(bar_feats)
-        return sys_boxes, sys_logits, stave_boxes, stave_logits, assign_logits, bar_x, bar_logits
+        return (
+            sys_boxes,
+            sys_logits,
+            stave_boxes,
+            stave_logits,
+            assign_logits,
+            bar_x,
+            bar_logits,
+        )
 
 
 class HierarchicalDETR(nn.Module):
@@ -356,24 +380,32 @@ class HierarchicalDETR(nn.Module):
         self.bar_decoder = BarDecoder(config)
         self.heads = PredictionHeads(config)
 
-    def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
-        memory = self.backbone(x)                       # (B, P, D)
-        sys_feats, stave_feats = self.decoder(memory)   # (B, N, D), (B, M, D)
+    def forward(
+        self, x: Tensor
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+        memory = self.backbone(x)  # (B, P, D)
+        sys_feats, stave_feats = self.decoder(memory)  # (B, N, D), (B, M, D)
 
         # Bar detection: loop over batch and systems
         B, N, D = sys_feats.shape
         P = memory.shape[1]
 
-        sys_q_flat = sys_feats.reshape(B * N, 1, D)        # (B*N, 1, D)
-        memory_flat = memory.unsqueeze(1).expand(          # (B*N, P, D)
-            -1, N, -1, -1).reshape(B * N, P, D)
+        sys_q_flat = sys_feats.reshape(B * N, 1, D)  # (B*N, 1, D)
+        memory_flat = (
+            memory.unsqueeze(1)
+            .expand(  # (B*N, P, D)
+                -1, N, -1, -1
+            )
+            .reshape(B * N, P, D)
+        )
 
         bar_feats_flat = self.bar_decoder(
-            sys_q_flat, memory_flat)  # (B*N, num_bar_queries, D)
-        bar_feats = bar_feats_flat.reshape(
-            B, N, self.config.num_bar_queries, D)
+            sys_q_flat, memory_flat
+        )  # (B*N, num_bar_queries, D)
+        bar_feats = bar_feats_flat.reshape(B, N, self.config.num_bar_queries, D)
 
         return self.heads(sys_feats, stave_feats, bar_feats)
         # returns: sys_boxes, sys_logits, stave_boxes, stave_logits, assign_logits, bar_x, bar_logits
+
 
 # vscode - End of file.

@@ -47,5 +47,5 @@ _all__ = [
     "TempoEvent",
     "TextEvent",
     "TimeSignatureEvent",
-    "Velocity"
+    "Velocity",
 ]

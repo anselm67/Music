@@ -18,11 +18,14 @@ class RecordingWalker(Walker):
     async def process(self, cmd_builder: Walker.CommandBuilder, file: Path):
         self.processed.append(file)
 
+
 # Dummy command builder.
 
 
 def command_builder(file: Path) -> tuple[str, list[str]]:
     return "/usr/bin/ls", list(file.as_posix())
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------

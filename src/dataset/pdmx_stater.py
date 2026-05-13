@@ -2,6 +2,7 @@
 
 Statistics are collected into a PDMXStats instance.
 """
+
 import json
 import logging
 from asyncio import Queue, QueueEmpty, TaskGroup, run
@@ -79,7 +80,7 @@ class PDMXStats:
             for s in p.systems:
                 self.bar_histo[s.bar_count] += 1
 
-    def collect(self, other: 'PDMXStats'):
+    def collect(self, other: "PDMXStats"):
         self.layout_count += other.layout_count
         self.score_count += other.score_count
         self.page_count += other.page_count
@@ -105,7 +106,7 @@ class PDMXStater:
     async def layout_stats(self, stats: PDMXStats, json_file: Path):
         logging.debug(f"layout_stats {json_file}")
         try:
-            async with aiofiles.open(json_file, 'r') as f:
+            async with aiofiles.open(json_file, "r") as f:
                 text = await f.read()
             stats.layout_count += 1
             score = Score.from_json(json.loads(text))
@@ -132,14 +133,14 @@ class PDMXStater:
 
     async def async_run(self, num_worker: int) -> PDMXStats:
         for index, row in self.pdmx.df.iterrows():
-            mxl_str = row['mxl']
+            mxl_str = row["mxl"]
             if not isinstance(mxl_str, str):
-                logging.info(
-                    f"PDMX.csv@{index}: invalid mxl path {mxl_str}")
+                logging.info(f"PDMX.csv@{index}: invalid mxl path {mxl_str}")
             else:
-                mxl_file = (self.pdmx.home / mxl_str)
-                self.queue.put_nowait(LayoutTask(
-                    self.pdmx.get_path(mxl_file, 'layout')))
+                mxl_file = self.pdmx.home / mxl_str
+                self.queue.put_nowait(
+                    LayoutTask(self.pdmx.get_path(mxl_file, "layout"))
+                )
 
         async with TaskGroup() as tg:
             tasks = [tg.create_task(self.worker()) for _ in range(num_worker)]
@@ -152,5 +153,6 @@ class PDMXStater:
     def run(self, num_worker: int) -> PDMXStats:
         logging.info(f"PDMXState.run: {num_worker} workers.")
         return run(self.async_run(num_worker))
+
 
 # vscode - End of File
