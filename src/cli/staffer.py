@@ -305,7 +305,7 @@ def train(
         callbacks=callbacks,
         log_every_n_steps=100,
         val_check_interval=VAL_CHECK_INTERVAL,
-        precision="16-mixed",
+        precision="bf16-mixed",
         enable_model_summary=False,
         enable_progress_bar=not hide_progress,
     )
