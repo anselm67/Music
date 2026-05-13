@@ -34,6 +34,7 @@ packages = ["src/kern", "src/utils", "src/dataset" ]
 dev = [
     "pytest>=9.0.3",
     "ruff>=0.15.12",
+    "types-aiofiles>=25.1.0.20260508",
     "types-tqdm>=4.67.3.20260508",
 ]
 

@@ -823,6 +823,7 @@ dependencies = [
 dev = [
     { name = "pytest" },
     { name = "ruff" },
+    { name = "types-aiofiles" },
     { name = "types-tqdm" },
 ]
 
@@ -850,6 +851,7 @@ requires-dist = [
 dev = [
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "ruff", specifier = ">=0.15.12" },
+    { name = "types-aiofiles", specifier = ">=25.1.0.20260508" },
     { name = "types-tqdm", specifier = ">=4.67.3.20260508" },
 ]
 
@@ -1630,6 +1632,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/8f/af/9904ec6d3c93d9b24e5ec360445bbdf758b7f00bfbeedb89cb0eb64eb8bb/triton-3.7.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:b9b85e72968a9d8bba5ddb24e9b64aaabaf48affb042f2755cb7cfa92b7531ce", size = 201460637, upload-time = "2026-05-07T18:46:34.749Z" },
     { url = "https://files.pythonhosted.org/packages/a1/f9/4835a8ea746b88727d8899f4e3ccce4f9cacb38abfc3bb0a638266c53111/triton-3.7.0-cp314-cp314t-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:18a160de426fd99f92b0baf509045360afbd3bfaa0b4a5171dde800ec9f09684", size = 188608706, upload-time = "2026-05-07T19:05:39.218Z" },
     { url = "https://files.pythonhosted.org/packages/c1/68/fa86e5a39608000f645535b2c124920126327ab731f8c4fafd5b07ff8d4b/triton-3.7.0-cp314-cp314t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:ce061073102714b725f3660ec6939d94a1da7984b3aa99c921417cae273672f5", size = 201546766, upload-time = "2026-05-07T18:46:42.088Z" },
+]
+
+[[package]]
+name = "types-aiofiles"
+version = "25.1.0.20260508"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3b/d9/60e8b26ad7e57eb3b58f3370b35f0d740dd0909079417e784f4e6c0f92f6/types_aiofiles-25.1.0.20260508.tar.gz", hash = "sha256:d26b07bb28f36c154c77d33982e506ee462044932d42c4eea6e78f69d1de5b84", size = 14851, upload-time = "2026-05-08T04:49:48.446Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f2/88/31d8fb1a3d0a96e1e41cfc58c67f48634e840e2598336887fa5be1dd9c82/types_aiofiles-25.1.0.20260508-py3-none-any.whl", hash = "sha256:c35d2be25a7e4b881da7f62ff3823db3770b2f704f31ac69681c227569e808cc", size = 14365, upload-time = "2026-05-08T04:49:47.302Z" },
 ]
 
 [[package]]
