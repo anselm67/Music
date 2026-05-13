@@ -159,7 +159,7 @@ async def async_run():
 
     print(f"Fetching {imslp_page} for pdf links...")
     links = await imslp.find_pdf_links(imslp_page)
-    print(f"Found imslp links: ")
+    print("Found imslp links: ")
     for (url, count) in links:
         print(f"\t{count}: {url}")
     selected_link, _ = links[0]

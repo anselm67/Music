@@ -40,7 +40,7 @@ def validate(ctx: ClickContext, files: list[Path]):
             parser = Parser.from_file(file, EmptyHandler())
             parser.parse()
             if not ctx.silent:
-                print(f"done")
+                print("done")
         except Exception as e:
             failed_count += 1
             if not ctx.silent:

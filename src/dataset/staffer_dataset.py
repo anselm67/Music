@@ -113,7 +113,7 @@ class StafferDataset(Dataset):
 
 
 def build_sampler(ds: Dataset, last_page_weight: float = 1.5) -> WeightedRandomSampler:
-    logging.info(f"Computing sample weights...")
+    logging.info("Computing sample weights...")
     part_counts: list[int] = []
     is_last_pages: list[bool] = []
     part_histo = Counter()

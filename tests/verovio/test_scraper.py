@@ -223,7 +223,7 @@ class TestStaffParsing:
         assert staves[0].top < staves[1].top
 
     def test_non_matching_paths_ignored(self, tmp_path):
-        body = f"""\
+        body = """\
 <g class="system">
  <g class="measure">
   <g class="staff">
