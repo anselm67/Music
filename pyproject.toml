@@ -34,6 +34,7 @@ packages = ["src/kern", "src/utils", "src/dataset" ]
 dev = [
     "mypy>=2.1.0",
     "pandas-stubs>=3.0.0.260204",
+    "pre-commit>=4.6.0",
     "pytest>=9.0.3",
     "ruff>=0.15.12",
     "types-aiofiles>=25.1.0.20260508",
