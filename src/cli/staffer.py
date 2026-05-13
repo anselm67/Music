@@ -92,7 +92,7 @@ def cli(
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
         filename=log_file,
-        format="%(asctime)s | %(levelname)s | %(module)s.%(funcName)s:%(lineno)d | %(message)s",
+        format="%(asctime)s | %(levelname)s | %(module)s.%(funcName)s:%(lineno)d | %(message)s",  # noqa: E501
         datefmt="%Y-%m-%d %H:%M:%S",
     )
     pdmx = PDMX(home, csv, offset, count)
@@ -539,7 +539,8 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path]) -> None:
         stave_assignment = torch.argmax(pred_assign, dim=1)
         for staff_index in range(pred_assign.shape[0]):
             print(
-                f"\tstaff[{staff_index}]: {pred_stave_logits[staff_index].item():.2f}, system: {stave_assignment[staff_index].item()}"
+                f"\tstaff[{staff_index}]: {pred_stave_logits[staff_index].item():.2f}, "
+                f"system: {stave_assignment[staff_index].item()}"
             )
             if pred_stave_logits[staff_index].item() > 0.0:
                 box = unbox(width_height, pred_stave_boxes[staff_index])

@@ -48,6 +48,7 @@ class PDMX:
         "svg": ".svg",
         "png": ".png",
     }
+    # ruff: noqa: E501
     CSV_SCHEMA = {
         "path": "Path to the data (MusicRender JSON) file.",
         "metadata": "Path to the associated metadata (JSON) file. The basename of each file matches the basename of the corresponding file in the path column.",
@@ -112,6 +113,7 @@ class PDMX:
         "subset:no_license_conflict": "Whether the song's public-facing copyright metadata license agrees with the internal copyright license data of the original MuseScore file (the negation of the license_conflict column).",
         "subset:all_valid": "Whether the song's associated compressed MusicXML (MXL), sheet music (PDF), and MIDI (MID) files are all valid (non-N/A).",
     }
+    # ruff: noqa: E501 - end
     home: Path
 
     def __init__(self, home, name: str = "PDMX.csv", offset: int = -1, count: int = -1):

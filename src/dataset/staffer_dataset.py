@@ -111,7 +111,7 @@ class StafferDataset(Dataset):
                     break
                 bar_xs[sys_idx, : len(bars)] = bars
                 for staff in system.staves:
-                    # TODO Should we check that all bar_xs in this page match bar_xs pf the system.
+                    # TODO Check all bar_xs in this page match bar_xs of the system.
                     staff_boxes[staff_idx] = torch.tensor(
                         staff.box.to_cxcywh(page.image_width, page.image_height)
                     )
