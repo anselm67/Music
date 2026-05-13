@@ -4,7 +4,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Iterable, TextIO, Type, cast
 
-from kern.parser import Parser
+from kern.parser import Handler, Parser
 from kern.typing import (
     Bar,
     Chord,
@@ -140,7 +140,7 @@ class TokenFormatter:
         return text
 
 
-class BaseHandler(Parser[Spine].Handler):
+class BaseHandler(Handler[Spine]):
     spines: list[Spine]
 
     def __init__(self):
@@ -155,7 +155,7 @@ class BaseHandler(Parser[Spine].Handler):
     ) -> Spine:
         match spine_type:
             case "**dynam" | "**dynam/2" | "**mxhm" | "**recip" | "**fb" | "**text":
-                spine = IgnoredSpine()
+                spine: Spine = IgnoredSpine()
             case _:
                 spine = Spine()
         self.spines.append(spine)
@@ -197,7 +197,7 @@ class NormHandler(BaseHandler):
 
     def __init__(self, output_path: Path | None):
         super(NormHandler, self).__init__()
-        self.output = output_path and open(output_path, "w+")
+        self.output = open(output_path, "w+") if output_path else None
         self.formatter = TokenFormatter()
         self.bar_numbering = False
         self.bar_number = 1

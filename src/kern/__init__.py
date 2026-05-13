@@ -1,6 +1,6 @@
 from .empty import EmptyHandler, EmptySpine
 from .kern_reader import KernReader
-from .parser import Parser
+from .parser import Handler, Parser
 from .to_midi import to_midi
 from .tokenizer import tokenize
 from .typing import (
@@ -25,6 +25,7 @@ __all__ = [
     "EmptySpine",
     "KernReader",
     "Parser",
+    "Handler",
     "Bar",
     "Chord",
     "Clef",

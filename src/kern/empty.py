@@ -2,7 +2,7 @@
 
 from typing import List, Optional, Tuple
 
-from kern.parser import Parser
+from kern.parser import Handler
 from kern.typing import Token
 
 
@@ -10,7 +10,7 @@ class EmptySpine:
     pass
 
 
-class EmptyHandler(Parser[EmptySpine].Handler):
+class EmptyHandler(Handler[EmptySpine]):
     def open_spine(
         self, spine_type: Optional[str] = None, parent: Optional[EmptySpine] = None
     ) -> EmptySpine:

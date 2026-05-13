@@ -4,11 +4,10 @@ from collections import deque
 from pathlib import Path
 from typing import cast
 
-from kern.parser import Parser
+from kern.parser import Handler, Parser
 from kern.typing import Chord, Duration, Note, Rest, Token
-from midi import Channel, MidiOutput
+from midi import Channel, MidiOutput, Velocity
 from midi import Pitch as MidiPitch
-from midi import Velocity
 
 # Convert
 # C D E F G A B                     from 1 to 7
@@ -147,7 +146,7 @@ class MidiSpine(Spine):
                 self.pending_delta += self.duration_to_ticks(rest.duration)
 
 
-class MidiHandler(Parser[Spine].Handler):
+class MidiHandler(Handler[Spine]):
     spines: list[Spine]
     time_signature: tuple[int, int]
     tempo: int

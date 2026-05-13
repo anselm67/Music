@@ -203,42 +203,43 @@ class DynamSpineHolder(SpineHolder):
             return Continue()
 
 
+class Handler(ABC, Generic[T]):
+    @abstractmethod
+    def open_spine(
+        self, spine_type: Optional[str] = None, parent: Optional[T] = None
+    ) -> T:
+        """A new spine is opened.
+
+        This can happen either form the header of the score, in which case a 
+        spine_type will be provided (e.g. '**kern' or '**dynam') or as a spine is 
+        splitted in which case the parent spine is provided."""
+        pass
+
+    @abstractmethod
+    def close_spine(self, spine: T):
+        pass
+
+    @abstractmethod
+    def branch_spine(self, source: T) -> T:
+        pass
+
+    @abstractmethod
+    def merge_spines(self, source: T, into: T):
+        pass
+
+    @abstractmethod
+    def rename_spine(self, spine: T, name: str):
+        pass
+
+    @abstractmethod
+    def append(self, tokens: list[tuple[T, Token]]):
+        pass
+
+    @abstractmethod
+    def done(self):
+        pass
+
 class Parser(Generic[T]):
-    class Handler(ABC):
-        @abstractmethod
-        def open_spine(
-            self, spine_type: Optional[str] = None, parent: Optional[T] = None
-        ) -> T:
-            """A new spine is opened.
-
-            This can happen either form the header of the score, in which case a 
-            spine_type will be provided (e.g. '**kern' or '**dynam') or as a spine is 
-            splitted in which case the parent spine is provided."""
-            pass
-
-        @abstractmethod
-        def close_spine(self, spine: T):
-            pass
-
-        @abstractmethod
-        def branch_spine(self, source: T) -> T:
-            pass
-
-        @abstractmethod
-        def merge_spines(self, source: T, into: T):
-            pass
-
-        @abstractmethod
-        def rename_spine(self, spine: T, name: str):
-            pass
-
-        @abstractmethod
-        def append(self, tokens: list[tuple[T, Token]]):
-            pass
-
-        @abstractmethod
-        def done(self):
-            pass
 
     path: str | Path
     records: Iterator[str]
