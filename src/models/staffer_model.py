@@ -37,7 +37,6 @@ class Config:
 
     num_system_queries: int = 16  # Also known as N
     num_stave_queries: int = 16  # Also known as M
-    num_bar_queries: int = 16
 
     interpolation: InterpolationMode = InterpolationMode.BILINEAR
     antialias: bool = False
