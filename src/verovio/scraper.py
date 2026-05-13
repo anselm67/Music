@@ -4,21 +4,21 @@ from __future__ import annotations
 
 import logging
 import re
-import xml.etree.ElementTree as ET
 from pathlib import Path
+from xml.etree.ElementTree import Element, ElementTree, parse
 
 from dataset import Box, Page, Staff, System
 
 
 class LayoutExtractor:
     svg_file: Path
-    tree: ET.ElementTree[ET.Element]
+    tree: ElementTree[Element[str]]  # type: ignore[type-arg]
     ns: dict[str, str]
     translation: tuple[int, int]
 
     def __init__(self, svg_file: Path):
         self.svg_file = svg_file
-        self.tree = ET.parse(svg_file)
+        self.tree = parse(svg_file)
         self.ns = {
             "svg": "http://www.w3.org/2000/svg",
             "xlink": "http://www.w3.org/1999/xlink",

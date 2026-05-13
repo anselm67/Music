@@ -69,6 +69,8 @@ torch = { index = "pytorch-cu130" }
 torchvision = { index = "pytorch-cu130" }
 
 [tool.mypy]
+python_version = "3.13"
+
 [[tool.mypy.overrides]]
 module = [
     "torchvision.*",
