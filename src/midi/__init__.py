@@ -24,7 +24,7 @@ from .typing import (
     Velocity,
 )
 
-_all__ = [
+__all__ = [
     "MidiInput",
     "MidiOutput",
     "Channel",
@@ -40,8 +40,8 @@ _all__ = [
     "KeySignatureEvent",
     "NoteOffEvent",
     "NoteOnEvent",
-    "Notes",
     "OpenTrackEvent",
+    "Pitch",
     "ProgramChangeEvent",
     "SequenceNumberEvent",
     "TempoEvent",

@@ -127,7 +127,7 @@ class LayoutExtractor:
                     bars=[bars[0].left, bars[0].right, *[x.right for x in bars[1:]]],
                 )
             )
-        # TODO Move the one and only bars[] for the system into the System and out of the Staff
+        # TODO Move bars[] for the system into the System and out of the Staff.
         if not staves:
             raise ValueError(f"{self.svg_file} has a system with no staff.")
         first_bars = staves[0].bars

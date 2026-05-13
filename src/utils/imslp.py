@@ -13,6 +13,8 @@ from bs4 import BeautifulSoup, Tag
 # https://duckduckgo.com/l/?uddg=https%3A%2F%2Fimslp.org%2Fwiki%2FInvention_in_D_minor%2C_BWV_775_(Bach%2C_Johann_Sebastian)&rut=d3f336a6dd9bbdc118e0f8e2a6f4d1eb03c0b44cf947937d048ea73da42ae682
 # https://imslp.org/wiki/Invention_in_D_minor,_BWV_775_(Bach,_Johann_Sebastian)
 
+USER_AGENT = "Lynx/2.8.9rel.1 libwww-FM/2.14 SSL-MM/1.4.1 OpenSSL/1.0.0a"
+
 
 class IMSLP:
     session: ClientSession
@@ -37,7 +39,7 @@ class IMSLP:
         async with self.session.get(
             url="https://www.duckduckgo.com/html",
             headers={
-                "User-Agent": "Lynx/2.8.9rel.1 libwww-FM/2.14 SSL-MM/1.4.1 OpenSSL/1.0.0a",
+                "User-Agent": USER_AGENT,
                 "Accept": "*/*",
             },
             params={
@@ -99,7 +101,6 @@ class IMSLP:
                             links.append((str(a["href"]), downloads))
         return links
 
-    # IMSLP_COOKIES = r'imslp_wikiLanguageSelectorLanguage=en; chatbase_anon_id=d8925c94-d976-492a-9649-e563f973d8a2; imslpdisclaimeraccepted=yes; __stripe_mid=5d13801d-837c-4919-8e35-88de460c440b313847; _gid=GA1.2.642930185.1737548859; __stripe_sid=d726e726-eeea-4292-b94d-715cac65d6979cf564; _ga_4QW4VCTZ4E=GS1.1.1737559129.13.1.1737560753.0.0.0; _ga=GA1.2.1606208118.1735899643; _ga_8370FT5CWW=GS1.2.1737559147.12.1.1737560755.0.0.0'
     IMSLP_COOKIES = {
         "imslp_wikiLanguageSelectorLanguage": "en",
         "chatbase_anon_id": "d8925c94-d976-492a-9649-e563f973d8a2",
@@ -131,7 +132,7 @@ class IMSLP:
         async with self.session.post(
             url=pdf_link,
             headers={
-                "User-Agent": "Lynx/2.8.9rel.1 libwww-FM/2.14 SSL-MM/1.4.1 OpenSSL/1.0.0a",
+                "User-Agent": USER_AGENT,
                 "Accept": "*/*",
             },
             cookies=self.IMSLP_COOKIES,

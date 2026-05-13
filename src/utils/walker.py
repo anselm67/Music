@@ -54,11 +54,13 @@ class Walker:
             await self.process(cmd_builder, file)
 
     async def run(self, glob: str, cmd_builder: CommandBuilder) -> tuple[int, int]:
-        """Runs a shell command on all files matching the glob pattern in this walker's root directory.
+        """Runs a shell command on all files matching the glob pattern in this walker's
+        root directory.
 
         Args:
             glob (str): The shell-like filename filter, e,g "*.krn"
-            cmd_builder (CommandBuilder): Function that returns the command to run for a given matching file.
+            cmd_builder (CommandBuilder): Function that returns the command to run for a
+                given matching file.
 
         Returns:
             int, int: Total count and failed count.

@@ -405,7 +405,10 @@ class HierarchicalDETR(nn.Module):
         bar_feats = bar_feats_flat.reshape(B, N, self.config.num_bar_queries, D)
 
         return self.heads(sys_feats, stave_feats, bar_feats)
-        # returns: sys_boxes, sys_logits, stave_boxes, stave_logits, assign_logits, bar_x, bar_logits
+        # returns:
+        # sys_boxes, sys_logits,
+        # stave_boxes, stave_logits, assign_logits,
+        # bar_x, bar_logits
 
 
 # vscode - End of file.

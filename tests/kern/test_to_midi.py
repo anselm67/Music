@@ -4,9 +4,8 @@ from unittest.mock import call, patch
 from kern import Duration, Note, Parser
 from kern import Pitch as KernPitch
 from kern.to_midi import MidiHandler, note_to_midi
-from midi import Channel
+from midi import Channel, Velocity
 from midi import Pitch as MidiPitch
-from midi import Velocity
 
 
 class TestToMidi(unittest.TestCase):

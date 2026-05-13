@@ -79,8 +79,9 @@ class MidiOutput:
         (num, den) = signature
         self.delta_time(dt)
         # Derive cc / bb from the time signature.
-        # cc is the number of midi-clocks per metronome tick, 24 per quarter => 36 per quarter dot.
-        # bb is the number of notated 32nd-notes in a MIDI quarter-note (24 MIDI clocks).
+        # cc is the number of midi-clocks per metronome tick, 24 per quarter => 36 per
+        # quarter dot. bb is the number of notated 32nd-notes in a MIDI quarter-note
+        # (24 MIDI clocks).
         if num == 6 and den == 8:
             nn, dd, cc, bb = num, int(log2(8)), 36, 8
         elif num == 4 and den == 4:

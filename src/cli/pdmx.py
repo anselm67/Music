@@ -77,7 +77,7 @@ def cli(
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
         filename=log_file,
-        format="%(asctime)s | %(levelname)s | %(module)s.%(funcName)s:%(lineno)d | %(message)s",
+        format="%(asctime)s | %(levelname)s | %(module)s.%(funcName)s:%(lineno)d | %(message)s",  # noqa: E501
         datefmt="%Y-%m-%d %H:%M:%S",
     )
     pdmx = PDMX(home, csv, offset, count)

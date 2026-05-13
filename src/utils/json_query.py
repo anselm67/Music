@@ -23,7 +23,7 @@ def compile_query(path: str) -> Callable[[dict | object], Any]:
         path (str): A json path expression, see above.
 
     Returns:
-        Callable[[dict | object], Any]: The compiled function to extract the json member.
+        Callable[[dict | object], Any]: Compiled function to extract the json member.
     """
     keys = path.split(".")
 
@@ -56,32 +56,36 @@ _FILTER_RE = re.compile(
 )
 
 
+def make_cmp(op: str, literal: str) -> Callable[[Any], bool]:
+    value: str | int
+    # parse the literal type
+    if literal.startswith("'") or literal.startswith('"'):
+        value = literal.strip("'\"")
+    else:
+        value = int(literal)
+    match op:
+        case "==":
+            return lambda a: a == value
+        case "!=":
+            return lambda a: a != value
+        case ">=":
+            return lambda a: a >= value
+        case "<=":
+            return lambda a: a <= value
+        case ">":
+            return lambda a: a > value
+        case "<":
+            return lambda a: a < value
+        case _:
+            raise ValueError(f"Unknown operator: {op!r}")
+
+
 def compile_filter(expression: str) -> Callable[[dict | object], bool]:
     if (m := _FILTER_RE.match(expression)) is None:
         raise ValueError(f"No valid operator found in expression: {expression!r}")
     path, op, value = m.group("path"), m.group("op"), m.group("value")
     query = compile_query(path)
-    # parse the literal type
-    if value.startswith("'") or value.startswith('"'):
-        value = value.strip("'\"")
-
-        def cmp(a, v=value):
-            return a == v
-    else:
-        value = int(value)
-        match op:
-            case "==":
-                cmp = lambda a, v=value: a == v
-            case "!=":
-                cmp = lambda a, v=value: a != v
-            case ">=":
-                cmp = lambda a, v=value: a >= v
-            case "<=":
-                cmp = lambda a, v=value: a <= v
-            case ">":
-                cmp = lambda a, v=value: a > v
-            case "<":
-                cmp = lambda a, v=value: a < v
+    cmp = make_cmp(op, value)
 
     def make_filter():
         def f(record):
