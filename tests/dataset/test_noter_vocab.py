@@ -10,7 +10,7 @@ from dataset import Vocab
 class TestVocab:
     @pytest.fixture
     def sample_tok2i(self):
-        return {"token1": 5, "token2": 6, "token3": 7}
+        return {"token1": 5, "token2": 6, "token3": 7, "=": 8, "==": 9}
 
     @pytest.fixture
     def vocab(self, sample_tok2i):
@@ -23,6 +23,28 @@ class TestVocab:
 
     def test_len(self, vocab, sample_tok2i):
         assert len(vocab) == len(sample_tok2i)
+
+    def test_encode_plain_token(self, vocab):
+        assert vocab.encode("token1") == 5
+
+    def test_encode_unknown_token(self, vocab):
+        assert vocab.encode("unknown") == Vocab.UNK
+
+    def test_encode_duration(self, vocab):
+        encoded = vocab.encode("token1/8")
+        assert encoded == 5 | (8 << 16)
+
+    def test_encode_one_dot_duration(self, vocab):
+        encoded = vocab.encode("token1/8:1")
+        assert encoded == 5 | (12 << 16)
+
+    def test_encode_two_dot_duration(self, vocab):
+        encoded = vocab.encode("token1/8:2")
+        assert encoded == 5 | (18 << 16)
+
+    def test_encode_bar(self, vocab):
+        encoded = vocab.encode("==12")
+        assert encoded == 9 | (12 << 16)
 
     def test_tok2i_normal(self, vocab):
         tokens = ["token1", "token2"]
@@ -68,6 +90,16 @@ class TestVocab:
         result = vocab.i2tok(ids)
         expected = ["token1", "UNK", "token2"]
         assert result == expected
+
+    def test_decode_duration_token(self, vocab):
+        duration_id = 5 | (8 << 16)
+        result = vocab.i2tok([duration_id])
+        assert result == ["token1/8"]
+
+    def test_decode_bar_token(self, vocab):
+        bar_id = 8 | (12 << 16)
+        result = vocab.i2tok([bar_id])
+        assert result == ["=12"]
 
     def test_i2tok_unknown_id(self, vocab):
         ids = torch.tensor([5, 999, 6])

@@ -86,11 +86,16 @@ def cli(
 def vocab(ctx: ClickContext):
     """Generates the vocab pickle file from PDMX token files."""
     vocab = Vocab.from_files(ctx.home / "build" / "tokens")
-    vocab.save(ctx.home / "build" / "vocab.pkl")
+    vocab.save(ctx.home / "build" / "vocab.json")
 
 
 cli.add_command(vocab)
 
-if __name__ == "__main__":
+
+def main():
     torch.set_float32_matmul_precision("high")
     cli()
+
+
+if __name__ == "__main__":
+    main()

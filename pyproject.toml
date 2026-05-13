@@ -59,6 +59,7 @@ asyncio_mode = "auto"
 kern = "cli.kern:main"
 pdmx = "cli.pdmx:main"
 staffer = "cli.staffer:main"
+noter = "cli.noter:main"
 
 [[tool.uv.index]]
 name = "pytorch-cu130"
