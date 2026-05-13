@@ -136,8 +136,8 @@ def show(ctx: ClickContext):
     dataset = StafferDataset(ctx.config, ctx.pdmx)
     while True:
         index = random.randint(0, len(dataset) - 1)
-        img, sys, staff, assign, bar_xs = dataset[index]
-        img = img.squeeze(0).cpu().numpy()
+        img_tensor, sys, staff, assign, bar_xs = dataset[index]
+        img = img_tensor.squeeze(0).cpu().numpy()
         img = np.stack([img] * 3, axis=-1) * 255
         width_height = img.shape[1], img.shape[0]
         # Try to make sense of the ground truth data.
@@ -170,25 +170,18 @@ def show(ctx: ClickContext):
 def stats(ctx: ClickContext, num_workers: int):
     """Computes the mean and std of a subset of images from the dataset.."""
     ds = StafferDataset(ctx.config, ctx.pdmx)
-    loader = DataLoader[tuple[Tensor, Tensor, Tensor, Tensor]](
+    loader = DataLoader[tuple[Tensor, Tensor, Tensor, Tensor, Tensor]](
         ds, num_workers=num_workers, batch_size=ctx.config.batch_size
     )
     pix_sum = 0
     pix_sum2 = 0
     pix_count = 0
-    for images, _, _, _ in loader:
-        if count <= 0:
-            break
+    for images, _, _, _, _ in loader:
         for batch_index in range(len(images)):
             img = images[batch_index].squeeze(0).cpu().numpy()
             pix_sum += img.sum()
             pix_sum2 += (img**2).sum()
             pix_count += img.shape[0] * img.shape[1]
-            count -= 1
-            if count <= 0:
-                break
-        if count % 100 == 0:
-            logging.info(f"{count} left.")
     mean = pix_sum / pix_count
     std = math.sqrt(pix_sum2 / pix_count - mean**2)
     print(f"Scanned {len(ds)} images.")
@@ -246,6 +239,7 @@ def train(
     VAL_CHECK_INTERVAL = 250
 
     # Resume training if we have an existing checkpoint.
+    ckpt_path: Path | None = None
     ckpt_path = Path("checkpoints") / "staffer" / name / "last.ckpt"
     if ckpt_path.exists():
         logging.info(f"Resuming training from {ckpt_path}")
@@ -412,7 +406,7 @@ def plot_one(ax_metrics: Any, name: str, columns: tuple[str, ...], ls="solid") -
     help="Selects one or more train and validation metrics to plot.",
 )
 def logs(
-    names: tuple[str],
+    names: tuple[str, ...],
     train_columns: tuple[str, ...],
     valid_columns: tuple[str, ...],
     both_columns: tuple[str, ...],
@@ -456,7 +450,7 @@ def logs(
             plt.close("all")
 
     fig.canvas.mpl_connect("key_press_event", on_key)
-    last_mod = 0
+    last_mod = 0.0
 
     while plt.get_fignums():
         mtime = csv_path.stat().st_mtime

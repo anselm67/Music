@@ -1,0 +1,4 @@
+{
+    "ruff.nativeServer": "on",
+    "ruff.configuration": "pyproject.toml"
+}

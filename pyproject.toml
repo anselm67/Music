@@ -33,6 +33,7 @@ packages = ["src/kern", "src/utils", "src/dataset" ]
 [dependency-groups]
 dev = [
     "mypy>=2.1.0",
+    "pandas-stubs>=3.0.0.260204",
     "pytest>=9.0.3",
     "ruff>=0.15.12",
     "types-aiofiles>=25.1.0.20260508",
