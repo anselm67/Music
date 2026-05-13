@@ -28,12 +28,23 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/kern", "src/utils"]
+packages = ["src/kern", "src/utils", "src/dataset" ]
 
 [dependency-groups]
 dev = [
-    "pytest>=9.0.2",
+    "pytest>=9.0.3",
+    "ruff>=0.15.12",
 ]
+
+[tool.ruff]
+line-length = 88  # or whatever you use now
+
+[tool.ruff.lint]
+select = ["E", "F"]   # pycodestyle errors + pyflakes — safe baseline
+ignore = []
+
+[tool.ruff.format]
+# ruff format is black-compatible by default; no config needed to start
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
