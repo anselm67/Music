@@ -111,7 +111,8 @@ class LayoutExtractor:
                     measure_bar_count = count
                 elif measure_bar_count != count:
                     logging.warning(
-                        f"{self.svg_file}: measure {measure.get('id')} bar count mismatch."
+                        f"{self.svg_file}: "
+                        f"measure {measure.get('id')} bar count mismatch."
                     )
                 boxes.setdefault(box.top, list()).append(box)
             bar_numbers.append(bar_number + bar_count)

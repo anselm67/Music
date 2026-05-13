@@ -65,7 +65,6 @@ class TestToMidi(unittest.TestCase):
         parser.parse()
 
         self.assertEqual(len(handler.tracks), 1)
-        track = handler.tracks[0]
 
         # 4c is Middle C (C3 in this system per tests, 48)
         # 4d is D3 (50)
