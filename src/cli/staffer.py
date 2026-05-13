@@ -567,9 +567,7 @@ def main():
 
 
 if __name__ == "__main__":
-    print(
-        "a very long line kdhfkjdhf kjdhf ksdjfh skdjfh dskjfh kjsdfh dksjfh kdjfhd kjfhd fkjsdhf skj"
-    )
+    print("a very long line kdhfkjdhf ")
     main()
 
 # vscode - End of file
