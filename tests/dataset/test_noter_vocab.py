@@ -80,29 +80,23 @@ class TestVocab:
             vocab.tok2i(tokens, max_chords)
 
     def test_i2tok_tensor(self, vocab):
-        ids = torch.tensor([5, 1, 6])
-        result = vocab.i2tok(ids)
-        expected = ["token1", "UNK", "token2"]
-        assert result == expected
-
-    def test_i2tok_list(self, vocab):
-        ids = [5, 1, 6]
+        ids = torch.tensor([[5], [1], [6]])
         result = vocab.i2tok(ids)
         expected = ["token1", "UNK", "token2"]
         assert result == expected
 
     def test_decode_duration_token(self, vocab):
         duration_id = 5 | (8 << 16)
-        result = vocab.i2tok([duration_id])
+        result = vocab.i2tok(torch.tensor([[duration_id]]))
         assert result == ["token1/8"]
 
     def test_decode_bar_token(self, vocab):
         bar_id = 8 | (12 << 16)
-        result = vocab.i2tok([bar_id])
+        result = vocab.i2tok(torch.tensor([[bar_id]]))
         assert result == ["=12"]
 
     def test_i2tok_unknown_id(self, vocab):
-        ids = torch.tensor([5, 999, 6])
+        ids = torch.tensor([[5], [999], [6]])
         result = vocab.i2tok(ids)
         expected = ["token1", "UNK", "token2"]
         assert result == expected
@@ -137,14 +131,24 @@ class TestVocab:
             tokens_file2.write_text("token4\n")
 
             vocab = Vocab.from_files(dir_path)
-            expected_tok2i = {"token1": 0, "token2": 1, "token3": 2, "token4": 3}
+            expected_tok2i = {
+                "EOS": 3,
+                "PAD": 0,
+                "SIL": 4,
+                "SOS": 2,
+                "UNK": 1,
+                "token1": 5,
+                "token2": 6,
+                "token3": 7,
+                "token4": 8,
+            }
             assert vocab._tok2i == expected_tok2i
 
     def test_from_files_no_files(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             dir_path = Path(temp_dir)
             vocab = Vocab.from_files(dir_path)
-            assert vocab._tok2i == {}
+            assert vocab._tok2i == {"EOS": 3, "PAD": 0, "SIL": 4, "SOS": 2, "UNK": 1}
 
     def test_constants(self):
         assert Vocab.PAD_T == (0, "PAD")
