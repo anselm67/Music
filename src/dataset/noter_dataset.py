@@ -30,6 +30,9 @@ class NoterDataset(Dataset):
     items: list[tuple[Path, Path, Box, int, int]]
     transform: v2.Transform
     vocab: Vocab
+    image_pad_value: float
+    s_sos: Tensor
+    s_eos: Tensor
 
     def __init__(self, config: Config, pdmx: PDMX, count=-1):
         self.pdmx = pdmx
@@ -46,9 +49,10 @@ class NoterDataset(Dataset):
                 ),
                 v2.ToDtype(torch.float, scale=True),
                 # Values from running: staffer stats
-                v2.Normalize(mean=[0.9563435316085815], std=[0.16557540870879858]),
+                v2.Normalize(mean=[0.9482423663139343], std=[0.17525607175008864]),
             ]
         )
+        self.image_pad_value = (1.0 - 0.9482423663139343) / 0.17525607175008864
         # Pre-computes start and end sequence tokens.
         self.s_sos = torch.full((1, MAX_CHORDS), self.vocab.SOS)
         self.s_eos = torch.full((1, MAX_CHORDS), self.vocab.EOS)
@@ -111,8 +115,14 @@ class NoterDataset(Dataset):
                 logging.error(f"{png_file}: {e}")
                 idx += 1
                 continue
-            tensor = crop(tensor, box.top, box.left, box.height, box.width)
-            image = torch.full((1, IMAGE_HEIGHT, IMAGE_WIDTH), 0.0)
+            tensor = crop(
+                tensor,
+                max(0, box.top - box.height),
+                box.left,
+                min(IMAGE_HEIGHT, 3 * box.height),
+                box.width,
+            )
+            image = torch.full((1, IMAGE_HEIGHT, IMAGE_WIDTH), self.image_pad_value)
             _, h, w = tensor.shape
             y0 = (IMAGE_HEIGHT - h) // 2
             x0 = (IMAGE_WIDTH - w) // 2
