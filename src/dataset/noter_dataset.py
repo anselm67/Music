@@ -135,10 +135,10 @@ class NoterDataset(Dataset):
                 )
                 idx += 1
                 continue
-            elif len(records) + 2 >= SPAD_LEN:
+            elif len(records) + 2 > SPAD_LEN:
                 logging.error(
                     f"{mxl_file}: bars {first_bar_number}:{last_bar_number}, "
-                    f"sequence too long {len(records)} (max {SPAD_LEN - 1})"
+                    f"sequence too long {len(records)} (max {SPAD_LEN - 2})"
                 )
                 idx += 1
                 continue
