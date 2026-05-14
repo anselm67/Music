@@ -57,7 +57,7 @@
                 "mxl",
                 "index == index",
                 "-s",
-                "pages.*.staff_count < 16"
+                "pages.0.systems.0.staff_count == 1"
             ]
         },
         {

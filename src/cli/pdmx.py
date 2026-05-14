@@ -262,7 +262,7 @@ def stats(ctx: ClickContext, num_workers: int | None):
     print(f"  Page count: {stats.page_count:,}")
     print(f"System count: {stats.system_count:,}")
     print(f" Staff count: {stats.staff_count:,}")
-    print(f"   Bar count: {stats.bar_count}:,")
+    print(f"   Bar count: {stats.bar_count:,}")
 
     print_histogram(stats.part_histo, title="Parts per score:")
 
