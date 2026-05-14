@@ -19,6 +19,10 @@ def compile_query(path: str) -> Callable[[dict | object], Any]:
         a.*.c
     Which will return a list of all matching members as a tuple.
 
+    Query also support indexing, as in:
+        a.0.x
+    Which will return a[0].x
+
     Args:
         path (str): A json path expression, see above.
 
