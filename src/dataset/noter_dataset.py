@@ -18,6 +18,8 @@ from models import Config
 from .layout import Box, Score
 from .pdmx import PDMX
 
+IMAGE_WIDTH = 6 * 128
+IMAGE_HEIGHT = 64
 MAX_CHORDS = 8
 SPAD_LEN = 128
 
@@ -25,7 +27,7 @@ SPAD_LEN = 128
 class NoterDataset(Dataset):
     pdmx: PDMX
     config: Config
-    items: list[tuple[Path, Box, int, int]]
+    items: list[tuple[Path, Path, Box, int, int]]
     transform: v2.Transform
     vocab: Vocab
 
@@ -54,7 +56,7 @@ class NoterDataset(Dataset):
         logging.info("Initializing NoterDataset...")
         self.items = []
         for _, row in tqdm(
-            pdmx.df.iterrows(), total=len(pdmx.df), desc="Loading dataset"
+            pdmx.df.iterrows(), total=len(pdmx.df), desc="Loading noter dataset"
         ):
             mxl_file = pdmx.home / row["mxl"]
             layout_file = pdmx.get_path(mxl_file, "layout")
@@ -68,6 +70,7 @@ class NoterDataset(Dataset):
                 for system in page.systems:
                     self.items.append(
                         (
+                            mxl_file,
                             png_file,
                             system.box,
                             system.first_bar_number,
@@ -77,58 +80,81 @@ class NoterDataset(Dataset):
                 if count >= 0 and len(self.items) >= count:
                     self.items = self.items[:count]
                     break
-        logging.info(f"\tNoterDataset: {len(self.items)} samples.")
+        logging.info(f"\tNoterDataset: {len(self.items):,} samples.")
 
     def __len__(self) -> int:
         return len(self.items)
 
-    cached_image_index: int = -1
-    cached_image: Tensor | None = None
-    cached_reader_index: int = -1
-    cached_reader: KernReader | None
+    def get_item_stats(self, idx: int) -> tuple[tuple[int, int], int]:
+        mxl_file, _, box, first_bar_number, last_bar_number = self.items[idx]
+        kern_path = self.pdmx.get_path(mxl_file, "tokens")
+        reader = KernReader(kern_path)
+        records = reader.get_text(first_bar_number, last_bar_number)
+        return (box.height, box.width), len(records) if records else -1
 
     def __getitem__(self, idx: int) -> tuple[Tensor, Tensor]:
         while True:
-            png_file, box, first_bar_number, last_bar_number = self.items[idx]
+            mxl_file, png_file, box, first_bar_number, last_bar_number = self.items[idx]
+            logging.debug(f"Loading {mxl_file}")
+            # Checks image size.
+            if box.width > IMAGE_WIDTH or box.height > IMAGE_HEIGHT:
+                logging.error(
+                    f"{mxl_file}: image too large (H x W) {box.height}x{box.width}"
+                )
+                idx += 1
+                continue
             # Gets the image and crop it to the system box.
-            if idx == self.cached_image_index and self.cached_image is not None:
-                image = self.cached_image
-            else:
-                try:
-                    image = decode_image(png_file.as_posix())
-                    image = self.transform(image)
-                    self.last_index = idx
-                    self.cached_image = image
-                except Exception as e:
-                    logging.error(f"{png_file}: {e}")
-                    idx += 1
-                    continue
-            print(f"Image box: {box}")
-            image = crop(image, box.top, box.left, box.height, box.width)
+            try:
+                tensor = decode_image(png_file.as_posix())
+                tensor = self.transform(tensor)
+            except Exception as e:
+                logging.error(f"{png_file}: {e}")
+                idx += 1
+                continue
+            tensor = crop(tensor, box.top, box.left, box.height, box.width)
+            image = torch.full((1, IMAGE_HEIGHT, IMAGE_WIDTH), 0.0)
+            _, h, w = tensor.shape
+            y0 = (IMAGE_HEIGHT - h) // 2
+            x0 = (IMAGE_WIDTH - w) // 2
+            image[:, y0 : y0 + h, x0 : x0 + w] = tensor
+
             # Load the tokens and extract the correct range.
-            if idx == self.cached_reader_index and self.cached_reader is not None:
-                reader = self.cached_reader
-            else:
-                kern_path = self.pdmx.get_path(png_file, "tokens")
-                try:
-                    reader = KernReader(kern_path)
-                except Exception as e:
-                    logging.error(f"{kern_path}: {e}")
-                    idx += 1
-                    continue
+            kern_path = self.pdmx.get_path(mxl_file, "tokens")
+            try:
+                reader = KernReader(kern_path)
+            except Exception as e:
+                logging.error(f"{kern_path}: {e}")
+                idx += 1
+                continue
             spine_number: int = 0
             tensor = torch.full((SPAD_LEN - 1, MAX_CHORDS), self.vocab.PAD)
             records = reader.get_text(first_bar_number, last_bar_number)
             if records is None:
                 logging.error(
-                    f"{png_file}: bars {first_bar_number}:{last_bar_number} not found."
+                    f"{mxl_file}: bars {first_bar_number}:{last_bar_number} not found."
                 )
                 idx += 1
                 continue
+            elif len(records) + 2 >= SPAD_LEN:
+                logging.error(
+                    f"{mxl_file}: bars {first_bar_number}:{last_bar_number}, "
+                    f"sequence too long {len(records)} (max {SPAD_LEN - 1})"
+                )
+                idx += 1
+                continue
+            failed = False
             for idx, text in enumerate(records):
                 str_tok = text.split("\t")[spine_number]
-                tensor[idx, :] = self.vocab.tok2i(
-                    str_tok.strip().split(), max_chords=MAX_CHORDS
-                )
+                try:
+                    tensor[idx, :] = self.vocab.tok2i(
+                        str_tok.strip().split(), max_chords=MAX_CHORDS
+                    )
+                except Exception as e:
+                    logging.error(f"{mxl_file}: {e}")
+                    failed = True
+                    break
+            if failed:
+                idx += 1
+                continue
             tensor[len(records), :] = self.s_eos
             return (image, torch.cat([self.s_sos, tensor]))
