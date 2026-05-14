@@ -101,7 +101,6 @@ class StafferDataset(Dataset):
                     system.box.to_cxcywh(page.image_width, page.image_height)
                 )
                 for staff in system.staves:
-                    # TODO Check all bar_xs in this page match bar_xs of the system.
                     staff_boxes[staff_idx] = torch.tensor(
                         staff.box.to_cxcywh(page.image_width, page.image_height)
                     )

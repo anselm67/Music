@@ -15,16 +15,6 @@ def make_boxes(n: int, padded: int) -> Tensor:
     return boxes
 
 
-def make_bars(n: int, padded: int) -> Tensor:
-    """Makes n random normalized bar x coords sorted by x, padded."""
-    bar_xs = torch.zeros(padded)
-    if n > 0:
-        raw = torch.rand(n).clamp(0.01, 0.99).sort().values
-        bar_xs[:n] = raw
-
-    return bar_xs
-
-
 def make_assign(num_staves: int, num_sys: int, padded: int) -> Tensor:
     """Make stave->system assignments sorted consistently, padded with -1."""
     assigns = torch.full((padded,), -1, dtype=torch.long)
