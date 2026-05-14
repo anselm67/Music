@@ -16,11 +16,18 @@ To extract a reasonable subset from PDMX, you can use something like this:
 
 ```bash
 # Select scores that have all pages rendering less than 16 staves.
-pdmx query -o subset.cvs 'index==index' --score 'pages.*.staff_count < 16'
+pdmx query -o Staff16.cvs 'index==index' --score 'pages.*.staff_count < 16'
 # Displays subset general statistics.
 pdmx --csv subset.csv stats
 # Train the staffer on that dataset.
-staffer --log-file logs/staffer.log train -e 12 --use-sampler
+staffer --log-file logs/staffer.log train -e 12 --use-sampler model_name
+```
+
+For the noter model, the same process applies:
+
+```bash
+# Select all scores that have systems of only one staff:
+pdmx --csv System1.csv 'index==index' --score 'pages.0.systems.0.staff_count == 1'
 ```
 
 TODO List:
