@@ -95,6 +95,11 @@ def cli(
         format="%(asctime)s | %(levelname)s | %(module)s.%(funcName)s:%(lineno)d | %(message)s",  # noqa: E501
         datefmt="%Y-%m-%d %H:%M:%S",
     )
+    logging.getLogger("lightning.pytorch").handlers = []
+    if log_file is not None:
+        logging.getLogger("lightning.pytorch").addHandler(
+            logging.FileHandler(log_file.as_posix())
+        )
     pdmx = PDMX(home, csv, offset, count)
     ctx.obj = ClickContext(Config(), home, pdmx)
 
