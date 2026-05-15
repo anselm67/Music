@@ -167,5 +167,5 @@ bar1\tbar2
         )
         self.assertEqual(
             reader.get_text(2, 3),
-            ["clef-G\tclef-f", "=1", "keys-\t.", "bar1\tbar2", "=3"],
+            ["clef-G\tclef-f", "=2", "keys-\t.", "bar1\tbar2", "=3"],
         )
