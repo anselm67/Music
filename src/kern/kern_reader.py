@@ -9,6 +9,7 @@ class KernReader:
     """Parses a kern token file for bars, and create a bar number to record index."""
 
     lines: list[str]
+    preambles: dict[int, list[str]]
     bars: dict[int, int]
     first_bar: int
 
@@ -20,25 +21,62 @@ class KernReader:
         super().__init__()
         self.path = path
         self.bars = dict()
+        self.preambles = dict()
         self.first_bar = -1
         self.load_tokens()
 
     BAR_RE = re.compile(r"^=+\s*(\d+)?.*$")
+    SIG_RE = re.compile(r"^\d+/\d+$")
+    CLEF_RE = re.compile(r"^clef-.*$")
+    KEYS_RE = re.compile(r"^key.*$")
 
-    def load_tokens(self):
+    def _get_spline_count(self) -> int:
+        if len(self.lines) == 0:
+            return 0
+        else:
+            return len(self.lines[0].split("\t"))
+
+    def _make_preamble(
+        self, barno: int, clef: list[str], keys: list[str], sig: list[str]
+    ) -> list[str]:
+        preamble = []
+        if all(s for s in clef):
+            preamble.append("\t".join(clef))
+        if all(s for s in keys):
+            preamble.append("\t".join(keys))
+        if barno == 1 and all(s for s in sig):
+            preamble.append("\t".join(sig))
+        return preamble
+
+    def load_tokens(self) -> None:
         with open(self.path.with_suffix(".tokens"), "r") as fp:
             self.lines = [line.strip() for line in fp.readlines()]
-        # Constructs the bars index.
-        for lineno in range(0, len(self.lines)):
-            line = self.lines[lineno]
+        if (spine_count := self._get_spline_count()) == 0:
+            return
+        sig: list[str] = [""] * spine_count
+        clef: list[str] = [""] * spine_count
+        keys: list[str] = [""] * spine_count
+        for lineno, line in enumerate(self.lines):
+            for spine, tok in enumerate(line.split("\t")):
+                assert spine < spine_count, "Invalid .tokens: spine count mismatch."
+                if self.SIG_RE.match(tok):
+                    sig[spine] = tok
+                elif self.CLEF_RE.match(tok):
+                    clef[spine] = tok
+                elif self.KEYS_RE.match(tok):
+                    keys[spine] = tok
+
             if m := self.BAR_RE.match(line):
                 if m.group(1) is not None:
                     bar_number = int(m.group(1))
                     if bar_number > 0 and self.first_bar < 0:
                         self.first_bar = bar_number
                     self.bars[bar_number] = lineno
+                    self.preambles[bar_number] = self._make_preamble(
+                        bar_number, clef, keys, sig
+                    )
 
-    def has_bar_zero(self):
+    def has_bar_zero(self) -> bool:
         return 0 in self.bars
 
     def get_text(
@@ -50,11 +88,12 @@ class KernReader:
             end_barno = start_barno + 1
         bos = self.bars.get(start_barno, -1)
         if bos >= 0:
+            preamble = self.preambles.get(start_barno, [])
             # Includes the marker for the next bar, feels more comfortable.
             eos = self.bars.get(end_barno, -1) + 1
-            return self.lines[bos:eos] if eos > 0 else self.lines[bos:]
+            return preamble + (self.lines[bos:eos] if eos > 0 else self.lines[bos:])
         else:
             return None
 
-    def header(self):
+    def header(self) -> list[str]:
         return self.lines[:10]
