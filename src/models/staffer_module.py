@@ -91,7 +91,9 @@ class StafferModule(L.LightningModule):
 
     def configure_optimizers(self):
         optimizer = AdamW(
-            self.parameters(), lr=self.config.lr, weight_decay=self.config.weight_decay
+            self.parameters(),
+            lr=self.config.lr,
+            weight_decay=self.config.weight_decay,
         )
 
         def lr_lambda(step: int) -> float:
