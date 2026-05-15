@@ -94,6 +94,7 @@ class StafferModule(L.LightningModule):
             self.parameters(),
             lr=self.config.lr,
             weight_decay=self.config.weight_decay,
+            eps=1e-4,
         )
 
         def lr_lambda(step: int) -> float:
