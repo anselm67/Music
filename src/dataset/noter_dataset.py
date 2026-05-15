@@ -27,7 +27,7 @@ SPAD_LEN = 128
 class NoterDataset(Dataset):
     pdmx: PDMX
     config: Config
-    items: list[tuple[Path, Path, Box, int, int]]
+    items: list[tuple[Path, Path, Box, int, int, int]]
     transform: v2.Transform
     vocab: Vocab
     image_pad_value: float
@@ -72,15 +72,28 @@ class NoterDataset(Dataset):
                 else:
                     png_file = pdmx.get_path(mxl_file, "png")
                 for system in page.systems:
-                    self.items.append(
-                        (
-                            mxl_file,
-                            png_file,
-                            system.box,
-                            system.first_bar_number,
-                            system.last_bar_number,
+                    match system.staff_count:
+                        case 1:
+                            spine_numbers = [0]
+                        case 2:
+                            spine_numbers = [1, 0]
+                        case _:
+                            logging.error(
+                                f"{mxl_file}: too many staves in system "
+                                f"({len(page.systems)} vs 2)"
+                            )
+                            continue
+                    for idx, staff in enumerate(system.staves):
+                        self.items.append(
+                            (
+                                mxl_file,
+                                png_file,
+                                staff.box,
+                                spine_numbers[idx],
+                                system.first_bar_number,
+                                system.last_bar_number,
+                            )
                         )
-                    )
                 if count >= 0 and len(self.items) >= count:
                     self.items = self.items[:count]
                     break
@@ -90,7 +103,7 @@ class NoterDataset(Dataset):
         return len(self.items)
 
     def get_item_stats(self, idx: int) -> tuple[tuple[int, int], int]:
-        mxl_file, _, box, first_bar_number, last_bar_number = self.items[idx]
+        mxl_file, _, box, _, first_bar_number, last_bar_number = self.items[idx]
         kern_path = self.pdmx.get_path(mxl_file, "tokens")
         reader = KernReader(kern_path)
         records = reader.get_text(first_bar_number, last_bar_number)
@@ -120,12 +133,15 @@ class NoterDataset(Dataset):
         image = torch.full((1, IMAGE_HEIGHT, IMAGE_WIDTH), self.image_pad_value)
         _, h, w = tensor.shape
         y0 = (IMAGE_HEIGHT - h) // 2
-        x0 = (IMAGE_WIDTH - w) // 2
-        image[:, y0 : y0 + h, x0 : x0 + w] = tensor
+        image[:, y0 : y0 + h, :w] = tensor
         return image
 
     def _load_sequence(
-        self, mxl_file: Path, first_bar_number: int, last_bar_number: int
+        self,
+        mxl_file: Path,
+        spine_number: int,
+        first_bar_number: int,
+        last_bar_number: int,
     ) -> Tensor | None:
         kern_path = self.pdmx.get_path(mxl_file, "tokens")
         try:
@@ -133,7 +149,6 @@ class NoterDataset(Dataset):
         except Exception as e:
             logging.error(f"{kern_path}: {e}")
             return None
-        spine_number: int = 0
         tensor = torch.full((SPAD_LEN - 1, MAX_CHORDS), self.vocab.PAD)
         records = reader.get_text(first_bar_number, last_bar_number)
         if records is None:
@@ -161,13 +176,15 @@ class NoterDataset(Dataset):
 
     def __getitem__(self, idx: int) -> tuple[Tensor, Tensor]:
         while True:
-            mxl_file, png_file, box, first_bar_number, last_bar_number = self.items[idx]
+            mxl_file, png_file, box, spine_number, first_bar_number, last_bar_number = (
+                self.items[idx]
+            )
             logging.debug(f"Loading {mxl_file}")
             if (image := self._load_image(mxl_file, png_file, box)) is None:
                 idx = (idx + 1) % len(self)
             elif (
                 sequence := self._load_sequence(
-                    mxl_file, first_bar_number, last_bar_number
+                    mxl_file, spine_number, first_bar_number, last_bar_number
                 )
             ) is None:
                 idx = (idx + 1) % len(self)

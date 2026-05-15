@@ -182,8 +182,10 @@
             "console": "integratedTerminal",
             "python": "${workspaceFolder}/.venv/bin/python",
             "args": [
+                "--csv",
+                "System2.csv",
                 "-n",
-                "10",
+                "1000",
                 "show"
             ]
         }
