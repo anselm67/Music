@@ -109,8 +109,6 @@ def show(ctx: ClickContext):
         index = random.randint(0, len(dataset) - 1)
         img_tensor, seq_tensor = dataset[index]
         img = img_tensor.squeeze(0).cpu().numpy()
-        print(f"     Image size: {img.shape}")
-        print(f"Sequence length: {seq_tensor.shape[0]}")
         tokens = vocab.i2tok(seq_tensor)
         print(tokens)
         cv2.imshow("Staff", img)
