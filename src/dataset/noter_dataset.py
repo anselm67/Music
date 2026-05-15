@@ -96,75 +96,80 @@ class NoterDataset(Dataset):
         records = reader.get_text(first_bar_number, last_bar_number)
         return (box.height, box.width), len(records) if records else -1
 
+    def _load_image(self, mxl_file: Path, png_file: Path, box: Box) -> Tensor | None:
+        # Checks image size.
+        if box.width > IMAGE_WIDTH or box.height > IMAGE_HEIGHT:
+            logging.error(
+                f"{mxl_file}: image too large (H x W) {box.height}x{box.width}"
+            )
+            return None
+        # Gets the image and crop it to the system box.
+        try:
+            tensor = decode_image(png_file.as_posix())
+            tensor = self.transform(tensor)
+        except Exception as e:
+            logging.error(f"{png_file}: {e}")
+            return None
+        tensor = crop(
+            tensor,
+            max(0, box.top - box.height),
+            box.left,
+            min(IMAGE_HEIGHT, 3 * box.height),
+            box.width,
+        )
+        image = torch.full((1, IMAGE_HEIGHT, IMAGE_WIDTH), self.image_pad_value)
+        _, h, w = tensor.shape
+        y0 = (IMAGE_HEIGHT - h) // 2
+        x0 = (IMAGE_WIDTH - w) // 2
+        image[:, y0 : y0 + h, x0 : x0 + w] = tensor
+        return image
+
+    def _load_sequence(
+        self, mxl_file: Path, first_bar_number: int, last_bar_number: int
+    ) -> Tensor | None:
+        kern_path = self.pdmx.get_path(mxl_file, "tokens")
+        try:
+            reader = KernReader(kern_path)
+        except Exception as e:
+            logging.error(f"{kern_path}: {e}")
+            return None
+        spine_number: int = 0
+        tensor = torch.full((SPAD_LEN - 1, MAX_CHORDS), self.vocab.PAD)
+        records = reader.get_text(first_bar_number, last_bar_number)
+        if records is None:
+            logging.error(
+                f"{mxl_file}: bars {first_bar_number}:{last_bar_number} not found."
+            )
+            return None
+        elif len(records) + 2 > SPAD_LEN:
+            logging.error(
+                f"{mxl_file}: bars {first_bar_number}:{last_bar_number}, "
+                f"sequence too long {len(records)} (max {SPAD_LEN - 2})"
+            )
+            return None
+        for idx, text in enumerate(records):
+            str_tok = text.split("\t")[spine_number]
+            try:
+                tensor[idx, :] = self.vocab.tok2i(
+                    str_tok.strip().split(), max_chords=MAX_CHORDS
+                )
+            except Exception as e:
+                logging.error(f"{mxl_file}: {e}")
+                return None
+        tensor[len(records), :] = self.s_eos
+        return torch.cat([self.s_sos, tensor])
+
     def __getitem__(self, idx: int) -> tuple[Tensor, Tensor]:
         while True:
             mxl_file, png_file, box, first_bar_number, last_bar_number = self.items[idx]
             logging.debug(f"Loading {mxl_file}")
-            # Checks image size.
-            if box.width > IMAGE_WIDTH or box.height > IMAGE_HEIGHT:
-                logging.error(
-                    f"{mxl_file}: image too large (H x W) {box.height}x{box.width}"
+            if (image := self._load_image(mxl_file, png_file, box)) is None:
+                idx = (idx + 1) % len(self)
+            elif (
+                sequence := self._load_sequence(
+                    mxl_file, first_bar_number, last_bar_number
                 )
-                idx += 1
-                continue
-            # Gets the image and crop it to the system box.
-            try:
-                tensor = decode_image(png_file.as_posix())
-                tensor = self.transform(tensor)
-            except Exception as e:
-                logging.error(f"{png_file}: {e}")
-                idx += 1
-                continue
-            tensor = crop(
-                tensor,
-                max(0, box.top - box.height),
-                box.left,
-                min(IMAGE_HEIGHT, 3 * box.height),
-                box.width,
-            )
-            image = torch.full((1, IMAGE_HEIGHT, IMAGE_WIDTH), self.image_pad_value)
-            _, h, w = tensor.shape
-            y0 = (IMAGE_HEIGHT - h) // 2
-            x0 = (IMAGE_WIDTH - w) // 2
-            image[:, y0 : y0 + h, x0 : x0 + w] = tensor
-
-            # Load the tokens and extract the correct range.
-            kern_path = self.pdmx.get_path(mxl_file, "tokens")
-            try:
-                reader = KernReader(kern_path)
-            except Exception as e:
-                logging.error(f"{kern_path}: {e}")
-                idx += 1
-                continue
-            spine_number: int = 0
-            tensor = torch.full((SPAD_LEN - 1, MAX_CHORDS), self.vocab.PAD)
-            records = reader.get_text(first_bar_number, last_bar_number)
-            if records is None:
-                logging.error(
-                    f"{mxl_file}: bars {first_bar_number}:{last_bar_number} not found."
-                )
-                idx += 1
-                continue
-            elif len(records) + 2 > SPAD_LEN:
-                logging.error(
-                    f"{mxl_file}: bars {first_bar_number}:{last_bar_number}, "
-                    f"sequence too long {len(records)} (max {SPAD_LEN - 2})"
-                )
-                idx += 1
-                continue
-            failed = False
-            for idx, text in enumerate(records):
-                str_tok = text.split("\t")[spine_number]
-                try:
-                    tensor[idx, :] = self.vocab.tok2i(
-                        str_tok.strip().split(), max_chords=MAX_CHORDS
-                    )
-                except Exception as e:
-                    logging.error(f"{mxl_file}: {e}")
-                    failed = True
-                    break
-            if failed:
-                idx += 1
-                continue
-            tensor[len(records), :] = self.s_eos
-            return (image, torch.cat([self.s_sos, tensor]))
+            ) is None:
+                idx = (idx + 1) % len(self)
+            else:
+                return (image, sequence)
