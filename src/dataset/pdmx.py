@@ -197,7 +197,7 @@ class PDMX:
         else:
             try:
                 KernReader(tokens_path)
-            except Exception as e:
+            except Exception:
                 return False
         return True
 
