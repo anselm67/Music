@@ -147,9 +147,18 @@ class BaseHandler(Handler[Spine]):
         super(BaseHandler, self).__init__()
         self.spines = list([])
 
-    def position(self, spine) -> int:
+    def position(self, spine: Spine) -> int:
         return self.spines.index(spine)
 
+    def output_position(self, spine: Spine) -> int:
+        pos = 0
+        for s in self.spines:
+            if s == spine:
+                return pos
+            if not isinstance(s, IgnoredSpine):
+                pos += 1
+        raise ValueError("spine not found.") 
+    
     def open_spine(
         self, spine_type: str | None = None, parent: Spine | None = None
     ) -> Spine:
@@ -305,7 +314,7 @@ class NormHandler(BaseHandler):
         output: list[list[Token]] = [[] for _ in range(len(self.spines))]
         for idx, (spine, tok) in enumerate(tokens):
             if isinstance(spine, MergeSpine):
-                dst_index = self.position(cast(MergeSpine, spine).into)
+                dst_index = self.output_position(cast(MergeSpine, spine).into)
                 output[dst_index].append(tok)
             else:
                 output[idx].append(tok)

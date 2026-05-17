@@ -28,7 +28,7 @@
                 "tokenize",
                 "-o",
                 "foo.tok",
-                "/home/anselm/datasets/PDMX/krn/14/34/QmWNCrJLSs8HaHpCUKtvZUCb8nZLWL3R4cFV7ouf9Mei9r.krn"
+                "/home/anselm/datasets/PDMX/build/krn/1/11/QmbbGKtZ9G6DkWxvSeU516c1ktWiFJmEbHGmR3JFtLAPyC.krn"
             ]
         },
         // pdmx cli

@@ -49,7 +49,7 @@ class KernReader:
         return preamble
 
     def load_tokens(self) -> None:
-        with open(self.path.with_suffix(".tokens"), "r") as fp:
+        with open(self.path, "r") as fp:
             self.lines = [line.strip() for line in fp.readlines()]
         if (spine_count := self._get_spline_count()) == 0:
             return
