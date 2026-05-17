@@ -16,7 +16,7 @@ class LayoutExtractor:
     ns: dict[str, str]
     translation: tuple[int, int]
 
-    def __init__(self, svg_file: Path):
+    def __init__(self, svg_file: Path) -> None:
         self.svg_file = svg_file
         self.tree = parse(svg_file)
         self.ns = {
@@ -25,7 +25,7 @@ class LayoutExtractor:
         }
         self.parse_translation()
 
-    def parse_translation(self):
+    def parse_translation(self) -> None:
         self.translation = (0, 0)
         page_margin = self.tree.getroot().find(
             ".//svg:g[@class='page-margin']", self.ns
@@ -44,21 +44,21 @@ class LayoutExtractor:
 
     MULTIREST_RE = re.compile(r"^#E08(?P<digit>\d)-.*$")
 
-    def check_multirest(self, staff_group) -> int | None:
+    def check_multirest(self, staff_group: Element) -> int | None:
         multirest = staff_group.find(".//svg:g[@class='multiRest']", self.ns)
         if multirest is None:
             return None
         digits: list[str] = list()
         for use in multirest.findall("svg:use", self.ns):
             href = use.get(f"{{{self.ns['xlink']}}}href")
-            if (m := self.MULTIREST_RE.match(href)) is not None:
+            if href and (m := self.MULTIREST_RE.match(href)) is not None:
                 digits.append(m.group("digit"))
         if digits:
             return int("".join(digits))
         else:
             return None
 
-    def parse_staff_group(self, staff_group) -> tuple[int, Box]:
+    def parse_staff_group(self, staff_group: Element) -> tuple[int, Box]:
         """Returns the bar count (multirest) and bounding box for the staff."""
         (top, bottom, left, right) = (-1, -1, -1, -1)
         for path in staff_group.findall("svg:path", self.ns):
@@ -81,7 +81,7 @@ class LayoutExtractor:
             Box((left, top), (right, bottom)),
         )
 
-    def check_bar_number(self, measure_group) -> int | None:
+    def check_bar_number(self, measure_group: Element) -> int | None:
         for g in measure_group.findall(".//svg:g", self.ns):
             g_class = g.get("class") or ""
             if ("mNum" in g_class) or g_class == "reh":
@@ -96,7 +96,9 @@ class LayoutExtractor:
                 return int(raw) if raw.strip().isdigit() else None
         return None
 
-    def parse_system(self, system_group, bar_number: int = 1) -> tuple[int, System]:
+    def parse_system(
+        self, system_group: Element, bar_number: int = 1
+    ) -> tuple[int, System]:
         # Collects the bounding box for all bars within that system.
         boxes: dict[int, list[Box]] = dict()
         bar_count = 0

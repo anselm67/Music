@@ -26,7 +26,7 @@ class Walker:
         self.root = root
         self.limit = limit
 
-    async def process(self, cmd_builder: CommandBuilder, file: Path):
+    async def process(self, cmd_builder: CommandBuilder, file: Path) -> None:
         proc = None
         self.total_count += 1
         try:
@@ -45,7 +45,7 @@ class Walker:
                 proc.kill()
             raise
 
-    async def worker(self, queue: Queue[Path], cmd_builder: CommandBuilder):
+    async def worker(self, queue: Queue[Path], cmd_builder: CommandBuilder) -> None:
         while True:
             try:
                 file = queue.get_nowait()

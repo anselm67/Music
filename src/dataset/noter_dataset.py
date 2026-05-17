@@ -34,7 +34,7 @@ class NoterDataset(Dataset):
     s_sos: Tensor
     s_eos: Tensor
 
-    def __init__(self, config: Config, pdmx: PDMX, count=-1):
+    def __init__(self, config: Config, pdmx: PDMX, count: int = -1) -> None:
         self.pdmx = pdmx
         self.config = config
         self.vocab = Vocab.load(pdmx.home / "build/vocab.json")

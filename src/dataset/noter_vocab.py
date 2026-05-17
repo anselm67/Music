@@ -25,7 +25,7 @@ class Vocab:
         self._tok2i = tok2i
         self._i2tok = {i: s for s, i in tok2i.items()}
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._tok2i)
 
     DURATION_RE = re.compile(

@@ -114,7 +114,7 @@ class System:
     staves: list[Staff]
     box: Box = field(init=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         object.__setattr__(
             self, "box", Box(self.staves[0].box.top_left, self.staves[-1].box.bot_right)
         )
@@ -151,7 +151,7 @@ class System:
     def last_bar_number(self) -> int:
         return self.first_bar_number + self.bar_count
 
-    def asdict(self) -> dict:
+    def asdict(self) -> dict[str, object]:
         obj = asdict(self)
         obj.pop("box", None)
         return obj
@@ -188,15 +188,15 @@ class Page:
         return sum(s.staff_count for s in self.systems)
 
     @property
-    def bar_count(self):
+    def bar_count(self) -> int:
         return sum(x.bar_count for x in self.systems)
 
     @property
-    def first_bar_number(self):
+    def first_bar_number(self) -> int:
         return self.systems[0].first_bar_number
 
     @property
-    def next_bar_number(self):
+    def next_bar_number(self) -> int:
         last_system = self.systems[-1]
         return last_system.first_bar_number + last_system.bar_count
 
@@ -234,7 +234,7 @@ class Score:
     def bar_count(self) -> int:
         return sum(p.bar_count for p in self.pages)
 
-    def asdict(self):
+    def asdict(self) -> dict[str, object]:
         obj = asdict(self)
         # Hack out the 'box' attribute from all systems.
         for page in obj["pages"]:

@@ -8,7 +8,7 @@ This class manages tghe patgh of files within a PDMX dataset, in addition:
 import json
 import os
 from pathlib import Path
-from typing import Literal, Self
+from typing import TYPE_CHECKING, Any, Literal, Self
 
 import pandas as pd
 
@@ -16,6 +16,9 @@ from kern import KernReader
 from utils import compile_filter
 
 from .layout import Score
+
+if TYPE_CHECKING:
+    from .pdmx_stater import PDMXStats
 
 
 def newer(src_file: Path, dst_file: Path) -> bool:
@@ -117,7 +120,9 @@ class PDMX:
     # ruff: noqa: E501 - end
     home: Path
 
-    def __init__(self, home, name: str = "PDMX.csv", offset: int = -1, count: int = -1):
+    def __init__(
+        self, home: Path, name: str = "PDMX.csv", offset: int = -1, count: int = -1
+    ) -> None:
         self.home = home
         self.df = pd.read_csv(home / name)
         self.slice(offset, count)
@@ -134,7 +139,7 @@ class PDMX:
             self.df = self.df.iloc[offset : offset + count]
         return self
 
-    def relative(self, path) -> Path:
+    def relative(self, path: Path) -> Path:
         return path.relative_to(self.home)
 
     def get_path(self, some: Path, dir_class: DirClass, mkdirs: bool = False) -> Path:
@@ -167,7 +172,7 @@ class PDMX:
     def get_err_path(self, path: Path) -> Path:
         return path.with_suffix(".err")
 
-    def touch_err_path(self, path: Path):
+    def touch_err_path(self, path: Path) -> None:
         err_path = self.get_err_path(path)
         err_path.parent.mkdir(parents=True, exist_ok=True)
         err_path.touch()
@@ -181,7 +186,7 @@ class PDMX:
             if not self.get_path(mxl_path, "png").exists():
                 return False
         else:
-            for page in score.pages:            
+            for page in score.pages:
                 if not self.get_page_path(mxl_path, "svg", page.page_number).exists():
                     return False
                 if not self.get_page_path(mxl_path, "png", page.page_number).exists():
@@ -195,9 +200,9 @@ class PDMX:
             except Exception as e:
                 return False
         return True
-    
+
     def query(
-        self, query_string, metadata: str | None, score: str | None, valid: bool
+        self, query_string: str, metadata: str | None, score: str | None, valid: bool
     ) -> pd.DataFrame:
         metadata_filter, score_filter = (
             compile_filter(metadata) if metadata else None,
@@ -207,11 +212,9 @@ class PDMX:
         df = self.df.query(query_string)
         if metadata_filter is not None or score_filter is not None:
 
-            def filter_row(row) -> bool:
+            def filter_row(row: Any) -> bool:
                 mxl_str = row["mxl"]
-                if not isinstance(mxl_str, str) or not isinstance(
-                    row["metadata"], str
-                ):
+                if not isinstance(mxl_str, str) or not isinstance(row["metadata"], str):
                     return False
                 try:
                     if metadata_filter is not None:
@@ -240,7 +243,7 @@ class PDMX:
         num_workers: int | None = None,
         force: bool = False,
         dry_run: bool = False,
-    ):
+    ) -> None:
         from .pdmx_maker import PDMXMaker
 
         if num_workers is None:
@@ -248,7 +251,7 @@ class PDMX:
         maker = PDMXMaker(self, force=force, dry_run=dry_run)
         maker.run(mxl_file, num_workers)
 
-    def stats(self, num_worker: int | None = None):
+    def stats(self, num_worker: int | None = None) -> "PDMXStats":
         from .pdmx_stater import PDMXStater
 
         if num_worker is None:

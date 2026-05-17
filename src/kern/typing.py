@@ -81,22 +81,22 @@ class Pitch(Enum):
     def order(self) -> int:
         return self.value[0] * 8 + self.value[1]
 
-    def __lt__(self, other):
+    def __lt__(self, other: object) -> bool:
         if isinstance(other, Pitch):
             return self.order() < other.order()
         return NotImplemented
 
-    def __le__(self, other):
+    def __le__(self, other: object) -> bool:
         if isinstance(other, Pitch):
             return self.order() <= other.order()
         return NotImplemented
 
-    def __gt__(self, other):
+    def __gt__(self, other: object) -> bool:
         if isinstance(other, Pitch):
             return self.order() > other.order()
         return NotImplemented
 
-    def __ge__(self, other):
+    def __ge__(self, other: object) -> bool:
         if isinstance(other, Pitch):
             return self.order() >= other.order()
         return NotImplemented
@@ -124,7 +124,7 @@ class Duration:
     duration: int
     dots: int = 0
 
-    def __lt__(self, other) -> bool:
+    def __lt__(self, other: object) -> bool:
         if isinstance(other, Duration):
             return self.length < other.length
         return NotImplemented
@@ -133,12 +133,12 @@ class Duration:
     def length(self) -> float:
         return (1 / self.duration) * sum(1 / (2**i) for i in range(self.dots + 1))
 
-    def __add__(self, other) -> "Duration":
+    def __add__(self, other: object) -> "Duration":
         if isinstance(other, Duration):
             return Duration.from_length(self.length + other.length)
         return NotImplemented
 
-    def __sub__(self, other) -> "Duration":
+    def __sub__(self, other: object) -> "Duration":
         if isinstance(other, Duration):
             return Duration.from_length(self.length - other.length)
         return NotImplemented
@@ -162,7 +162,7 @@ class Duration:
 class Token:
     pass
 
-    def __lt__(self, other) -> bool:
+    def __lt__(self, _: object) -> bool:
         return NotImplemented
 
 
@@ -170,7 +170,7 @@ class Token:
 class Clef(Token):
     pitch: Pitch
 
-    def __lt__(self, other) -> bool:
+    def __lt__(self, other: object) -> bool:
         if isinstance(other, Clef):
             return self.pitch < other.pitch
         return NotImplemented
@@ -197,7 +197,7 @@ class Bar(Token):
     is_repeat_end: bool
     is_invisible: bool
 
-    def requires_valid_bar_number(self):
+    def requires_valid_bar_number(self) -> bool:
         return not (
             self.is_final
             or self.is_repeat_start
@@ -237,7 +237,7 @@ class Instrument(Token):
 class DurationToken(Token):
     duration: Duration | None
 
-    def __lt__(self, other) -> bool:
+    def __lt__(self, other: object) -> bool:
         if isinstance(other, DurationToken):
             return self.duration is None or self.duration < other.duration
         return True
@@ -269,7 +269,7 @@ class Note(DurationToken):
     is_lower_thrill: bool = False
     is_drum: bool = False
 
-    def __lt__(self, other) -> bool:
+    def __lt__(self, other: object) -> bool:
         if isinstance(other, Note):
             return self.pitch < other.pitch
         return False

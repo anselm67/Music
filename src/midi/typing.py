@@ -341,13 +341,13 @@ class HeaderDataEvent(Event):
 
 @dataclass
 class OpenTrackEvent(Event):
-    def __init__(self):
+    def __init__(self) -> None:
         super(OpenTrackEvent, self).__init__(0, EventType.OpenTrack)
 
 
 @dataclass
 class CloseTrackEvent(Event):
-    def __init__(self):
+    def __init__(self) -> None:
         super(CloseTrackEvent, self).__init__(0, EventType.CloseTrack)
 
 
@@ -373,7 +373,7 @@ class SequenceNumberEvent(Event):
 class TextEvent(Event):
     text: str
 
-    def __init__(self, dt, event_type: EventType, text: str):
+    def __init__(self, dt: int, event_type: EventType, text: str) -> None:
         super(TextEvent, self).__init__(dt, event_type)
         self.text = text
 
@@ -382,7 +382,7 @@ class TextEvent(Event):
 class TempoEvent(Event):
     bpm: int
 
-    def __init__(self, dt, bpm: int):
+    def __init__(self, dt: int, bpm: int) -> None:
         super(TempoEvent, self).__init__(dt, EventType.Tempo)
         self.bpm = bpm
 

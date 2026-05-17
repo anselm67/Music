@@ -91,8 +91,8 @@ def compile_filter(expression: str) -> Callable[[dict | object], bool]:
     query = compile_query(path)
     cmp = make_cmp(op, value)
 
-    def make_filter():
-        def f(record):
+    def make_filter() -> Callable[[Any], bool]:
+        def f(record: Any) -> bool:
             result = query(record)
             match result:
                 case None:

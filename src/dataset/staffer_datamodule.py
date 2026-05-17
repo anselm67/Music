@@ -26,7 +26,7 @@ class StafferDataModule(L.LightningDataModule):
         self.use_sampler = use_sampler
         self.num_workers = num_workers
 
-    def setup(self, stage: str | None = None):
+    def setup(self, stage: str | None = None) -> None:
         full = StafferDataset(
             self.config, self.pdmx, count=self.config.train_len + self.config.valid_len
         )
@@ -34,7 +34,7 @@ class StafferDataModule(L.LightningDataModule):
             full, [self.config.train_len, self.config.valid_len]
         )
 
-    def train_dataloader(self):
+    def train_dataloader(self) -> DataLoader:
         if self.use_sampler:
             logging.info(f"train_dataloader: {self.num_workers} workers with sampler.")
             return DataLoader(
@@ -54,7 +54,7 @@ class StafferDataModule(L.LightningDataModule):
                 pin_memory=True,
             )
 
-    def val_dataloader(self):
+    def val_dataloader(self) -> DataLoader:
         return DataLoader(
             self.val_ds,
             batch_size=self.config.batch_size,

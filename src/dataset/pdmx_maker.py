@@ -63,13 +63,13 @@ class PDMXMaker:
     force: bool
     dry_run: bool
 
-    def __init__(self, pdmx, force: bool = False, dry_run: bool = False):
+    def __init__(self, pdmx: PDMX, force: bool = False, dry_run: bool = False) -> None:
         self.pdmx = pdmx
         self.queue = Queue()
         self.force = force
         self.dry_run = dry_run
 
-    def erred(self, dst_file: Path):
+    def erred(self, dst_file: Path) -> bool:
         return self.pdmx.get_err_path(dst_file).exists()
 
     def newer(
@@ -133,7 +133,7 @@ class PDMXMaker:
             logging.error("Too many pages in score!")
             return None
 
-    async def mxl_svg_task(self, mxl_file: Path):
+    async def mxl_svg_task(self, mxl_file: Path) -> None:
         svg_files = None
         # Converts the mxl file to svg by rendering it with verovio.
         svg_file = self.pdmx.get_path(mxl_file, "svg", mkdirs=True)
@@ -155,7 +155,7 @@ class PDMXMaker:
             json_file = self.pdmx.get_path(mxl_file, "layout", mkdirs=True)
             self.queue.put_nowait(SvgLayoutTask(svg_files, json_file))
 
-    def krn_to_tokens(self, krn_file: Path):
+    def krn_to_tokens(self, krn_file: Path) -> None:
         # If the krn file doesn't exist, assume verovio failed to produced it.
         if not krn_file.exists():
             return
@@ -170,7 +170,7 @@ class PDMXMaker:
             logging.warning(f"{tok_file}: {e}")
             tok_file.unlink(missing_ok=True)
 
-    async def mxl_krn_task(self, mxl_file: Path):
+    async def mxl_krn_task(self, mxl_file: Path) -> None:
         # Converts the mxl file to svg by rendering it with verovio.
         krn_file = self.pdmx.get_path(mxl_file, "krn", mkdirs=True)
         if not self.force and self.newer(mxl_file, krn_file):
@@ -196,7 +196,7 @@ class PDMXMaker:
             return False
         return True
 
-    async def make_layout(self, svg_files: list[Path], json_file: Path):
+    async def make_layout(self, svg_files: list[Path], json_file: Path) -> None:
         if not self.should_refresh_layout(svg_files, json_file):
             logging.debug(f"-> {json_file}")
         elif self.dry_run:
@@ -221,7 +221,7 @@ class PDMXMaker:
                 self.pdmx.touch_err_path(json_file)
                 logging.error(f"make_layout {svg_file}: {e}")
 
-    async def make_png(self, svg_file: Path):
+    async def make_png(self, svg_file: Path) -> None:
         png_file = self.pdmx.get_path(svg_file, "png", mkdirs=True)
         if not self.force and self.newer(svg_file, png_file):
             logging.debug(f"-> {png_file}")
@@ -234,12 +234,12 @@ class PDMXMaker:
                 if await self.exec(binary, args) != 0:
                     self.pdmx.touch_err_path(png_file)
 
-    async def svg_layout_task(self, svg_files: list[Path], json_file: Path):
+    async def svg_layout_task(self, svg_files: list[Path], json_file: Path) -> None:
         await self.make_layout(svg_files, json_file)
         for svg_file in svg_files:
             await self.make_png(svg_file)
 
-    async def worker(self):
+    async def worker(self) -> None:
         while True:
             try:
                 task = self.queue.get_nowait()
@@ -256,7 +256,7 @@ class PDMXMaker:
             except Exception as e:
                 logging.error(f"Task {task}: {e}", exc_info=e)
 
-    async def async_run(self, mxl_file: Path | None, num_worker: int):
+    async def async_run(self, mxl_file: Path | None, num_worker: int) -> None:
         if mxl_file is None:
             for index, row in self.pdmx.df.iterrows():
                 mxl_str = row["mxl"]
@@ -273,7 +273,8 @@ class PDMXMaker:
             for _ in range(num_worker):
                 tg.create_task(self.worker())
 
-    def run(self, xml_path: Path | None, num_worker: int):
-        return run(self.async_run(xml_path, num_worker))
-        return run(self.async_run(xml_path, num_worker))
-        return run(self.async_run(xml_path, num_worker))
+    def run(self, xml_path: Path | None, num_worker: int) -> None:
+        run(self.async_run(xml_path, num_worker))
+
+
+# vscode - End of File

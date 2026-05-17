@@ -55,7 +55,7 @@ class Config:
         ret = value // self.divider
         return int(round(ret / self.patch_size) * self.patch_size)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.image_shape = (
             self.scale_to_patch(self.max_height),
             self.scale_to_patch(self.max_width),
@@ -63,7 +63,7 @@ class Config:
         # Trains for 4 epochs by default.
         self.max_steps = 4 * (self.train_len // self.batch_size)
 
-    def asdict(self):
+    def asdict(self) -> dict[str, object]:
         obj = asdict(self)
         obj.pop("image_shape")
         obj.pop("max_steps")

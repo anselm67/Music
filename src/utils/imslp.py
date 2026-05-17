@@ -23,10 +23,10 @@ class IMSLP:
 
     URL_LINK_RE = re.compile(r"^.*\?uddg=([^\&]*)\&.*$")
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.session = ClientSession()
 
-    async def find_imslp(self, query: str) -> Optional[str]:
+    async def find_imslp(self, query: str) -> str | None:
         """Query DuckDuckGo for an IMSLP page.
 
         Args:
@@ -128,7 +128,7 @@ class IMSLP:
 
     ANCHOR_TEXT = "I agree with the disclaimer above, continue my download"
 
-    async def download_link(self, pdf_link) -> Optional[str]:
+    async def download_link(self, pdf_link: str) -> str | None:
         async with self.session.post(
             url=pdf_link,
             headers={
@@ -148,7 +148,7 @@ class IMSLP:
                 return "https://imslp.eu" + str(a["href"])
             return None
 
-    async def save_pdf(self, download_url: str, into: Path):
+    async def save_pdf(self, download_url: str, into: Path) -> bool:
         logging.info(f"\tSaving {download_url} to {into}")
         async with self.session.get(download_url) as resp:
             content = await resp.read()
@@ -159,7 +159,7 @@ class IMSLP:
         return False
 
 
-async def async_run():
+async def async_run() -> None:
     imslp = IMSLP()
     # imslp_page = await imslp.find_imslp("bach invention no 1")
     imslp_page = (
@@ -182,7 +182,7 @@ async def async_run():
         print("Not found")
 
 
-def main():
+def main() -> None:
     run(async_run())
 
 

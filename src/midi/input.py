@@ -28,32 +28,32 @@ from midi.typing import (
 
 
 class MidiInput(ABC):
-    buf: array.array
+    buf: array.array[int]
     pos: int = 0
 
-    def __init__(self, buf: array.array):
+    def __init__(self, buf: array.array[int]):
         self.buf = buf
 
-    def debug(self, start_off: int = 5, end_off: int = 5):
+    def debug(self, start_off: int = 5, end_off: int = 5) -> None:
         start = max(0, self.pos - start_off)
         end = min(self.pos + end_off, len(self.buf))
         print("".join([f"{hex(self.buf[pos])} " for pos in range(start, end)]))
 
-    def parse(self):
+    def parse(self) -> None:
         self.decode_header()
 
-    def next(self):
+    def next(self) -> int:
         value = self.buf[self.pos]
         self.pos += 1
         return value
 
-    def skip(self, count: int):
+    def skip(self, count: int) -> None:
         self.pos += count
 
-    def done(self):
+    def done(self) -> bool:
         return self.pos >= len(self.buf)
 
-    def read_varlen(self):
+    def read_varlen(self) -> int:
         byte = self.next()
         value = byte & 0x7F
         while (byte & 0x80) != 0:
@@ -61,17 +61,17 @@ class MidiInput(ABC):
             value = (value << 7) + (byte & 0x7F)
         return value
 
-    def read_u16(self):
+    def read_u16(self) -> int:
         return ((self.next() & 0xFF) << 8) + (self.next() & 0xFF)
 
-    def read_u24(self):
+    def read_u24(self) -> int:
         return (
             ((self.next() & 0xFF) << 16)
             + ((self.next() & 0xFF) << 8)
             + (self.next() & 0xFF)
         )
 
-    def read_u32(self):
+    def read_u32(self) -> int:
         return (
             ((self.next() & 0xFF) << 24)
             + ((self.next() & 0xFF) << 16)
@@ -83,7 +83,7 @@ class MidiInput(ABC):
         ascii = [self.next() for _ in range(length)]
         return "".join([chr(ch) for ch in ascii])
 
-    def decode_header(self):
+    def decode_header(self) -> None:
         while not self.done():
             chunk_type = "".join([chr(self.next()) for _ in range(4)])
             if chunk_type == "MThd":
@@ -94,7 +94,7 @@ class MidiInput(ABC):
                 raise ValueError(f"Invalid chunk type {chunk_type}")
         print(f"{chunk_type}")
 
-    def parse_mthd(self):
+    def parse_mthd(self) -> None:
         length = self.read_u32()
         assert length == 6, f"MThd length of {length}, expected 6."
         format = Format(self.read_u16())
@@ -102,7 +102,7 @@ class MidiInput(ABC):
         divisions = self.read_u16()
         self.handle(HeaderDataEvent(format, number_of_tracks, divisions))
 
-    def parse_meta_event(self, dt: int):
+    def parse_meta_event(self, dt: int) -> None:
         meta_type = self.next()
         if meta_type == EventType.SequenceNumber.code():
             assert self.next() == 2, "Expecting sequence number meta-event of length 2."
@@ -129,7 +129,7 @@ class MidiInput(ABC):
             # Set tempo.
             assert self.next() == 3, "Expecting tempo meta event of length 3."
             tempo = self.read_u24()
-            self.handle(TempoEvent(dt, 60 * 1_000_000 / tempo))
+            self.handle(TempoEvent(dt, 60 * 1_000_000 // tempo))
         elif meta_type == EventType.TimeSignature.code():
             assert self.next() == 4, "Expecting time-signature meta event of length 4."
             nn, dd, cc, bb = self.next(), self.next(), self.next(), self.next()
@@ -138,7 +138,7 @@ class MidiInput(ABC):
             # Parse key signature (two bytes).
             assert self.next() == 2, "Expecting key-signature meta event of length 2."
             sf = self.next()
-            mi: Literal["Minor", "Major"]  = "Minor" if self.next() == 1 else "Major"
+            mi: Literal["Minor", "Major"] = "Minor" if self.next() == 1 else "Major"
             self.handle(KeySignatureEvent(dt, sf, mi))
         elif meta_type == EventType.Sequencer.code():
             length = self.next()
@@ -153,7 +153,7 @@ class MidiInput(ABC):
 
     last_status: Optional[int] = None
 
-    def parse_channel_message(self, dt: int, event_type: int):
+    def parse_channel_message(self, dt: int, event_type: int) -> None:
         self.last_status = None
         channel = event_type & 0x7
         message_type = event_type & 0xF0
@@ -204,7 +204,7 @@ class MidiInput(ABC):
             return True
         return False
 
-    def parse_event(self):
+    def parse_event(self) -> None:
         dt = self.read_varlen()
         event_type = self.next()
         if EventType.is_sysex_code(event_type):
@@ -225,7 +225,7 @@ class MidiInput(ABC):
         elif not self.parse_running_status(dt):
             raise ValueError(f"Unknown event type {hex(event_type)}")
 
-    def parse_mtrk(self):
+    def parse_mtrk(self) -> None:
         self.handle(OpenTrackEvent())
         length = self.read_u32()
         start = self.pos
@@ -234,5 +234,5 @@ class MidiInput(ABC):
         self.handle(CloseTrackEvent())
 
     @abstractmethod
-    def handle(self, event: Event):
+    def handle(self, event: Event) -> None:
         pass

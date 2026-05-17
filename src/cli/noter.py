@@ -73,14 +73,14 @@ class ClickContext:
 )
 @click.pass_context
 def cli(
-    ctx,
+    ctx: click.Context,
     log_level: str,
     log_file: None | Path,
     home: Path,
     csv: str,
     offset: int,
     count: int,
-):
+) -> None:
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
         filename=log_file,
@@ -93,7 +93,7 @@ def cli(
 
 @click.command()
 @click.pass_obj
-def vocab(ctx: ClickContext):
+def vocab(ctx: ClickContext) -> None:
     """Generates the vocab pickle file from PDMX token files."""
     vocab = Vocab.from_files(ctx.home / "build" / "tokens")
     vocab.save(ctx.home / "build" / "vocab.json")
@@ -101,7 +101,7 @@ def vocab(ctx: ClickContext):
 
 @click.command()
 @click.pass_obj
-def show(ctx: ClickContext):
+def show(ctx: ClickContext) -> None:
     """Displays random samples from the dataset."""
     dataset = NoterDataset(ctx.config, ctx.pdmx)
     vocab = Vocab.load(ctx.home / "build/vocab.json")
@@ -124,7 +124,7 @@ def show(ctx: ClickContext):
     help="Number of workers for the dataset loader.",
 )
 @click.pass_obj
-def stats(ctx: ClickContext, num_workers: int):
+def stats(ctx: ClickContext, num_workers: int) -> None:
     """Computes stats for images from the dataset."""
     # We can't use DataLoader just yet, because the image size isn't padded.
     dataset = NoterDataset(ctx.config, ctx.pdmx)
@@ -157,7 +157,7 @@ def stats(ctx: ClickContext, num_workers: int):
     help="Number of workers for the dataset loader.",
 )
 @click.pass_obj
-def image_stats(ctx: ClickContext, num_workers: int):
+def image_stats(ctx: ClickContext, num_workers: int) -> None:
     """Computes the mean and std of a subset of images from the dataset.."""
     ds = NoterDataset(ctx.config, ctx.pdmx)
     loader = DataLoader[tuple[Tensor, Tensor]](
@@ -185,7 +185,7 @@ cli.add_command(stats)
 cli.add_command(image_stats)
 
 
-def main():
+def main() -> None:
     torch.set_float32_matmul_precision("high")
     cli()
 

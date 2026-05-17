@@ -19,7 +19,7 @@ class ClickContext:
 @click.group()
 @click.option("--silent", "-s", is_flag=True, default=False)
 @click.pass_context
-def cli(ctx, silent: bool):
+def cli(ctx: click.Context, silent: bool) -> None:
     ctx.ensure_object(ClickContext)
     ctx.obj = ClickContext(silent=silent)
 
@@ -32,7 +32,7 @@ def cli(ctx, silent: bool):
     required=True,
 )
 @click.pass_obj
-def validate(ctx: ClickContext, files: list[Path]):
+def validate(ctx: ClickContext, files: list[Path]) -> None:
     """Parse and validate one or more kern files, reporting any errors found."""
     failed_count = 0
     for file in files:
@@ -63,7 +63,7 @@ def validate(ctx: ClickContext, files: list[Path]):
 )
 @click.option("--tempo", "-t", type=click.IntRange(1, 279), default=60)
 @click.pass_obj
-def midi(ctx: ClickContext, kern_file: Path, output: Path, tempo: int):
+def midi(ctx: ClickContext, kern_file: Path, output: Path, tempo: int) -> None:
     """Converts a kern file to midi."""
     output = output or kern_file.with_suffix(".mid")
     to_midi(kern_file, output, tempo=tempo)
@@ -84,7 +84,7 @@ def midi(ctx: ClickContext, kern_file: Path, output: Path, tempo: int):
     default=None,
 )
 @click.pass_obj
-def tokenize(ctx: ClickContext, kern_file: Path, output: Path | None):
+def tokenize(ctx: ClickContext, kern_file: Path, output: Path | None) -> None:
     """Tokenize a kern file into a unique normal form."""
     kern_tokenize(kern_file, output, enable_warnings=not ctx.silent)
 
@@ -94,7 +94,7 @@ cli.add_command(midi)
 cli.add_command(tokenize)
 
 
-def main():
+def main() -> None:
     logging.basicConfig(level=logging.INFO)
     cli()
 

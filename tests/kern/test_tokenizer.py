@@ -12,7 +12,7 @@ def check_tokenization(tmp_path: Path, kern_text: str) -> bool:
     try:
         tokenize(input, output)
         KernReader(output)
-    except Exception as e:
+    except Exception:
         return False
     return True
 
@@ -49,7 +49,7 @@ def tokenize_input(tmp_path: Path, kern_text: str) -> KernReader:
 """.strip()
     ],
 )
-def test_spine_merge_with_extras(tmp_path: Path, input: str):
+def test_spine_merge_with_extras(tmp_path: Path, input: str) -> None:
     assert check_tokenization(tmp_path, input)
 
 
@@ -68,7 +68,7 @@ def test_spine_merge_with_extras(tmp_path: Path, input: str):
         )
     ],
 )
-def test_remove_unused_keys(tmp_path: Path, input: str, expected: list[str]):
+def test_remove_unused_keys(tmp_path: Path, input: str, expected: list[str]) -> None:
     reader = tokenize_input(tmp_path, input)
     for line, check in zip(reader.lines, expected):
         assert line == check

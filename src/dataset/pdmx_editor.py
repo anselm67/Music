@@ -20,7 +20,7 @@ class MxlEditor:
     scale: float
     hide_truth: bool = False
 
-    def __init__(self, pdmx: PDMX, mxl_path: Path | None, scale: float = 0.8):
+    def __init__(self, pdmx: PDMX, mxl_path: Path | None, scale: float = 0.8) -> None:
         self.pdmx = pdmx
         if mxl_path is None:
             mxl_path = pdmx.pick_mxl()
@@ -102,7 +102,7 @@ class MxlEditor:
                         return
         print("Click on a bar to get its coordinates.")
 
-    def run(self):
+    def run(self) -> None:
         page_index = 0
         page, image = self.load_page(page_index)
         while True:
@@ -174,7 +174,7 @@ class MxlEditor:
                     "(t) open corresponding token file in vscode."
                 )
 
-    def close(self):
+    def close(self) -> None:
         cv2.destroyAllWindows()
 
 

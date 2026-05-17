@@ -11,13 +11,13 @@ from midi.typing import Channel, Pitch, Velocity
 class MidiOutput:
     buf: array.array
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.buf = array.array("B")
 
-    def append(self, bytes: Iterable[int]):
+    def append(self, bytes: Iterable[int]) -> None:
         self.buf.extend(bytes)
 
-    def varlen(self, value: int):
+    def varlen(self, value: int) -> None:
         buffer: list[int] = [value & 0x7F]
         value >>= 7
         while value > 0:
@@ -26,14 +26,14 @@ class MidiOutput:
         buffer.reverse()
         self.append(buffer)
 
-    def open_chunk(self, type: Literal["MThd", "MTrk"]):
+    def open_chunk(self, type: Literal["MThd", "MTrk"]) -> int:
         self.append([ord(b) for b in type])
         # Reserve 4 bytes for chunk length to be filled on completion of chunk.
         _, off = self.buf.buffer_info()
         self.append([0, 0, 0, 0])
         return off
 
-    def write_u32(self, value: int, off: int = -1):
+    def write_u32(self, value: int, off: int = -1) -> None:
         if off < 0:
             _, off = self.buf.buffer_info()
             self.buf.extend([0, 0, 0, 0])
@@ -41,7 +41,7 @@ class MidiOutput:
             self.buf[off + idx] = value & 0xFF
             value >>= 8
 
-    def write_u24(self, value: int, off: int = -1):
+    def write_u24(self, value: int, off: int = -1) -> None:
         if off < 0:
             _, off = self.buf.buffer_info()
             self.buf.extend([0, 0, 0])
@@ -49,7 +49,7 @@ class MidiOutput:
             self.buf[off + idx] = value & 0xFF
             value >>= 8
 
-    def write_u16(self, value: int, off: int = -1):
+    def write_u16(self, value: int, off: int = -1) -> None:
         if off < 0:
             _, off = self.buf.buffer_info()
             self.buf.extend([0, 0])
@@ -57,25 +57,25 @@ class MidiOutput:
             self.buf[off + idx] = value & 0xFF
             value >>= 8
 
-    def close_chunk(self, off: int):
+    def close_chunk(self, off: int) -> None:
         _, len = self.buf.buffer_info()
         self.write_u32(len - (off + 4), off)
 
-    def format(self, number: int):
+    def format(self, number: int) -> None:
         assert number == 0, "MidiOutput only supports format 0."
         self.write_u16(number)
 
-    def number_of_tracks(self, count: int):
+    def number_of_tracks(self, count: int) -> None:
         self.write_u16(count)
 
-    def ticks_per_quarter_notes(self, div: int):
+    def ticks_per_quarter_notes(self, div: int) -> None:
         assert div & 0x80 == 0, "MidiOutput only supports ticks per quarter notes."
         self.write_u16(div)
 
-    def delta_time(self, duration: int = 0):
+    def delta_time(self, duration: int = 0) -> None:
         self.varlen(duration)
 
-    def time_signature(self, signature: tuple[int, int], dt: int = 0):
+    def time_signature(self, signature: tuple[int, int], dt: int = 0) -> None:
         (num, den) = signature
         self.delta_time(dt)
         # Derive cc / bb from the time signature.
@@ -92,20 +92,20 @@ class MidiOutput:
             assert False, "Unsupported time signature {num} / {den}"
         self.append([0xFF, 0x58, 0x04, nn, dd, cc, bb])
 
-    def tempo(self, bpm: int, dt: int = 0):
+    def tempo(self, bpm: int, dt: int = 0) -> None:
         self.delta_time(dt)
         usec = int((60.0 / float(bpm)) * 1000000)
         self.append([0xFF, 0x51, 0x3])
         self.write_u24(usec)
 
-    def program_change(self, chan: Channel, prog_number: int, dt: int = 0):
+    def program_change(self, chan: Channel, prog_number: int, dt: int = 0) -> None:
         self.delta_time(dt)
         assert prog_number < 128, f"Invalid program number {prog_number} must be < 128."
         self.append([0xC0 | chan.value, prog_number])
 
     def note_on(
         self, chan: Channel, pitch: Pitch, v: Velocity = Velocity.Standard, dt: int = 0
-    ):
+    ) -> None:
         self.delta_time(dt)
         assert pitch.value >= 0 and pitch.value < 128, f"Invalid note {
             pitch
@@ -117,20 +117,20 @@ class MidiOutput:
 
     def note_off(
         self, chan: Channel, pitch: Pitch, v: Velocity = Velocity.Standard, dt: int = 0
-    ):
+    ) -> None:
         assert pitch.value >= 0 and pitch.value < 128, f"Invalid note {
             pitch.value
         } must be >= 0 amd < 128."
         self.delta_time(dt)
         self.append([0x80 | chan.value, pitch.value, v.value])
 
-    def track_end(self, dt: int = 0):
+    def track_end(self, dt: int = 0) -> None:
         self.delta_time(dt)
         self.append([0xFF, 0x2F, 0x00])
 
-    def append_track(self, other: "MidiOutput"):
+    def append_track(self, other: "MidiOutput") -> None:
         self.buf.extend(other.buf)
 
-    def save(self, path: Path):
+    def save(self, path: Path) -> None:
         with open(path, "wb+") as f:
             f.write(self.buf)

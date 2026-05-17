@@ -38,7 +38,7 @@ def note_to_midi(note: Note) -> MidiPitch:
 
 
 class Spine:
-    def append(self, token: Token):
+    def append(self, token: Token) -> None:
         pass
 
     def close(self) -> MidiOutput | None:
@@ -130,7 +130,7 @@ class MidiSpine(Spine):
             self.track.note_off(self.channel, midi_note, Velocity.Forte, 0)
         return delta_time + ticks
 
-    def append(self, token: Token):
+    def append(self, token: Token) -> None:
         match token:
             case Note():
                 note = cast(Note, token)
@@ -153,7 +153,7 @@ class MidiHandler(Handler[Spine]):
     channels: deque[Channel]
     tracks: list[MidiOutput]
 
-    def __init__(self, ticks_per_quarter: int, tempo):
+    def __init__(self, ticks_per_quarter: int, tempo: int) -> None:
         super(MidiHandler, self).__init__()
         self.ticks_per_quarter = ticks_per_quarter
         self.tracks = list([])
@@ -162,13 +162,13 @@ class MidiHandler(Handler[Spine]):
         self.time_signature = (4, 4)
         self.tempo = tempo
 
-    def position(self, spine) -> int:
+    def position(self, spine: Spine) -> int:
         return self.spines.index(spine)
 
     def allocate_channel(self) -> Channel:
         return self.channels.popleft()
 
-    def free_channel(self, channel: Channel):
+    def free_channel(self, channel: Channel) -> None:
         self.channels.appendleft(channel)
 
     def open_spine(
@@ -185,7 +185,7 @@ class MidiHandler(Handler[Spine]):
         self.spines.append(spine)
         return spine
 
-    def close_spine(self, spine: Spine):
+    def close_spine(self, spine: Spine) -> None:
         match spine:
             case MidiSpine():
                 self.free_channel(spine.channel)
@@ -198,23 +198,23 @@ class MidiHandler(Handler[Spine]):
         self.spines.insert(self.position(source), branch)
         return branch
 
-    def merge_spines(self, source: Spine, into: Spine):
+    def merge_spines(self, source: Spine, into: Spine) -> None:
         # The source will be close_spine() by the parser.
         pass
 
-    def rename_spine(self, spine: Spine, name: str):
+    def rename_spine(self, spine: Spine, name: str) -> None:
         pass
 
-    def append(self, tokens: list[tuple[Spine, Token]]):
+    def append(self, tokens: list[tuple[Spine, Token]]) -> None:
         pass
         for spine, token in tokens:
             spine.append(token)
 
-    def done(self):
+    def done(self) -> None:
         pass
 
 
-def to_midi(kern_file: Path, midi_file: Path, tempo=60):
+def to_midi(kern_file: Path, midi_file: Path, tempo: int = 60) -> None:
     ticks_per_quarter = 480
     handler = MidiHandler(ticks_per_quarter, tempo)
     parser = Parser.from_file(kern_file, handler)

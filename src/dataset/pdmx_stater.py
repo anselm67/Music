@@ -50,7 +50,7 @@ class PDMXStats:
     # Per stave statistics.
     bar_histo: Counter
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.mxl_count = 0
         self.layout_count = 0
         self.score_count = 0
@@ -65,7 +65,7 @@ class PDMXStats:
         self.height100_histo = Counter()
         self.bar_histo = Counter()
 
-    def aggregate(self, score: Score):
+    def aggregate(self, score: Score) -> None:
         self.score_count += 1
         self.page_count += score.page_count
         self.system_count += score.system_count
@@ -80,7 +80,7 @@ class PDMXStats:
             for s in p.systems:
                 self.bar_histo[s.bar_count] += 1
 
-    def collect(self, other: "PDMXStats"):
+    def collect(self, other: "PDMXStats") -> None:
         self.layout_count += other.layout_count
         self.score_count += other.score_count
         self.page_count += other.page_count
@@ -103,7 +103,7 @@ class PDMXStater:
         self.pdmx = pdmx
         self.queue = Queue()
 
-    async def layout_stats(self, stats: PDMXStats, json_file: Path):
+    async def layout_stats(self, stats: PDMXStats, json_file: Path) -> None:
         logging.debug(f"layout_stats {json_file}")
         try:
             async with aiofiles.open(json_file, "r") as f:

@@ -14,7 +14,7 @@ def _find_binary(name: str) -> Path:
 _verovio_binary = None
 
 
-def verovio_binary():
+def verovio_binary() -> Path:
     global _verovio_binary
     if _verovio_binary is None:
         _verovio_binary = _find_binary("verovio")
@@ -24,7 +24,7 @@ def verovio_binary():
 _rsvgconvert_binary = None
 
 
-def rsvgconvert_binary():
+def rsvgconvert_binary() -> Path:
     global _rsvgconvert_binary
     if _rsvgconvert_binary is None:
         _rsvgconvert_binary = _find_binary("rsvg-convert")

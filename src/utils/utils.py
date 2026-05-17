@@ -48,7 +48,7 @@ def path_substract(shorter: Path, longer: Path) -> Path:
     return Path(os.path.relpath(longer, prefix))
 
 
-def from_json(cls: type, data: Any):
+def from_json(cls: type, data: Any) -> Any:
     """Deserializes a json object into a dataclass instance.
 
     This handles nested data classes and dict and list fields.
@@ -81,7 +81,7 @@ def from_json(cls: type, data: Any):
         return data
 
 
-def print_histogram(counter: Counter, title: str, width: int = 80):
+def print_histogram(counter: Counter, title: str, width: int = 80) -> None:
     print(title)
     max_val = max(counter.values())
     total = sum(counter.values())

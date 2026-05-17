@@ -66,14 +66,14 @@ class ClickContext:
 )
 @click.pass_context
 def cli(
-    ctx,
+    ctx: click.Context,
     home: Path,
     csv: str,
     log_file: None | Path,
     log_level: str,
     offset: int,
     count: int,
-):
+) -> None:
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
         filename=log_file,
@@ -117,7 +117,7 @@ def query(
     score: str | None,
     columns: tuple[str],
     output: Path | None,
-):
+) -> None:
     """Query the underlying PDMX.csv database as a DataFrame.
 
     QUERY_STRING: The base panda query to run.
@@ -142,7 +142,7 @@ def query(
 @click.option(
     "--output", "-o", type=click.Path(dir_okay=False, file_okay=True, path_type=Path)
 )
-def render(mxl_file: Path, output: Path):
+def render(mxl_file: Path, output: Path) -> None:
     """Renders MXL_FILE into .svg files, one per page."""
     svg_file = output or mxl_file.with_suffix(".svg")
     verovio_render(mxl_file, svg_file)
@@ -163,7 +163,7 @@ def render(mxl_file: Path, output: Path):
     type=click.Path(dir_okay=False, file_okay=True, path_type=Path),
     help="Output file, defaults to the mxl file with .krn extension.",
 )
-def from_mxl(mxl_file: Path, output: Path):
+def from_mxl(mxl_file: Path, output: Path) -> None:
     """Converts MXL_FILE into a kern file.
 
     MXL_FILE: The mxl file to convert to kern.
@@ -187,7 +187,7 @@ def from_mxl(mxl_file: Path, output: Path):
     help="Resize scale of image and structure for display.",
 )
 @click.pass_obj
-def show(ctx: ClickContext, any_path: Path | None, scale: float):
+def show(ctx: ClickContext, any_path: Path | None, scale: float) -> None:
     """Displays the provided image and layout info when available.
 
 
@@ -195,7 +195,7 @@ def show(ctx: ClickContext, any_path: Path | None, scale: float):
     """
     pdmx = ctx.pdmx
     mxl_path = None if any_path is None else pdmx.get_path(any_path, "mxl")
-    editor = MxlEditor(pdmx, mxl_path)
+    editor = MxlEditor(pdmx, mxl_path, scale=scale)
     editor.run()
     editor.close()
 
@@ -236,7 +236,7 @@ def make(
     force: bool,
     dry_run: bool,
     num_workers: int | None,
-):
+) -> None:
     """Computes all dependent files from PDMX mxl files.
 
     \b
@@ -264,7 +264,7 @@ def make(
     help="Number of workers for the dataset loader.",
 )
 @click.pass_obj
-def stats(ctx: ClickContext, num_workers: int | None):
+def stats(ctx: ClickContext, num_workers: int | None) -> None:
     """Computes layout statistics for the PDMX dataset."""
     stats = ctx.pdmx.stats(num_worker=num_workers)
     print(f"{stats.layout_count:,} layout files, {stats.score_count:,} scores:")
@@ -291,7 +291,7 @@ def stats(ctx: ClickContext, num_workers: int | None):
     default=None,
 )
 @click.pass_obj
-def info(ctx: ClickContext, mxl_file: Path):
+def info(ctx: ClickContext, mxl_file: Path) -> None:
     """Displays all infos about a given PDMX score.
 
     MXL_FILE: Optional; When provided only this item is checked and rebuild.
@@ -316,7 +316,7 @@ cli.add_command(stats)
 cli.add_command(info)
 
 
-def main():
+def main() -> None:
     cli()
 
 

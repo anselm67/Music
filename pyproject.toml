@@ -72,6 +72,7 @@ torchvision = { index = "pytorch-cu130" }
 
 [tool.mypy]
 python_version = "3.13"
+disallow_untyped_defs = true
 
 [[tool.mypy.overrides]]
 module = [

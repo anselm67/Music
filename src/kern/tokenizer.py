@@ -43,7 +43,7 @@ class TokenFormatter:
     barno: int
     display_bar_number: bool
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.barno = 1
         self.display_bar_number = True
         self.formatters = {
@@ -143,7 +143,7 @@ class TokenFormatter:
 class BaseHandler(Handler[Spine]):
     spines: list[Spine]
 
-    def __init__(self):
+    def __init__(self) -> None:
         super(BaseHandler, self).__init__()
         self.spines = list([])
 
@@ -170,10 +170,10 @@ class BaseHandler(Handler[Spine]):
         self.spines.append(spine)
         return spine
 
-    def debug_spine(self):
+    def debug_spine(self) -> None:
         print("\t".join(f"{id(spine):#x}" for spine in self.spines))
 
-    def close_spine(self, spine: Spine):
+    def close_spine(self, spine: Spine) -> None:
         # print(f"close: {id(spine):#x}")
         self.spines.remove(spine)
         # self.debug_spine()
@@ -185,12 +185,12 @@ class BaseHandler(Handler[Spine]):
         # self.debug_spine()
         return branch
 
-    def merge_spines(self, source: Spine, into: Spine):
+    def merge_spines(self, source: Spine, into: Spine) -> None:
         # The source will be close_spine() by the parser.
         # print(f"merge: {id(source):#x} => {id(into):#x}")
         pass
 
-    def rename_spine(self, spine: Spine, name: str):
+    def rename_spine(self, spine: Spine, name: str) -> None:
         pass
 
 
@@ -298,7 +298,7 @@ class NormHandler(BaseHandler):
 
         return tokens
 
-    def merge(self, toks) -> list[Token]:
+    def merge(self, toks: list[Token]) -> list[Token]:
         # We might have merge multiple bar tokens, keep only one.
         if self.check_type(toks, Bar):
             return [toks[0]]
@@ -314,7 +314,7 @@ class NormHandler(BaseHandler):
             return [toks[0]]
         return toks
 
-    def merge_tokens(self, tokens) -> list[str]:
+    def merge_tokens(self, tokens: list[tuple[Spine, Token]]) -> list[str]:
         output: list[list[Token]] = [[] for _ in range(len(self.spines))]
         for idx, (spine, tok) in enumerate(tokens):
             if isinstance(spine, MergeSpine):
@@ -330,7 +330,7 @@ class NormHandler(BaseHandler):
         ]
         return [" ".join(toks) for toks in formatted_output]
 
-    def append(self, tokens: list[tuple[Spine, Token]]):
+    def append(self, tokens: list[tuple[Spine, Token]]) -> None:
         tokens = [
             (spine, token)
             for spine, token in tokens
@@ -345,7 +345,7 @@ class NormHandler(BaseHandler):
         if self.output:
             self.output.write("\t".join(tok for tok in output if tok) + "\n")
 
-    def done(self):
+    def done(self) -> None:
         if self.output:
             self.output.close()
 

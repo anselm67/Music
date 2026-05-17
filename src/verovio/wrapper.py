@@ -6,7 +6,7 @@ from pathlib import Path
 from .binaries import rsvgconvert_binary, verovio_binary
 
 
-def safe_run(command: list[Path | str], timeout=60):
+def safe_run(command: list[Path | str], timeout: int = 60) -> None:
     try:
         result = subprocess.run(command, timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -83,6 +83,6 @@ def svg_to_png_command(svg_file: Path, png_file: Path) -> tuple[Path, list[str]]
     ]
 
 
-def svg_to_png(svg_file: Path, png_file: Path):
+def svg_to_png(svg_file: Path, png_file: Path) -> None:
     (binary, args) = svg_to_png_command(svg_file, png_file)
     safe_run([binary, *args])

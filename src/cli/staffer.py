@@ -5,7 +5,7 @@ import random
 import shutil
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import click
 import cv2
@@ -17,6 +17,7 @@ import torch
 from lightning.pytorch.callbacks import Callback, EarlyStopping, ModelCheckpoint
 from lightning.pytorch.callbacks.early_stopping import EarlyStoppingReason
 from lightning.pytorch.loggers import CSVLogger
+from matplotlib.backend_bases import Event, KeyEvent
 from torch import Tensor
 from torch.utils.data import DataLoader
 from torchinfo import summary as model_summary
@@ -81,14 +82,14 @@ class ClickContext:
 )
 @click.pass_context
 def cli(
-    ctx,
+    ctx: click.Context,
     log_level: str,
     log_file: None | Path,
     home: Path,
     csv: str,
     offset: int,
     count: int,
-):
+) -> None:
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
         filename=log_file,
@@ -105,7 +106,7 @@ def cli(
 
 
 @click.command()
-def summary():
+def summary() -> None:
     """Displays a nice summary of the underlying HierarchicalDETR model."""
     config = Config()
     model = HierarchicalDETR(config)
@@ -115,7 +116,7 @@ def summary():
 
 
 @click.command()
-def check():
+def check() -> None:
     """Checks the model input / output dimensions."""
     config = Config()
     model = HierarchicalDETR(config)
@@ -136,7 +137,7 @@ def check():
 
 @click.command()
 @click.pass_obj
-def show(ctx: ClickContext):
+def show(ctx: ClickContext) -> None:
     """Displays random samples from the dataset."""
     dataset = StafferDataset(ctx.config, ctx.pdmx)
     while True:
@@ -172,7 +173,7 @@ def show(ctx: ClickContext):
     help="Number of workers for the dataset loader.",
 )
 @click.pass_obj
-def stats(ctx: ClickContext, num_workers: int):
+def stats(ctx: ClickContext, num_workers: int) -> None:
     """Computes the mean and std of a subset of images from the dataset.."""
     ds = StafferDataset(ctx.config, ctx.pdmx)
     loader = DataLoader[tuple[Tensor, Tensor, Tensor, Tensor]](
@@ -236,7 +237,7 @@ def train(
     epochs: int,
     use_sampler: bool,
     num_workers: int,
-):
+) -> None:
     """Trains and/or resume training of a Staffer model instance.
 
     NAME: sets id/name of the model being trained.
@@ -358,7 +359,9 @@ LOG_VARIABLES = [
 ]
 
 
-def plot_one(ax_metrics: Any, name: str, columns: tuple[str, ...], ls="solid") -> None:
+def plot_one(
+    ax_metrics: Any, name: str, columns: tuple[str, ...], ls: str = "solid"
+) -> None:
     csv_path = Path(f"logs/staffer/{name}/metrics.csv")
     all_path = csv_path.with_stem("cumulated_metrics")
     all_df = None
@@ -415,7 +418,7 @@ def logs(
     train_columns: tuple[str, ...],
     valid_columns: tuple[str, ...],
     both_columns: tuple[str, ...],
-):
+) -> None:
     """Displays training logs from multiple experiments in a single graph.
 
     NAMES: List of the names of the model experiments you want graphed.
@@ -449,8 +452,9 @@ def logs(
     plt.ion()
     fig, ax_metrics = plt.subplots(1, 1)
 
-    def on_key(event):
-        if event.key == "q":
+    def on_key(event: Event) -> None:
+        key_event = cast(KeyEvent, event)
+        if key_event.key == "q":
             plt.close("all")
 
     fig.canvas.mpl_connect("key_press_event", on_key)
@@ -556,7 +560,7 @@ cli.add_command(logs)
 cli.add_command(predict)
 
 
-def main():
+def main() -> None:
     torch.set_float32_matmul_precision("high")
     cli()
 

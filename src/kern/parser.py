@@ -53,7 +53,9 @@ class KernSpineHolder[T](SpineHolder):
     def error(self, msg: str) -> NoReturn:
         raise SyntaxError(msg)
 
-    def parse_note(self, token, suggested_duration: Optional[Duration] = None) -> Note:
+    def parse_note(
+        self, token: str, suggested_duration: Duration | None = None
+    ) -> Note:
         orig_token = token
         # When an opening (tie, slur, and phrase) starts, keep it for the end.
         additional = ""
@@ -210,13 +212,13 @@ class Handler(ABC, Generic[T]):
     ) -> T:
         """A new spine is opened.
 
-        This can happen either form the header of the score, in which case a 
-        spine_type will be provided (e.g. '**kern' or '**dynam') or as a spine is 
+        This can happen either form the header of the score, in which case a
+        spine_type will be provided (e.g. '**kern' or '**dynam') or as a spine is
         splitted in which case the parent spine is provided."""
         pass
 
     @abstractmethod
-    def close_spine(self, spine: T):
+    def close_spine(self, spine: T) -> None:
         pass
 
     @abstractmethod
@@ -224,23 +226,23 @@ class Handler(ABC, Generic[T]):
         pass
 
     @abstractmethod
-    def merge_spines(self, source: T, into: T):
+    def merge_spines(self, source: T, into: T) -> None:
         pass
 
     @abstractmethod
-    def rename_spine(self, spine: T, name: str):
+    def rename_spine(self, spine: T, name: str) -> None:
         pass
 
     @abstractmethod
-    def append(self, tokens: list[tuple[T, Token]]):
+    def append(self, tokens: list[tuple[T, Token]]) -> None:
         pass
 
     @abstractmethod
-    def done(self):
+    def done(self) -> None:
         pass
+
 
 class Parser(Generic[T]):
-
     path: str | Path
     records: Iterator[str]
     lineno: int = 0
@@ -276,7 +278,7 @@ class Parser(Generic[T]):
     def from_iterator(iterator: Iterable[str], handler: Handler) -> "Parser":
         return Parser("iterator", iterator, handler)
 
-    def error(self, msg: str):
+    def error(self, msg: str) -> NoReturn:
         raise ValueError(f"{self.path}, {self.lineno}: {msg}")
 
     COMMENT_RE = re.compile(r"^!!.*$")
@@ -298,7 +300,7 @@ class Parser(Generic[T]):
             self.error(f"Spine {spine_holder} missing.")
         return pos
 
-    def insert_spine(self, at: int, spine_holder: SpineHolder):
+    def insert_spine(self, at: int, spine_holder: SpineHolder) -> None:
         # Copying is required as these are called from within self.spines iterators.
         spines = list(self.spines)
         spines.insert(at, spine_holder)
@@ -311,7 +313,7 @@ class Parser(Generic[T]):
         self.insert_spine(at, spine_holder)
         return spine_holder
 
-    def close_spine(self, spine_holder: SpineHolder):
+    def close_spine(self, spine_holder: SpineHolder) -> None:
         self.handler.close_spine(spine_holder.spine)
         # Copying is required as these are called from within self.spines iterators.
         spines = list(self.spines)
@@ -325,7 +327,9 @@ class Parser(Generic[T]):
         self.insert_spine(self.position(source_holder) + 1, holder)
         return branch
 
-    def merge_spines(self, source_holder: SpineHolder, into_holder: SpineHolder):
+    def merge_spines(
+        self, source_holder: SpineHolder, into_holder: SpineHolder
+    ) -> None:
         self.handler.merge_spines(source_holder.spine, into_holder.spine)
         self.close_spine(source_holder)
 
@@ -382,7 +386,12 @@ class Parser(Generic[T]):
                     self.error(f"Unknown spine indicator '{indicator}'.")
         return SpinePath(indicator)
 
-    def parse_token(self, holder: SpineHolder, text: str, tokens_iterator) -> Token:
+    def parse_token(
+        self,
+        holder: SpineHolder,
+        text: str,
+        tokens_iterator: Iterator[tuple[SpineHolder, str]],
+    ) -> Token:
         try:
             token = holder.parse_token(text)
             if token is None:
@@ -391,7 +400,7 @@ class Parser(Generic[T]):
         except SyntaxError as e:
             raise SyntaxError(f"{self.path}, {self.lineno}: {e}") from e
 
-    def parse(self):
+    def parse(self) -> None:
         self.header()
         while True:
             line = cast(str, self.next())
@@ -415,10 +424,10 @@ class Parser(Generic[T]):
             except Exception as e:
                 raise SyntaxError(f"{self.path}, {self.lineno}: {e}")
 
-    def header(self):
+    def header(self) -> None:
         kerns = self.next(throw_on_end=True).split()  # type: ignore
         for kern in kerns:
-            holder = None
+            holder: SpineHolder | None = None
             match kern:
                 case "**kern":
                     holder = KernSpineHolder(

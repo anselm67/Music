@@ -16,20 +16,20 @@ class EmptyHandler(Handler[EmptySpine]):
     ) -> EmptySpine:
         return EmptySpine()
 
-    def close_spine(self, spine: EmptySpine):
+    def close_spine(self, spine: EmptySpine) -> None:
         pass
 
     def branch_spine(self, source: EmptySpine) -> EmptySpine:
         return EmptySpine()
 
-    def merge_spines(self, source: EmptySpine, into: EmptySpine):
+    def merge_spines(self, source: EmptySpine, into: EmptySpine) -> None:
         pass
 
-    def rename_spine(self, spine: EmptySpine, name: str):
+    def rename_spine(self, spine: EmptySpine, name: str) -> None:
         pass
 
-    def append(self, tokens: List[Tuple[EmptySpine, Token]]):
+    def append(self, tokens: List[Tuple[EmptySpine, Token]]) -> None:
         pass
 
-    def done(self):
+    def done(self) -> None:
         pass

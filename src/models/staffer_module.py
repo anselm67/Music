@@ -5,6 +5,7 @@ from dataclasses import fields
 
 import lightning as L
 import torch
+from lightning.pytorch.utilities.types import OptimizerLRSchedulerConfig
 from torch import Tensor
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
@@ -89,7 +90,7 @@ class StafferModule(L.LightningModule):
     def validation_step(self, batch: tuple, batch_idx: int) -> None:
         self._step(batch, "val")
 
-    def configure_optimizers(self):
+    def configure_optimizers(self) -> OptimizerLRSchedulerConfig:
         optimizer = AdamW(
             self.parameters(),
             lr=self.config.lr,
