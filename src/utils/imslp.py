@@ -4,7 +4,7 @@ import logging
 import re
 from asyncio import run
 from pathlib import Path
-from typing import Optional, cast
+from typing import cast
 from urllib.parse import unquote
 
 from aiohttp import ClientSession
