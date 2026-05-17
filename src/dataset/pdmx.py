@@ -12,6 +12,7 @@ from typing import Literal, Self
 
 import pandas as pd
 
+from kern import KernReader
 from utils import compile_filter
 
 from .layout import Score
@@ -171,8 +172,32 @@ class PDMX:
         err_path.parent.mkdir(parents=True, exist_ok=True)
         err_path.touch()
 
+    def _is_valid(self, mxl_path: Path, score: Score) -> bool:
+        if not mxl_path.exists():
+            return False
+        if score.page_count <= 1:
+            if not self.get_path(mxl_path, "svg").exists():
+                return False
+            if not self.get_path(mxl_path, "png").exists():
+                return False
+        else:
+            for page in score.pages:            
+                if not self.get_page_path(mxl_path, "svg", page.page_number).exists():
+                    return False
+                if not self.get_page_path(mxl_path, "png", page.page_number).exists():
+                    return False
+        tokens_path = self.get_path(mxl_path, "tokens")
+        if not tokens_path.exists():
+            return False
+        else:
+            try:
+                KernReader(tokens_path)
+            except Exception as e:
+                return False
+        return True
+    
     def query(
-        self, query_string, metadata: str | None, score: str | None
+        self, query_string, metadata: str | None, score: str | None, valid: bool
     ) -> pd.DataFrame:
         metadata_filter, score_filter = (
             compile_filter(metadata) if metadata else None,
@@ -183,20 +208,23 @@ class PDMX:
         if metadata_filter is not None or score_filter is not None:
 
             def filter_row(row) -> bool:
-                if not isinstance(row["mxl"], str) or not isinstance(
+                mxl_str = row["mxl"]
+                if not isinstance(mxl_str, str) or not isinstance(
                     row["metadata"], str
                 ):
                     return False
                 try:
                     if metadata_filter is not None:
                         metadata_file = self.home / row["metadata"]
-                        obj = json.loads(metadata_file.read_text())
-                        if not metadata_filter(obj):
+                        metadata = json.loads(metadata_file.read_text())
+                        if not metadata_filter(metadata):
                             return False
-                    if score_filter is not None:
+                    if valid or score_filter is not None:
                         layout_file = self.get_path((self.home / row["mxl"]), "layout")
-                        obj = Score.from_json(json.loads(layout_file.read_text()))
-                        if not score_filter(obj):
+                        score = Score.from_json(json.loads(layout_file.read_text()))
+                        if score_filter and not score_filter(score):
+                            return False
+                        if valid and not self._is_valid(self.home / mxl_str, score):
                             return False
                     return True
                 except (FileNotFoundError, json.JSONDecodeError):

@@ -92,6 +92,14 @@ def cli(
 @click.option(
     "--score", "-s", type=str, default=None, help="Score query as a json filter."
 )
+@click.option(
+    "--valid",
+    "-v",
+    default=False,
+    is_flag=True,
+    show_default=True,
+    help="Keeps valid entry with proper svg, png, layout, krn and tokens.",
+)
 @click.option("--columns", "-c", multiple=True, help="Names of columns to display")
 @click.option(
     "--output",
@@ -105,6 +113,7 @@ def query(
     ctx: ClickContext,
     query_string: str,
     metadata: str | None,
+    valid: bool,
     score: str | None,
     columns: tuple[str],
     output: Path | None,
@@ -113,7 +122,7 @@ def query(
 
     QUERY_STRING: The base panda query to run.
     """
-    result = ctx.pdmx.query(query_string, metadata=metadata, score=score)
+    result = ctx.pdmx.query(query_string, metadata=metadata, score=score, valid=valid)
     if columns:
         result = result[list(columns)]
     if output is not None:
@@ -305,7 +314,6 @@ cli.add_command(show)
 cli.add_command(make)
 cli.add_command(stats)
 cli.add_command(info)
-# TODO Add a validate command to check that all bars within a system are the same.
 
 
 def main():
