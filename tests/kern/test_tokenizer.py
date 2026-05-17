@@ -2,21 +2,33 @@ from pathlib import Path
 
 import pytest
 
-from kern import tokenize, KernReader
+from kern import KernReader, tokenize
 
-def check_tokenization(tmp_path: Path, context: str) -> bool:
+
+def check_tokenization(tmp_path: Path, kern_text: str) -> bool:
     input = tmp_path / "input.krn"
     output = tmp_path / "output.krn"
-    input.write_text(context)
+    input.write_text(kern_text)
     try:
         tokenize(input, output)
         KernReader(output)
     except Exception as e:
         return False
     return True
-        
-@pytest.mark.parametrize("input", [
-"""
+
+
+def tokenize_input(tmp_path: Path, kern_text: str) -> KernReader:
+    input = tmp_path / "input.krn"
+    output = tmp_path / "output.krn"
+    input.write_text(kern_text)
+    tokenize(input, output)
+    return KernReader(output)
+
+
+@pytest.mark.parametrize(
+    "input",
+    [
+        """
 !!!COM: William James Kirkpatrick
 !!!OTL: I Shall Be No Stranger There
 **kern	**text	**kern	**text	**text	**text
@@ -34,7 +46,29 @@ def check_tokenization(tmp_path: Path, context: str) -> bool:
 *	*	*v	*v	*	*	*
 16EJk 16A	.	16eJk 16f#	the	time’s	my
 =	=	=	=	=	=
-""".strip()        
-    ])
-def test_spine_merge_with_extras(tmp_path: Path, input):
+""".strip()
+    ],
+)
+def test_spine_merge_with_extras(tmp_path: Path, input: str):
     assert check_tokenization(tmp_path, input)
+
+
+@pytest.mark.parametrize(
+    "input,expected",
+    [
+        (
+            """
+**kern
+*clefG2
+*k[]
+*M6/8
+=
+""".strip(),
+            ["clef-GG", "6/8", "=1"],
+        )
+    ],
+)
+def test_remove_unused_keys(tmp_path: Path, input: str, expected: list[str]):
+    reader = tokenize_input(tmp_path, input)
+    for line, check in zip(reader.lines, expected):
+        assert line == check

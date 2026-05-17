@@ -157,8 +157,8 @@ class BaseHandler(Handler[Spine]):
                 return pos
             if not isinstance(s, IgnoredSpine):
                 pos += 1
-        raise ValueError("spine not found.") 
-    
+        raise ValueError("spine not found.")
+
     def open_spine(
         self, spine_type: str | None = None, parent: Spine | None = None
     ) -> Spine:
@@ -233,6 +233,10 @@ class NormHandler(BaseHandler):
         # Pure spine paths aren't interesting to us.
         if self.check_type((t for _, t in tokens), SpinePath):
             return True
+        # Empty keys aren't interesting either:
+        if self.check_type((t for _, t in tokens), Key):
+            if all(cast(Key, t).count == 0 for _, t in tokens):
+                return True
         return False
 
     def fix_bar(

@@ -48,5 +48,4 @@ end of the first page; The tokenizer needs to take it apart into separate bars.
 - In mxl/14/10/QmWAGXyEP8SJRRRPSy5jpFvX9MRGPqPUuHkUay19hAy8wM.mxl the rendering is missing the first few bars and is therefore out of sync.
 - In /mxl/3/6/Qmd7UQFcdQg8fjqqCkJPHkc2N4PqQEkx6vh5sxqchozJu8.mxl the bar count mismatches likely because they are some invisible bars at the beginning of the svg file that the LayoutExtractor counts (it shouldn't).
 - In mxl/3/47/QmdUzkYhyPhs5b5TNvGmT2fpc1CwLdjkxFrWvGE5WCFECa.mxl right after the second page break, bars have leading dots in spine.
-- In mxl/1/11/QmbbGKtZ9G6DkWxvSeU516c1ktWiFJmEbHGmR3JFtLAPyC.mxl, the tokenized version of the file has a spine count mismatch due to a spine branch.
 
