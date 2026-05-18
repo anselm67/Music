@@ -3,6 +3,7 @@ import logging
 import math
 import random
 import shutil
+import sys
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, cast
@@ -101,6 +102,7 @@ def cli(
         logging.getLogger("lightning.pytorch").addHandler(
             logging.FileHandler(log_file.as_posix())
         )
+    logging.info("Running: %s", " ".join(sys.argv))
     pdmx = PDMX(home, csv, offset, count)
     ctx.obj = ClickContext(Config(), home, pdmx)
 

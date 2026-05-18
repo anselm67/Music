@@ -8,6 +8,7 @@ PDMX Main repo is https://zenodo.org/records/14648209
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+import sys
 
 import click
 
@@ -80,6 +81,7 @@ def cli(
         format="%(asctime)s | %(levelname)s | %(module)s.%(funcName)s:%(lineno)d | %(message)s",  # noqa: E501
         datefmt="%Y-%m-%d %H:%M:%S",
     )
+    logging.info("Running: %s", " ".join(sys.argv))
     pdmx = PDMX(home, csv, offset, count)
     ctx.obj = ClickContext(home=home, pdmx=pdmx)
 
