@@ -104,7 +104,7 @@ class TestVocab:
     def test_i2tok_empty(self, vocab: Vocab) -> None:
         ids = torch.empty(0)
         result = vocab.i2tok(ids)
-        expected = torch.empty(0)
+        expected = []
         assert result == expected
 
     def test_save_and_load(self, vocab: Vocab, sample_tok2i: dict[str, int]) -> None:
