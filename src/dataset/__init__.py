@@ -1,6 +1,4 @@
 from .layout import Box, CenteredBox, Page, Score, Staff, System
-from .noter_dataset import NoterDataset
-from .noter_vocab import Vocab
 from .pdmx import PDMX
 from .pdmx_editor import MxlEditor
 from .pdmx_maker import PDMXMaker
@@ -18,7 +16,5 @@ __all__ = [
     "CenteredBox",
     "StafferDataset",
     "StafferDataModule",
-    "NoterDataset",
     "MxlEditor",
-    "Vocab",
 ]

@@ -2,10 +2,10 @@
 import logging
 import math
 import random
+import sys
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-import sys
 
 import click
 import cv2
@@ -14,8 +14,8 @@ from torch import Tensor
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from dataset import PDMX, NoterDataset, Vocab
-from models import Config
+from dataset import PDMX
+from noter import NoterConfig, NoterDataset, NoterModule, Vocab
 from utils import print_histogram
 
 HOME = Path("/home/anselm/datasets/PDMX")
@@ -25,7 +25,7 @@ HOME = Path("/home/anselm/datasets/PDMX")
 class ClickContext:
     home: Path
     pdmx: PDMX
-    config: Config
+    config: NoterConfig
 
 
 @click.group()
@@ -52,7 +52,7 @@ class ClickContext:
 )
 @click.option(
     "--csv",
-    default="Staff16.csv",
+    default="System2.csv",
     show_default=True,
     help="Name of the .csv master file.",
 )
@@ -90,7 +90,7 @@ def cli(
     )
     logging.info("Running: %s", " ".join(sys.argv))
     pdmx = PDMX(home, csv, offset, count)
-    ctx.obj = ClickContext(home, pdmx, Config())
+    ctx.obj = ClickContext(home, pdmx, NoterConfig())
 
 
 @click.command()
@@ -106,12 +106,11 @@ def vocab(ctx: ClickContext) -> None:
 def show(ctx: ClickContext) -> None:
     """Displays random samples from the dataset."""
     dataset = NoterDataset(ctx.config, ctx.pdmx)
-    vocab = Vocab.load(ctx.home / "build/vocab.json")
     while True:
         index = random.randint(0, len(dataset) - 1)
         img_tensor, seq_tensor = dataset[index]
         img = img_tensor.squeeze(0).cpu().numpy()
-        tokens = vocab.i2tok(seq_tensor)
+        tokens = dataset.vocab.i2tok(seq_tensor)
         print(tokens)
         cv2.imshow("Staff", img)
         if cv2.waitKey(0) == ord("q"):
@@ -146,9 +145,6 @@ def stats(ctx: ClickContext, num_workers: int) -> None:
     print(f"Image max size (w x h): {max_width} x {max_height}")
     print(f"      Sequence max len: {max_seqlen}")
     print_histogram(seqlen_histo, title="Sequence lengths:")
-    # With --csv System1.csv, we get the following values:
-    # Image max size (w x h): 656 x 52
-    #       Sequence max len: 789
 
 
 @click.command()
@@ -181,10 +177,32 @@ def image_stats(ctx: ClickContext, num_workers: int) -> None:
     print(f" std: {std}")
 
 
+@click.command()
+@click.pass_obj
+def summary(ctx: ClickContext) -> None:
+    """Displays a nice summary of the underlying NoterModel model."""
+    config = NoterConfig()
+    config.use_vocab(Vocab.load(ctx.pdmx.home / "build/vocab.json"))
+    B = config.batch_size
+    T = config.max_seqlen
+    H = config.max_chords
+
+    # We can't use torchinfo.summary() because it fails on nested tensors used
+    # by the TransformerDecoder.
+    model = NoterModule(config)
+    model.forward(
+        torch.zeros(B, config.in_channels, *config.input_shape),  # source
+        torch.full((B,), config.input_shape[1]),  # source_widths
+        torch.zeros(B, T, H, dtype=torch.long),  # target
+    )
+    print(model)
+
+
 cli.add_command(vocab)
 cli.add_command(show)
 cli.add_command(stats)
 cli.add_command(image_stats)
+cli.add_command(summary)
 
 
 def main() -> None:

@@ -4,110 +4,110 @@ from pathlib import Path
 import pytest
 import torch
 
-from dataset import Vocab
+from noter import Vocab
 
 
 class TestVocab:
     @pytest.fixture
-    def sample_tok2i(self):
+    def sample_tok2i(self) -> dict[str, int]:
         return {"token1": 5, "token2": 6, "token3": 7, "=": 8, "==": 9}
 
     @pytest.fixture
-    def vocab(self, sample_tok2i):
+    def vocab(self, sample_tok2i: dict[str, int]) -> Vocab:
         return Vocab(sample_tok2i)
 
-    def test_init(self, sample_tok2i):
+    def test_init(self, sample_tok2i: dict[str, int]) -> None:
         vocab = Vocab(sample_tok2i)
         assert vocab._tok2i == sample_tok2i
         assert vocab._i2tok == {v: k for k, v in sample_tok2i.items()}
 
-    def test_len(self, vocab, sample_tok2i):
+    def test_len(self, vocab: Vocab, sample_tok2i: dict[str, int]) -> None:
         assert len(vocab) == len(sample_tok2i)
 
-    def test_encode_plain_token(self, vocab):
+    def test_encode_plain_token(self, vocab: Vocab) -> None:
         assert vocab.encode("token1") == 5
 
-    def test_encode_unknown_token(self, vocab):
+    def test_encode_unknown_token(self, vocab: Vocab) -> None:
         assert vocab.encode("unknown") == Vocab.UNK
 
-    def test_encode_duration(self, vocab):
+    def test_encode_duration(self, vocab: Vocab) -> None:
         encoded = vocab.encode("token1/8")
         assert encoded == 5 | (8 << 16)
 
-    def test_encode_one_dot_duration(self, vocab):
+    def test_encode_one_dot_duration(self, vocab: Vocab) -> None:
         encoded = vocab.encode("token1/8:1")
         assert encoded == 5 | (12 << 16)
 
-    def test_encode_two_dot_duration(self, vocab):
+    def test_encode_two_dot_duration(self, vocab: Vocab) -> None:
         encoded = vocab.encode("token1/8:2")
         assert encoded == 5 | (18 << 16)
 
-    def test_encode_bar(self, vocab):
+    def test_encode_bar(self, vocab: Vocab) -> None:
         encoded = vocab.encode("==12")
         assert encoded == 9 | (12 << 16)
 
-    def test_tok2i_normal(self, vocab):
+    def test_tok2i_normal(self, vocab: Vocab) -> None:
         tokens = ["token1", "token2"]
         max_chords = 4
         result = vocab.tok2i(tokens, max_chords)
         expected = torch.tensor([5, 6, 4, 4])  # 4 is SIL
         assert torch.equal(result, expected)
 
-    def test_tok2i_with_unknown(self, vocab):
+    def test_tok2i_with_unknown(self, vocab: Vocab) -> None:
         tokens = ["token1", "unknown", "token2"]
         max_chords = 3
         result = vocab.tok2i(tokens, max_chords)
         expected = torch.tensor([5, 1, 6])  # 1 is UNK
         assert torch.equal(result, expected)
 
-    def test_tok2i_empty_tokens(self, vocab):
-        tokens = []
+    def test_tok2i_empty_tokens(self, vocab: Vocab) -> None:
+        tokens: list[str] = []
         max_chords = 2
         result = vocab.tok2i(tokens, max_chords)
         expected = torch.tensor([4, 4])
         assert torch.equal(result, expected)
 
-    def test_tok2i_max_chords_zero(self, vocab):
+    def test_tok2i_max_chords_zero(self, vocab: Vocab) -> None:
         tokens = ["token1"]
         max_chords = 0
         with pytest.raises(ValueError, match="Number of tokens .* exceeds max_chords"):
             vocab.tok2i(tokens, max_chords)
 
-    def test_tok2i_more_tokens_than_max(self, vocab):
+    def test_tok2i_more_tokens_than_max(self, vocab: Vocab) -> None:
         tokens = ["token1", "token2", "token3", "extra"]
         max_chords = 2
         with pytest.raises(ValueError, match="Number of tokens .* exceeds max_chords"):
             vocab.tok2i(tokens, max_chords)
 
-    def test_i2tok_tensor(self, vocab):
+    def test_i2tok_tensor(self, vocab: Vocab) -> None:
         ids = torch.tensor([[5], [1], [6]])
         result = vocab.i2tok(ids)
         expected = ["token1", "UNK", "token2"]
         assert result == expected
 
-    def test_decode_duration_token(self, vocab):
+    def test_decode_duration_token(self, vocab: Vocab) -> None:
         duration_id = 5 | (8 << 16)
         result = vocab.i2tok(torch.tensor([[duration_id]]))
         assert result == ["token1/8"]
 
-    def test_decode_bar_token(self, vocab):
+    def test_decode_bar_token(self, vocab: Vocab) -> None:
         bar_id = 8 | (12 << 16)
         result = vocab.i2tok(torch.tensor([[bar_id]]))
         assert result == ["=12"]
 
-    def test_i2tok_unknown_id(self, vocab):
+    def test_i2tok_unknown_id(self, vocab: Vocab) -> None:
         ids = torch.tensor([[5], [999], [6]])
         result = vocab.i2tok(ids)
         expected = ["token1", "UNK", "token2"]
         assert result == expected
 
-    def test_i2tok_empty(self, vocab):
-        ids = []
+    def test_i2tok_empty(self, vocab: Vocab) -> None:
+        ids = torch.empty(0)
         result = vocab.i2tok(ids)
-        expected = []
+        expected = torch.empty(0)
         assert result == expected
 
-    def test_save_and_load(self, vocab, sample_tok2i):
+    def test_save_and_load(self, vocab: Vocab, sample_tok2i: dict[str, int]) -> None:
         with tempfile.NamedTemporaryFile(delete=False) as f:
             path = Path(f.name)
         try:
@@ -118,7 +118,7 @@ class TestVocab:
         finally:
             path.unlink()
 
-    def test_from_files(self):
+    def test_from_files(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             dir_path = Path(temp_dir)
             # Create a .tokens file
@@ -144,13 +144,13 @@ class TestVocab:
             }
             assert vocab._tok2i == expected_tok2i
 
-    def test_from_files_no_files(self):
+    def test_from_files_no_files(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             dir_path = Path(temp_dir)
             vocab = Vocab.from_files(dir_path)
             assert vocab._tok2i == {"EOS": 3, "PAD": 0, "SIL": 4, "SOS": 2, "UNK": 1}
 
-    def test_constants(self):
+    def test_constants(self) -> None:
         assert Vocab.PAD_T == (0, "PAD")
         assert Vocab.UNK_T == (1, "UNK")
         assert Vocab.SOS_T == (2, "SOS")

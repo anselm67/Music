@@ -43,8 +43,8 @@ class Config:
 
     # Training config.
     batch_size: int = 16
-    train_len: int = 12500 * batch_size
-    valid_len: int = 100 * batch_size
+    train_len: int = -1
+    valid_len: int = -1
     max_steps: int = field(init=False)
     lr: float = 1e-4
     weight_decay: float = 1e-4
@@ -60,6 +60,10 @@ class Config:
             self.scale_to_patch(self.max_height),
             self.scale_to_patch(self.max_width),
         )
+        if self.train_len == -1:
+            self.train_len = 12500 * self.batch_size
+        if self.valid_len == -1:
+            self.valid_len = 100 * self.batch_size
         # Trains for 4 epochs by default.
         self.max_steps = 4 * (self.train_len // self.batch_size)
 
@@ -76,7 +80,7 @@ class PatchEmbedding(nn.Module):
     def __init__(self, config: Config):
         super().__init__()
         self.config = config
-        self.num_patch = (
+        num_patch = (
             config.image_shape[0] // config.patch_size,
             config.image_shape[1] // config.patch_size,
         )
@@ -87,7 +91,7 @@ class PatchEmbedding(nn.Module):
             stride=config.patch_size,
         )
         self.pos_embed = nn.Parameter(
-            0.02 * randn(self.num_patch[0] * self.num_patch[1], config.embed_dim)
+            0.02 * randn(num_patch[0] * num_patch[1], config.embed_dim)
         )
 
         self.dropout = nn.Dropout(config.dropout)
@@ -285,8 +289,6 @@ class PredictionHeads(nn.Module):
 
 
 class HierarchicalDETR(nn.Module):
-    config: Config
-
     def __init__(self, config: Config):
         super().__init__()
         self.config = config

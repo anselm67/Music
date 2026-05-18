@@ -15,7 +15,7 @@ from .staffer_model import Config, HierarchicalDETR
 
 
 class StafferModule(L.LightningModule):
-    def __init__(self, config: Config):
+    def __init__(self, config: Config) -> None:
         super().__init__()
         self.config = config
         self.model = HierarchicalDETR(config)
