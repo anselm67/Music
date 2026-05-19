@@ -5,13 +5,13 @@ from midi.typing import EventType, Pitch, Velocity
 
 
 class TestMidiTyping(unittest.TestCase):
-    def test_event_type_meta_helpers(self):
+    def test_event_type_meta_helpers(self) -> None:
         # Test helper methods for Meta events
         self.assertTrue(EventType.Tempo.is_meta())
         self.assertEqual(EventType.Tempo.code(), 0x51)
         self.assertTrue(EventType.is_meta_code(0xFF))
 
-    def test_event_type_channel_helpers(self):
+    def test_event_type_channel_helpers(self) -> None:
         # Test helper methods for Channel events
         self.assertTrue(EventType.NoteOn.is_channel())
         self.assertEqual(EventType.NoteOn.code(), 0x90)
@@ -20,17 +20,17 @@ class TestMidiTyping(unittest.TestCase):
         # 0xFF is Meta, not Channel
         self.assertFalse(EventType.is_channel_code(0xFF))
 
-    def test_event_type_sysex_helpers(self):
+    def test_event_type_sysex_helpers(self) -> None:
         self.assertTrue(EventType.is_sysex_code(0xF0))
         self.assertTrue(EventType.is_sysex_code(0xF7))
         self.assertFalse(EventType.is_sysex_code(0x90))
 
-    def test_notes_enum(self):
+    def test_notes_enum(self) -> None:
         # Spot check note values
         self.assertEqual(Pitch.C4.value, 60)
         self.assertEqual(Pitch.A4.value, 69)
 
-    def test_velocity_enum(self):
+    def test_velocity_enum(self) -> None:
         self.assertEqual(Velocity.Standard.value, 64)
 
 

@@ -6,7 +6,7 @@ from kern.typing import Bar, Duration, Instrument, Note, Pitch, Rest, Token
 
 
 class TestHumdrumParser(unittest.TestCase):
-    def ok(self, text: str):
+    def ok(self, text: str) -> None:
         parser = Parser.from_text(text, EmptyHandler())
         parser.parse()
 
@@ -15,7 +15,7 @@ class TestHumdrumParser(unittest.TestCase):
         with self.assertRaises(ValueError):
             parser.parse()
 
-    def parse_one_token(self, text: str, expected_token: Token):
+    def parse_one_token(self, text: str, expected_token: Token) -> None:
         mock_handler = Mock()
         handler_instance = mock_handler.return_value
         parser = Parser.from_text("**kern\n" + text + "\n", handler_instance)
@@ -25,25 +25,25 @@ class TestHumdrumParser(unittest.TestCase):
             [call([(handler_instance.open_spine.return_value, expected_token)])]
         )
 
-    def test_kerns(self):
+    def test_kerns(self) -> None:
         self.should_fail("")
         self.ok("**kern\t**kern\n*clefF4\t*clefG2")
 
-    def test_spine_indicators(self):
+    def test_spine_indicators(self) -> None:
         self.ok("**kern\t**kern\n*-\t*")
 
-    def test_suggested_duration_note(self):
+    def test_suggested_duration_note(self) -> None:
         # joplin/elite.krn has a lot of this(!)
         self.ok("**kern\n4C C\n")
 
-    def test_handler_called(self):
+    def test_handler_called(self) -> None:
         mock_handler = Mock()
         handler_instance = mock_handler.return_value
         parser = Parser.from_text("**kern\t**kern\n", handler_instance)
         parser.parse()
         self.assertEqual(handler_instance.open_spine.call_count, 2)
 
-    def test_note_parsing(self):
+    def test_note_parsing(self) -> None:
         mock_handler = Mock()
         handler_instance = mock_handler.return_value
         parser = Parser.from_text("**kern\n8A\n", handler_instance)
@@ -100,7 +100,7 @@ class TestHumdrumParser(unittest.TestCase):
             ]
         )
 
-    def test_some_tokens(self):
+    def test_some_tokens(self) -> None:
         self.parse_one_token("8A\n", Note(pitch=Pitch.A, duration=Duration(8)))
         self.parse_one_token(
             "8A-\n",
@@ -115,7 +115,7 @@ class TestHumdrumParser(unittest.TestCase):
             Note(pitch=Pitch.A, duration=Duration(8), sharps=2, starts_beam=2),
         )
 
-    def test_note_duration(self):
+    def test_note_duration(self) -> None:
         self.parse_one_token(
             "8.A\n",
             Note(
@@ -131,7 +131,7 @@ class TestHumdrumParser(unittest.TestCase):
             ),
         )
 
-    def test_rest_duration(self):
+    def test_rest_duration(self) -> None:
         self.parse_one_token(
             "8r\n",
             Rest(
@@ -145,7 +145,7 @@ class TestHumdrumParser(unittest.TestCase):
             ),
         )
 
-    def test_rest_duration_extra(self):
+    def test_rest_duration_extra(self) -> None:
         self.parse_one_token(
             "8ryy\n",
             Rest(
@@ -153,7 +153,7 @@ class TestHumdrumParser(unittest.TestCase):
             ),
         )
 
-    def test_open_before_note_token(self):
+    def test_open_before_note_token(self) -> None:
         self.parse_one_token(
             "(16..A\n",
             Note(
@@ -163,7 +163,7 @@ class TestHumdrumParser(unittest.TestCase):
             ),
         )
 
-    def test_ritardendo_note_token(self):
+    def test_ritardendo_note_token(self) -> None:
         # https://kern.humdrum.org/cgi-bin/ksdata?location=users/craig/classical/chopin/mazurka&file=mazurka06-1.krn&format=info
         self.parse_one_token(
             "(20%3A#\n",
@@ -175,7 +175,7 @@ class TestHumdrumParser(unittest.TestCase):
             ),
         )
 
-    def test_barred_gracenote_token(self):
+    def test_barred_gracenote_token(self) -> None:
         # https://kern.humdrum.org/cgi-bin/ksdata?location=users/craig/classical/chopin/mazurka&file=mazurka06-1.krn&format=info
         self.parse_one_token(
             "(<8qgg#/\n",
@@ -188,7 +188,7 @@ class TestHumdrumParser(unittest.TestCase):
             ),
         )
 
-    def test_wrapped_note_token(self):
+    def test_wrapped_note_token(self) -> None:
         # https://kern.humdrum.org/cgi-bin/ksdata?location=users/craig/classical/chopin/mazurka&file=mazurka06-1.krn&format=info
         self.parse_one_token(
             "&(4B#&)\n",
@@ -201,7 +201,7 @@ class TestHumdrumParser(unittest.TestCase):
             ),
         )
 
-    def test_thrilled_note(self):
+    def test_thrilled_note(self) -> None:
         self.parse_one_token(
             "4anT^\n",
             Note(
@@ -223,7 +223,7 @@ class TestHumdrumParser(unittest.TestCase):
             ),
         )
 
-    def test_drum_note(self):
+    def test_drum_note(self) -> None:
         self.parse_one_token(
             "4Rgg/L\n",
             Note(
@@ -236,7 +236,7 @@ class TestHumdrumParser(unittest.TestCase):
             ),
         )
 
-    def test_random_stuff_i_ve_run_into(self):
+    def test_random_stuff_i_ve_run_into(self) -> None:
         self.parse_one_token(
             "[</2b-\n",
             Note(
@@ -265,7 +265,7 @@ class TestHumdrumParser(unittest.TestCase):
             ),
         )
 
-    def test_some_asap_dataset_tokens(self):
+    def test_some_asap_dataset_tokens(self) -> None:
         self.parse_one_token(
             ".ZZZ16g#LL\n",
             Note(
@@ -282,7 +282,7 @@ class TestHumdrumParser(unittest.TestCase):
             ),
         )
 
-    def test_bar_number(self):
+    def test_bar_number(self) -> None:
         self.parse_one_token("= 7 \n", Bar("= 7", 7, False, False, False, False))
         self.parse_one_token(
             "==\n",

@@ -5,7 +5,7 @@ from pathlib import Path
 from kern.kern_reader import KernReader
 
 
-def get_kern_reader(content) -> KernReader:
+def get_kern_reader(content: str) -> KernReader:
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
         token_file = tmp_path / "example.tokens"

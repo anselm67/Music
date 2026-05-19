@@ -22,27 +22,27 @@ TEST_IODIR = FIXTURES / "midi"
 class CapturingMidiInput(MidiInput):
     events: list[Event]
 
-    def __init__(self, buf: array.array):
+    def __init__(self, buf: array.array) -> None:
         super().__init__(buf)
         self.events = []
 
-    def handle(self, event: Event):
+    def handle(self, event: Event) -> None:
         self.events.append(event)
 
 
 class TestMidiParser(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         TEST_IODIR.mkdir(parents=True, exist_ok=True)
         cls.create_mono_file()
         cls.create_multi_file()
 
     @classmethod
-    def tearDownClass(cls):
+    def tearDownClass(cls) -> None:
         shutil.rmtree(TEST_IODIR)
 
     @classmethod
-    def create_mono_file(cls):
+    def create_mono_file(cls) -> None:
         output = MidiOutput()
         # Header: Format 0, 1 Track
         hd = output.open_chunk("MThd")
@@ -63,7 +63,7 @@ class TestMidiParser(unittest.TestCase):
         output.save(TEST_IODIR / "mono.mid")
 
     @classmethod
-    def create_multi_file(cls):
+    def create_multi_file(cls) -> None:
         output = MidiOutput()
         # Header: Format 1, 2 Tracks
         hd = output.open_chunk("MThd")
@@ -95,7 +95,7 @@ class TestMidiParser(unittest.TestCase):
 
         output.save(TEST_IODIR / "multi.mid")
 
-    def test_parse_mono(self):
+    def test_parse_mono(self) -> None:
         path = TEST_IODIR / "mono.mid"
         with open(path, "rb") as f:
             buf = array.array("B", f.read())
@@ -114,7 +114,7 @@ class TestMidiParser(unittest.TestCase):
         self.assertEqual(note_ons[0].channel, Channel.Chan1)
         self.assertEqual(note_ons[0].note.value, 60)
 
-    def test_parse_multi(self):
+    def test_parse_multi(self) -> None:
         path = TEST_IODIR / "multi.mid"
         with open(path, "rb") as f:
             buf = array.array("B", f.read())

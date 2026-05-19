@@ -34,7 +34,9 @@ class TestHierarchicalLoss:
     def loss(self, config: Config) -> HierarchicalLoss:
         return HierarchicalLoss(config)
 
-    def _make_inputs(self, config: Config, num_sys: int, num_staves: int, B: int = 2):
+    def _make_inputs(
+        self, config: Config, num_sys: int, num_staves: int, B: int = 2
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, list[Tensor], list[Tensor], list[Tensor]]:
         N, M = (
             config.num_system_queries,
             config.num_stave_queries,
@@ -58,7 +60,7 @@ class TestHierarchicalLoss:
             gt_assign,
         )
 
-    def test_loss_is_scalar(self, loss: HierarchicalLoss, config: Config):
+    def test_loss_is_scalar(self, loss: HierarchicalLoss, config: Config) -> None:
         """Loss should return a scalar tensor."""
         inputs = self._make_inputs(config, num_sys=3, num_staves=5)
         result = loss(*inputs)
@@ -67,13 +69,13 @@ class TestHierarchicalLoss:
 
     def test_loss_single_system_single_stave(
         self, loss: HierarchicalLoss, config: Config
-    ):
+    ) -> None:
         """Minimal case — one system, one stave."""
         inputs = self._make_inputs(config, num_sys=1, num_staves=1)
         result = loss(*inputs)
         assert result.total() > 0
 
-    def test_loss_max_queries(self, loss: HierarchicalLoss, config: Config):
+    def test_loss_max_queries(self, loss: HierarchicalLoss, config: Config) -> None:
         """Loss should handle num_gt == num_queries without crashing."""
         N, M = config.num_system_queries, config.num_stave_queries
         inputs = self._make_inputs(config, num_sys=N, num_staves=M)
@@ -82,7 +84,7 @@ class TestHierarchicalLoss:
 
     def test_loss_decreases_with_better_boxes(
         self, loss: HierarchicalLoss, config: Config
-    ):
+    ) -> None:
         """Loss should be lower when predicted boxes match GT than when far away."""
         B = 1
         N, M = (
@@ -131,7 +133,7 @@ class TestHierarchicalLoss:
 
         assert good_loss.total() < bad_loss.total()
 
-    def test_loss_backward(self, loss: HierarchicalLoss, config: Config):
+    def test_loss_backward(self, loss: HierarchicalLoss, config: Config) -> None:
         """Loss should be differentiable."""
         B = 2
         N, M = (
@@ -165,7 +167,7 @@ class TestHierarchicalLoss:
         assert pred_stave_boxes.grad is not None
         assert pred_assign.grad is not None
 
-    def test_containment_loss_isolated(self, loss: HierarchicalLoss, config: Config):
+    def test_containment_loss_isolated(self, loss: HierarchicalLoss, config: Config) -> None:
         """Directly test _containment_loss — stave outside system yields higher loss."""
         N, M = config.num_system_queries, config.num_stave_queries
 
@@ -191,7 +193,7 @@ class TestHierarchicalLoss:
         assert good.item() == pytest.approx(0.0, abs=1e-5)
         assert bad.item() > 0.0
 
-    def test_containment_loss_isolated2(self, loss: HierarchicalLoss, config: Config):
+    def test_containment_loss_isolated2(self, loss: HierarchicalLoss, config: Config) -> None:
         """Directly test _containment_loss — stave outside system yields higher loss."""
         N, M = config.num_system_queries, config.num_stave_queries
 
@@ -207,7 +209,7 @@ class TestHierarchicalLoss:
 
         assert good.item() == pytest.approx(0.0, abs=1e-5)
 
-    def test_containment_loss_activates(self, loss: HierarchicalLoss, config: Config):
+    def test_containment_loss_activates(self, loss: HierarchicalLoss, config: Config) -> None:
         """Containment loss should be higher when staves stick out of their system."""
         B = 1
         N, M = (
@@ -272,7 +274,9 @@ class TestAlignmentLoss:
     def loss(self, config: Config) -> HierarchicalLoss:
         return HierarchicalLoss(config)
 
-    def _make_sys_and_staves(self, config: Config, num_staves: int):
+    def _make_sys_and_staves(
+        self, config: Config, num_staves: int
+    ) -> tuple[Tensor, Tensor, Tensor, int]:
         N, M = config.num_system_queries, config.num_stave_queries
         gt_assign = make_assign(num_staves, 1, M)
         sys_boxes = torch.ones(N, 4)
@@ -281,7 +285,7 @@ class TestAlignmentLoss:
 
     def test_perfect_alignment_yields_zero(
         self, loss: HierarchicalLoss, config: Config
-    ):
+    ) -> None:
         """When stave edges perfectly match system edges, loss should be zero."""
         N, M = config.num_system_queries, config.num_stave_queries
         gt_assign = make_assign(2, 1, M)
@@ -301,7 +305,7 @@ class TestAlignmentLoss:
         result = loss._alignment_loss(sys_boxes, stave_boxes, gt_assign, 2, 1)
         assert result.item() == pytest.approx(0.0, abs=1e-5)
 
-    def test_misaligned_top(self, loss: HierarchicalLoss, config: Config):
+    def test_misaligned_top(self, loss: HierarchicalLoss, config: Config) -> None:
         """Top of first stave not matching system top should yield positive loss."""
         N, M = config.num_system_queries, config.num_stave_queries
         gt_assign = make_assign(1, 1, M)
@@ -316,7 +320,7 @@ class TestAlignmentLoss:
         result = loss._alignment_loss(sys_boxes, stave_boxes, gt_assign, 1, 1)
         assert result.item() > 0.0
 
-    def test_misaligned_sides(self, loss: HierarchicalLoss, config: Config):
+    def test_misaligned_sides(self, loss: HierarchicalLoss, config: Config) -> None:
         """Stave sides not matching system sides should yield positive loss."""
         N, M = config.num_system_queries, config.num_stave_queries
         gt_assign = make_assign(1, 1, M)
@@ -331,7 +335,9 @@ class TestAlignmentLoss:
         result = loss._alignment_loss(sys_boxes, stave_boxes, gt_assign, 1, 1)
         assert result.item() > 0.0
 
-    def test_better_alignment_lower_loss(self, loss: HierarchicalLoss, config: Config):
+    def test_better_alignment_lower_loss(
+        self, loss: HierarchicalLoss, config: Config
+    ) -> None:
         """Better aligned staves should yield lower loss than misaligned ones."""
         N, M = config.num_system_queries, config.num_stave_queries
         gt_assign = make_assign(2, 1, M)
@@ -354,7 +360,7 @@ class TestAlignmentLoss:
 
         assert good_loss.item() < bad_loss.item()
 
-    def test_multiple_systems(self, loss: HierarchicalLoss, config: Config):
+    def test_multiple_systems(self, loss: HierarchicalLoss, config: Config) -> None:
         """Loss should handle multiple systems correctly."""
         N, M = config.num_system_queries, config.num_stave_queries
         gt_assign = make_assign(4, 2, M)

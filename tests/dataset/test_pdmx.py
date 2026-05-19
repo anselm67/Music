@@ -6,7 +6,7 @@ from dataset import PDMX
 
 
 class TestPDMX:
-    def test_get_path(self, tmp_path: Path):
+    def test_get_path(self, tmp_path: Path) -> None:
         (tmp_path / "PDMX.csv").write_text("id\n1")
         pdmx = PDMX(tmp_path)
         assert (
@@ -25,7 +25,7 @@ class TestPDMX:
         with pytest.raises(ValueError):
             pdmx.get_path(Path(tmp_path), "mxl")
 
-    def test_get_page_path(self, tmp_path: Path):
+    def test_get_page_path(self, tmp_path: Path) -> None:
         (tmp_path / "PDMX.csv").write_text("id\n1")
         pdmx = PDMX(tmp_path)
         assert (

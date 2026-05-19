@@ -4,7 +4,7 @@ from kern.typing import Duration
 
 
 class TestDuration(unittest.TestCase):
-    def test_length(self):
+    def test_length(self) -> None:
         # Test length calculation for a Duration object
         d = Duration(4, 0)
         self.assertEqual(d.length, 0.25)
@@ -15,7 +15,7 @@ class TestDuration(unittest.TestCase):
         d = Duration(4, 3)
         self.assertEqual(d.length, 0.25 + 0.125 + 0.0625 + 0.03125)
 
-    def test_from_length(self):
+    def test_from_length(self) -> None:
         # Test creation of Duration object from length
         d = Duration.from_length(0.25)
         self.assertEqual(d, Duration(4, 0))
@@ -26,7 +26,7 @@ class TestDuration(unittest.TestCase):
         d = Duration.from_length(0.25 + 0.125 + 0.0625 + 0.03125)
         self.assertEqual(d, Duration(4, 3))
 
-    def test_substract(self):
+    def test_substract(self) -> None:
         # Test subtraction of two Duration objects
         d1 = Duration(4, 0)
         d2 = Duration(8, 0)

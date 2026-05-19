@@ -7,12 +7,12 @@ from midi import Channel, MidiOutput, Pitch, Velocity
 
 
 class TestMidiOutput(unittest.TestCase):
-    def test_append(self):
+    def test_append(self) -> None:
         output = MidiOutput()
         output.append([0x01, 0x02, 0x03])
         self.assertEqual(output.buf.tolist(), [1, 2, 3])
 
-    def test_varlen(self):
+    def test_varlen(self) -> None:
         # Test cases for variable length encoding (value -> expected bytes)
         cases = [
             (0, [0x00]),
@@ -26,7 +26,7 @@ class TestMidiOutput(unittest.TestCase):
             output.varlen(val)
             self.assertEqual(output.buf.tolist(), expected, f"Failed for value {val}")
 
-    def test_write_ints(self):
+    def test_write_ints(self) -> None:
         output = MidiOutput()
         output.write_u32(0x12345678)
         self.assertEqual(output.buf.tolist(), [0x12, 0x34, 0x56, 0x78])
@@ -39,7 +39,7 @@ class TestMidiOutput(unittest.TestCase):
         output.write_u16(0x1234)
         self.assertEqual(output.buf.tolist(), [0x12, 0x34])
 
-    def test_chunks(self):
+    def test_chunks(self) -> None:
         output = MidiOutput()
         # Start a header chunk
         off = output.open_chunk("MThd")
@@ -61,7 +61,7 @@ class TestMidiOutput(unittest.TestCase):
         ]
         self.assertEqual(output.buf.tolist(), expected)
 
-    def test_time_signature(self):
+    def test_time_signature(self) -> None:
         output = MidiOutput()
         output.time_signature((4, 4))
         # Expect: delta_time(0) + Meta Event (FF 58 04) + 4/4 params
@@ -75,7 +75,7 @@ class TestMidiOutput(unittest.TestCase):
         expected_6_8 = [0x00, 0xFF, 0x58, 0x04, 0x06, 0x03, 36, 8]
         self.assertEqual(output.buf.tolist(), expected_6_8)
 
-    def test_note_events(self):
+    def test_note_events(self) -> None:
         output = MidiOutput()
         output.note_on(Channel.Chan1, Pitch.C4, Velocity.Standard)
         # dt=0 (0x00), NoteOn Ch1 (0x90 | 1 = 0x91), Note 60, Vel 64
@@ -86,7 +86,7 @@ class TestMidiOutput(unittest.TestCase):
         # dt=0 (0x00), NoteOff Ch1 (0x80 | 1 = 0x81), Note 60, Vel 64 (default)
         self.assertEqual(output.buf.tolist(), [0x00, 0x81, 60, 64])
 
-    def test_tempo(self):
+    def test_tempo(self) -> None:
         output = MidiOutput()
         output.tempo(120)
         # 120 bpm = 500,000 microseconds per quarter note (0x07A120)
@@ -94,7 +94,7 @@ class TestMidiOutput(unittest.TestCase):
         expected = [0x00, 0xFF, 0x51, 0x03, 0x07, 0xA1, 0x20]
         self.assertEqual(output.buf.tolist(), expected)
 
-    def test_save(self):
+    def test_save(self) -> None:
         output = MidiOutput()
         output.append([0x90, 60, 64])
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
@@ -107,7 +107,7 @@ class TestMidiOutput(unittest.TestCase):
             finally:
                 os.unlink(tmp.name)
 
-    def test_append_track(self):
+    def test_append_track(self) -> None:
         output1 = MidiOutput()
         output1.append([0x01, 0x02])
 

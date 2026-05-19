@@ -7,7 +7,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 class TestHumdrumFixtures(unittest.TestCase):
-    def test_fixtures(self):
+    def test_fixtures(self) -> None:
         for file in FIXTURES.glob("*.krn"):
             try:
                 parser = Parser.from_file(file, EmptyHandler())

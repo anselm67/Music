@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import call, patch
+from unittest.mock import MagicMock, call, patch
 
 from kern import Duration, Note, Parser
 from kern import Pitch as KernPitch
@@ -9,7 +9,7 @@ from midi import Pitch as MidiPitch
 
 
 class TestToMidi(unittest.TestCase):
-    def test_note_to_midi_octave(self):
+    def test_note_to_midi_octave(self) -> None:
         note = Note(Duration(4, 0), KernPitch.CCCC)
         midi = note_to_midi(note)
         self.assertEqual(midi, MidiPitch.CX)
@@ -22,7 +22,7 @@ class TestToMidi(unittest.TestCase):
         midi = note_to_midi(note)
         self.assertEqual(midi, MidiPitch.C7)
 
-    def test_note_to_midi_sharp(self):
+    def test_note_to_midi_sharp(self) -> None:
         note = Note(Duration(4, 0), KernPitch.f, sharps=1)
         midi = note_to_midi(note)
         self.assertEqual(midi, MidiPitch.F3Sharp)
@@ -40,7 +40,7 @@ class TestToMidi(unittest.TestCase):
         self.assertEqual(midi, MidiPitch.C5)
         self.assertEqual(midi, MidiPitch.C5)
 
-    def test_handler_channel(self):
+    def test_handler_channel(self) -> None:
         handler = MidiHandler(480, 120)
         self.assertEqual(handler.allocate_channel(), Channel.Chan0)
         self.assertEqual(handler.allocate_channel(), Channel.Chan1)
@@ -57,7 +57,7 @@ class TestToMidi(unittest.TestCase):
         self.assertEqual(handler.allocate_channel(), Channel.Chan0)
 
     @patch("kern.to_midi.MidiOutput")
-    def test_generating_bar_single_staff(self, mock_midi_output):
+    def test_generating_bar_single_staff(self, mock_midi_output: MagicMock) -> None:
         handler = MidiHandler(480, 120)
         # A simple bar with two quarter notes: C and D
         parser = Parser.from_text("**kern\n4c\n4d\n*-", handler)
@@ -77,7 +77,7 @@ class TestToMidi(unittest.TestCase):
         mock_midi_output.return_value.assert_has_calls(expected_calls, any_order=False)
 
     @patch("kern.to_midi.MidiOutput")
-    def test_chord_conversion(self, mock_midi_output):
+    def test_chord_conversion(self, mock_midi_output: MagicMock) -> None:
         handler = MidiHandler(480, 120)
         # Chord C E G
         parser = Parser.from_text("**kern\n4c 4e 4g\n*-", handler)

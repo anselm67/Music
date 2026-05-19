@@ -9,7 +9,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 class TestUtils(unittest.TestCase):
-    def test_reads_lines(self):
+    def test_reads_lines(self) -> None:
         path = FIXTURES / "sample.txt"
         lines = list(iterable_from_file(path))
         self.assertEqual(len(lines), 3)
@@ -17,12 +17,12 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(lines[1], "Line 2")
         self.assertEqual(lines[2], "Line 3")
 
-    def test_path_substract(self):
+    def test_path_substract(self) -> None:
         shorter = Path("/home/user/project")
         longer = Path("/home/user/project/src/main.py")
         self.assertEqual(path_substract(shorter, longer), Path("src/main.py"))
 
-    def test_from_json_dataclass(self):
+    def test_from_json_dataclass(self) -> None:
 
         @dataclass
         class Child:
