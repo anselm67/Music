@@ -39,12 +39,12 @@ def make_pdmx(tmp_path: Path) -> PDMX:
     return pdmx
 
 
-def make_maker(tmp_path: Path, force=False, dry_run=False) -> PDMXMaker:
+def make_maker(tmp_path: Path, force: bool = False, dry_run: bool = False) -> PDMXMaker:
     pdmx = make_pdmx(tmp_path)
     return PDMXMaker(pdmx, force=force, dry_run=dry_run)
 
 
-def touch(path: Path, mtime: float | None = None):
+def touch(path: Path, mtime: float | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.touch()
     if mtime is not None:
@@ -59,18 +59,18 @@ def touch(path: Path, mtime: float | None = None):
 
 
 class TestNewer:
-    def test_binaries(self):
+    def test_binaries(self) -> None:
         assert verovio_binary() == Path("/usr/bin/true")
         assert rsvgconvert_binary() == Path("/usr/bin/true")
 
-    def test_dst_does_not_exist(self, tmp_path):
+    def test_dst_does_not_exist(self, tmp_path: Path) -> None:
         src = tmp_path / "src.mxl"
         dst = tmp_path / "dst.svg"
         touch(src)
         maker = make_maker(tmp_path)
         assert not maker.newer(src, dst, check_err_file=False)
 
-    def test_dst_older_than_src(self, tmp_path):
+    def test_dst_older_than_src(self, tmp_path: Path) -> None:
         src = tmp_path / "src.mxl"
         dst = tmp_path / "dst.svg"
         now = time.time()
@@ -79,7 +79,7 @@ class TestNewer:
         maker = make_maker(tmp_path)
         assert not maker.newer(src, dst, check_err_file=False)
 
-    def test_dst_newer_than_src(self, tmp_path):
+    def test_dst_newer_than_src(self, tmp_path: Path) -> None:
         src = tmp_path / "src.mxl"
         dst = tmp_path / "dst.svg"
         now = time.time()
@@ -95,7 +95,7 @@ class TestNewer:
 
 
 class TestShouldRefreshSvg:
-    def test_force_always_refreshes(self, tmp_path):
+    def test_force_always_refreshes(self, tmp_path: Path) -> None:
         p = make_maker(tmp_path, force=True)
         mxl = tmp_path / "mxl/1/aa/score.mxl"
         svg = tmp_path / "svg/1/aa/score.svg"
@@ -104,7 +104,7 @@ class TestShouldRefreshSvg:
         touch(svg, now)
         assert p.should_refresh_svg(mxl, svg) is True
 
-    def test_svg_up_to_date(self, tmp_path):
+    def test_svg_up_to_date(self, tmp_path: Path) -> None:
         p = make_maker(tmp_path)
         mxl = tmp_path / "mxl/1/aa/score.mxl"
         svg = tmp_path / "svg/1/aa/score.svg"
@@ -113,14 +113,14 @@ class TestShouldRefreshSvg:
         touch(svg, now)
         assert p.should_refresh_svg(mxl, svg) is False
 
-    def test_svg_missing(self, tmp_path):
+    def test_svg_missing(self, tmp_path: Path) -> None:
         p = make_maker(tmp_path)
         mxl = tmp_path / "mxl/1/aa/score.mxl"
         svg = tmp_path / "svg/1/aa/score.svg"
         touch(mxl)
         assert p.should_refresh_svg(mxl, svg) is True
 
-    def test_multipage_svg_up_to_date(self, tmp_path):
+    def test_multipage_svg_up_to_date(self, tmp_path: Path) -> None:
         p = make_maker(tmp_path)
         mxl = tmp_path / "mxl/1/aa/score.mxl"
         svg = tmp_path / "svg/1/aa/score.svg"
@@ -136,13 +136,13 @@ class TestShouldRefreshSvg:
 
 
 class TestCollectSvgFiles:
-    def test_single_page(self, tmp_path):
+    def test_single_page(self, tmp_path: Path) -> None:
         p = make_maker(tmp_path)
         svg = tmp_path / "svg/1/aa/score.svg"
         touch(svg)
         assert p.collect_svg_files(svg) == [svg]
 
-    def test_multi_page(self, tmp_path):
+    def test_multi_page(self, tmp_path: Path) -> None:
         p = make_maker(tmp_path)
         svg = tmp_path / "svg/1/aa/score.svg"
         pages = [svg.with_stem(f"score_{i:03d}") for i in range(1, 4)]
@@ -150,7 +150,7 @@ class TestCollectSvgFiles:
             touch(page)
         assert p.collect_svg_files(svg) == pages
 
-    def test_no_svg_returns_none(self, tmp_path):
+    def test_no_svg_returns_none(self, tmp_path: Path) -> None:
         p = make_maker(tmp_path)
         svg = tmp_path / "svg/1/aa/score.svg"
         assert p.collect_svg_files(svg) is None
@@ -162,7 +162,7 @@ class TestCollectSvgFiles:
 
 
 class TestShouldRefreshLayout:
-    def test_force_always_refreshes(self, tmp_path):
+    def test_force_always_refreshes(self, tmp_path: Path) -> None:
         p = make_maker(tmp_path, force=True)
         svg = tmp_path / "svg/1/aa/score.svg"
         json_file = tmp_path / "layout/1/aa/score.json"
@@ -171,7 +171,7 @@ class TestShouldRefreshLayout:
         touch(json_file, now)
         assert p.should_refresh_layout([svg], json_file) is True
 
-    def test_all_svgs_up_to_date(self, tmp_path):
+    def test_all_svgs_up_to_date(self, tmp_path: Path) -> None:
         p = make_maker(tmp_path)
         now = time.time()
         svgs = [tmp_path / f"svg/1/aa/score_{i:03d}.svg" for i in range(1, 3)]
@@ -181,7 +181,7 @@ class TestShouldRefreshLayout:
         touch(json_file, now)
         assert p.should_refresh_layout(svgs, json_file) is False
 
-    def test_json_missing(self, tmp_path):
+    def test_json_missing(self, tmp_path: Path) -> None:
         p = make_maker(tmp_path)
         svg = tmp_path / "svg/1/aa/score.svg"
         json_file = tmp_path / "layout/1/aa/score.json"
@@ -199,12 +199,14 @@ class TestShouldRefreshLayout:
 
 class TestExec:
     @pytest.mark.asyncio
-    async def test_successful_command(self, tmp_path):
+    async def test_successful_command(self, tmp_path: Path) -> None:
         p = make_maker(tmp_path)
         await p.exec(Path("/usr/bin/true"), [])
 
     @pytest.mark.asyncio
-    async def test_failed_command_logs_error(self, tmp_path, caplog):
+    async def test_failed_command_logs_error(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
         import logging
 
         p = make_maker(tmp_path)
@@ -213,7 +215,7 @@ class TestExec:
         assert caplog.records  # some error was logged
 
     @pytest.mark.asyncio
-    async def test_cancelled_kills_process(self, tmp_path):
+    async def test_cancelled_kills_process(self, tmp_path: Path) -> None:
         p = make_maker(tmp_path)
         task = asyncio.create_task(p.exec(Path("/usr/bin/sleep"), ["10"]))
         await asyncio.sleep(0.05)
@@ -229,11 +231,11 @@ class TestExec:
 
 class TestRun:
     @pytest.mark.asyncio
-    async def test_all_valid_rows_queued(self, tmp_path):
+    async def test_all_valid_rows_queued(self, tmp_path: Path) -> None:
         p = make_maker(tmp_path)
         queued = []
 
-        async def fake_worker():
+        async def fake_worker() -> None:
             while True:
                 try:
                     task = p.queue.get_nowait()
@@ -248,7 +250,7 @@ class TestRun:
         assert p.queue.empty()
 
     @pytest.mark.asyncio
-    async def test_single_mxl_queued(self, tmp_path):
+    async def test_single_mxl_queued(self, tmp_path: Path) -> None:
         p = make_maker(tmp_path)
         mxl = tmp_path / "mxl/1/aa/score.mxl"
         touch(mxl)
@@ -261,7 +263,9 @@ class TestRun:
         assert task.mxl_file == mxl
 
     @pytest.mark.asyncio
-    async def test_invalid_mxl_row_skipped(self, tmp_path, caplog):
+    async def test_invalid_mxl_row_skipped(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
         import logging
 
         p = make_maker(tmp_path)
@@ -281,7 +285,9 @@ class TestRun:
 
 class TestDryRun:
     @pytest.mark.asyncio
-    async def test_mxl_task_dry_run_logs_command(self, tmp_path, caplog):
+    async def test_mxl_task_dry_run_logs_command(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
         import logging
 
         p = make_maker(tmp_path, dry_run=True)
@@ -299,7 +305,7 @@ class TestDryRun:
         assert any("verovio" in r.message for r in caplog.records)
 
     @pytest.mark.asyncio
-    async def test_svg_task_dry_run_no_exec(self, tmp_path):
+    async def test_svg_task_dry_run_no_exec(self, tmp_path: Path) -> None:
         p = make_maker(tmp_path, dry_run=True)
         svg = tmp_path / "svg/1/aa/score.svg"
         json_file = p.pdmx.get_path(svg, "layout")
