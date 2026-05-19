@@ -15,7 +15,7 @@ class RecordingWalker(Walker):
         super().__init__(root)
         self.processed: list[Path] = []
 
-    async def process(self, cmd_builder: Walker.CommandBuilder, file: Path):
+    async def process(self, cmd_builder: Walker.CommandBuilder, file: Path) -> None:
         self.processed.append(file)
 
 
@@ -32,7 +32,7 @@ def command_builder(file: Path) -> tuple[str, list[str]]:
 
 
 @pytest.mark.asyncio
-async def test_all_files_processed(tmp_path):
+async def test_all_files_processed(tmp_path: Path) -> None:
     (tmp_path / "a.mxl").touch()
     (tmp_path / "b.mxl").touch()
     (tmp_path / "sub").mkdir()
@@ -45,7 +45,7 @@ async def test_all_files_processed(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_only_matching_glob(tmp_path):
+async def test_only_matching_glob(tmp_path: Path) -> None:
     (tmp_path / "a.mxl").touch()
     (tmp_path / "b.txt").touch()
 
@@ -57,7 +57,7 @@ async def test_only_matching_glob(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_empty_directory(tmp_path):
+async def test_empty_directory(tmp_path: Path) -> None:
     walker = RecordingWalker(tmp_path)
     await walker.run("*.mxl", command_builder)
 
@@ -65,7 +65,7 @@ async def test_empty_directory(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_concurrency_limit(tmp_path):
+async def test_concurrency_limit(tmp_path: Path) -> None:
     for i in range(20):
         (tmp_path / f"{i}.mxl").touch()
 
@@ -73,7 +73,7 @@ async def test_concurrency_limit(tmp_path):
     peak = 0
 
     class PeakWalker(Walker):
-        async def process(self, cmd_builder: Walker.CommandBuilder, file: Path):
+        async def process(self, cmd_builder: Walker.CommandBuilder, file: Path) -> None:
             nonlocal active, peak
             active += 1
             peak = max(peak, active)
@@ -87,7 +87,7 @@ async def test_concurrency_limit(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_process_called_with_correct_paths(tmp_path):
+async def test_process_called_with_correct_paths(tmp_path: Path) -> None:
     expected = {tmp_path / "a.mxl", tmp_path / "b.mxl"}
     for f in expected:
         f.touch()
