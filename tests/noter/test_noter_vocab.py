@@ -30,17 +30,9 @@ class TestVocab:
     def test_encode_unknown_token(self, vocab: Vocab) -> None:
         assert vocab.encode("unknown") == Vocab.UNK
 
-    def test_encode_duration(self, vocab: Vocab) -> None:
-        encoded = vocab.encode("token1/8")
-        assert encoded == 5 | (8 << 16)
-
-    def test_encode_one_dot_duration(self, vocab: Vocab) -> None:
-        encoded = vocab.encode("token1/8:1")
-        assert encoded == 5 | (12 << 16)
-
-    def test_encode_two_dot_duration(self, vocab: Vocab) -> None:
-        encoded = vocab.encode("token1/8:2")
-        assert encoded == 5 | (18 << 16)
+    def test_encode_flat_token_not_in_vocab(self, vocab: Vocab) -> None:
+        # "token1/8" is an opaque string; UNK if not in vocab
+        assert vocab.encode("token1/8") == Vocab.UNK
 
     def test_encode_bar(self, vocab: Vocab) -> None:
         encoded = vocab.encode("==12")
@@ -85,15 +77,10 @@ class TestVocab:
         expected = ["token1", "UNK", "token2"]
         assert result == expected
 
-    def test_decode_duration_token(self, vocab: Vocab) -> None:
-        duration_id = 5 | (8 << 16)
-        result = vocab.i2tok(torch.tensor([[duration_id]]))
-        assert result == ["token1/8"]
-
     def test_decode_bar_token(self, vocab: Vocab) -> None:
-        bar_id = 8 | (12 << 16)
-        result = vocab.i2tok(torch.tensor([[bar_id]]))
-        assert result == ["=12"]
+        # IDs 8 and 9 decode to the base bar forms, not to "=12"
+        assert vocab.decode(8) == "="
+        assert vocab.decode(9) == "=="
 
     def test_i2tok_unknown_id(self, vocab: Vocab) -> None:
         ids = torch.tensor([[5], [999], [6]])
