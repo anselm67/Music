@@ -27,7 +27,7 @@ For the noter model, the same process applies:
 
 ```bash
 # Select all scores that have systems of only one staff:
-pdmx query -o System2.csv 'index==index' --score 'pages.0.systems.0.staff_count <= 2' --valid
+pdmx query -o System2.csv 'index==index' --score 'pages.0.systems.0.staff_count <= 2' --valid --bar-match
 ```
 
 TODO List:

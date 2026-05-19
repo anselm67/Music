@@ -6,9 +6,9 @@ PDMX Main repo is https://zenodo.org/records/14648209
 """
 
 import logging
+import sys
 from dataclasses import dataclass
 from pathlib import Path
-import sys
 
 import click
 
@@ -102,6 +102,14 @@ def cli(
     show_default=True,
     help="Keeps valid entry with proper svg, png, layout, krn and tokens.",
 )
+@click.option(
+    "--bar-match",
+    "-b",
+    default=False,
+    is_flag=True,
+    show_default=True,
+    help="Keeps only entries where kern and SVG bar numbers agree on every system.",
+)
 @click.option("--columns", "-c", multiple=True, help="Names of columns to display")
 @click.option(
     "--output",
@@ -116,6 +124,7 @@ def query(
     query_string: str,
     metadata: str | None,
     valid: bool,
+    bar_match: bool,
     score: str | None,
     columns: tuple[str],
     output: Path | None,
@@ -124,7 +133,9 @@ def query(
 
     QUERY_STRING: The base panda query to run.
     """
-    result = ctx.pdmx.query(query_string, metadata=metadata, score=score, valid=valid)
+    result = ctx.pdmx.query(
+        query_string, metadata=metadata, score=score, valid=valid, bar_match=bar_match
+    )
     if columns:
         result = result[list(columns)]
     if output is not None:

@@ -177,6 +177,20 @@ class PDMX:
         err_path.parent.mkdir(parents=True, exist_ok=True)
         err_path.touch()
 
+    @staticmethod
+    def _bars_match(score: Score) -> bool:
+        for page in score.pages:
+            for system in page.systems:
+                bn = system.bar_numbers
+                sbn = system.svg_bar_numbers
+                if not bn or not sbn:
+                    return False
+                if sbn[0] is None or sbn[0] != bn[0]:
+                    return False
+                if sbn[-1] is None or sbn[-1] != bn[-1]:
+                    return False
+        return True
+
     def _is_valid(self, mxl_path: Path, score: Score) -> bool:
         if not mxl_path.exists():
             return False
@@ -202,7 +216,12 @@ class PDMX:
         return True
 
     def query(
-        self, query_string: str, metadata: str | None, score: str | None, valid: bool
+        self,
+        query_string: str,
+        metadata: str | None,
+        score: str | None,
+        valid: bool,
+        bar_match: bool,
     ) -> pd.DataFrame:
         metadata_filter, score_filter = (
             compile_filter(metadata) if metadata else None,
@@ -210,7 +229,12 @@ class PDMX:
         )
 
         df = self.df.query(query_string)
-        if metadata_filter is not None or score_filter is not None:
+        if (
+            metadata_filter is not None
+            or score_filter is not None
+            or valid
+            or bar_match
+        ):
 
             def filter_row(row: Any) -> bool:
                 mxl_str = row["mxl"]
@@ -222,12 +246,18 @@ class PDMX:
                         metadata = json.loads(metadata_file.read_text())
                         if not metadata_filter(metadata):
                             return False
-                    if valid or score_filter is not None:
+                    if valid or score_filter is not None or bar_match:
                         layout_file = self.get_path((self.home / row["mxl"]), "layout")
-                        score = Score.from_json(json.loads(layout_file.read_text()))
-                        if score_filter and not score_filter(score):
+                        loaded_score = Score.from_json(
+                            json.loads(layout_file.read_text())
+                        )
+                        if score_filter and not score_filter(loaded_score):
                             return False
-                        if valid and not self._is_valid(self.home / mxl_str, score):
+                        if valid and not self._is_valid(
+                            self.home / mxl_str, loaded_score
+                        ):
+                            return False
+                        if bar_match and not self._bars_match(loaded_score):
                             return False
                     return True
                 except (FileNotFoundError, json.JSONDecodeError):
