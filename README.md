@@ -16,7 +16,7 @@ To extract a reasonable subset from PDMX, you can use something like this:
 
 ```bash
 # Select scores that have all pages rendering less than 16 staves.
-pdmx query -o Staff16.cvs 'index==index' --score 'pages.*.staff_count < 16'
+pdmx query -o Staff16.cvs 'index==index' --score 'pages.*.staff_count < 16' --valid
 # Displays subset general statistics.
 pdmx --csv subset.csv stats
 # Train the staffer on that dataset.
@@ -31,16 +31,11 @@ pdmx query -o System2.csv 'index==index' --score 'pages.0.systems.0.staff_count 
 ```
 
 TODO List:
-- pdmx: add a validate command to filter out from the underlying csv any row that isn't completly made (eg that's missing a tokens file  or carries broken images).
-```bash
-  # pdmx --csv Staff16.csv validate -o ValidStaff16.csv
-```
-- Add a validate command to staffer that gives real metrics on full set validation; Requires a new DataLoader to pick from the samples not used during training.
+- NoterModel needs to predict the pitch and duration of each note separately? Or Vocab.encode needs to be reworked.
 - Simplify the network output so staff becomes two coordinates only (top, bottom) derive other coordinates from the system
 - import editor from projects/Staffer or projects/OMR
-- Remove bar prediction from the model
 - move staffer model, dataset into a staffer package
-
+- vocab: should only scan the tokens file included in the training set eg System2.csv, not all tokens files found under build/tokens
 Pending fixes:
 - The tokenizer should check the length of the first bars against the metric and decide based on that where the number 1 falls.
 - In mxl/14/10/QmWAGXyEP8SJRRRPSy5jpFvX9MRGPqPUuHkUay19hAy8wM.mxl the rendering is missing the first few bars and is therefore out of sync.
