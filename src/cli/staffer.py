@@ -25,8 +25,13 @@ from torchinfo import summary as model_summary
 from torchvision.io import decode_image
 
 from pdmx import PDMX, Box
-from staffer import StafferDataModule, StafferDataset
-from staffer import Config, HierarchicalDETR, StafferModule
+from staffer import (
+    Config,
+    HierarchicalDETR,
+    StafferDataModule,
+    StafferDataset,
+    StafferModule,
+)
 
 HOME = Path("/home/anselm/datasets/PDMX")
 
@@ -314,7 +319,7 @@ def train(
         callbacks=callbacks,
         log_every_n_steps=100,
         val_check_interval=VAL_CHECK_INTERVAL,
-        precision="16-mixed",
+        precision="bf16-mixed",
         enable_model_summary=False,
         enable_progress_bar=not hide_progress,
     )
