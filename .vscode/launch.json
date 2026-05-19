@@ -189,6 +189,17 @@
                 "1000",
                 "show"
             ]
+        },
+        {
+            "name": "noter vocab",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "cli.noter",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "args": [
+                "vocab"
+            ]
         }
     ]
 }

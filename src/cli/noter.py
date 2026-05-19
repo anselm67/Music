@@ -97,7 +97,7 @@ def cli(
 @click.pass_obj
 def vocab(ctx: ClickContext) -> None:
     """Generates the vocab pickle file from PDMX token files."""
-    vocab = Vocab.from_files(ctx.home / "build" / "tokens")
+    vocab = Vocab.from_pdmx(ctx.pdmx)
     vocab.save(ctx.home / "build" / "vocab.json")
 
 

@@ -44,7 +44,7 @@ class TestVocab:
 
     def test_encode_bar(self, vocab: Vocab) -> None:
         encoded = vocab.encode("==12")
-        assert encoded == 9 | (12 << 16)
+        assert encoded == 9 
 
     def test_tok2i_normal(self, vocab: Vocab) -> None:
         tokens = ["token1", "token2"]
@@ -104,8 +104,7 @@ class TestVocab:
     def test_i2tok_empty(self, vocab: Vocab) -> None:
         ids = torch.empty(0)
         result = vocab.i2tok(ids)
-        expected = []
-        assert result == expected
+        assert result == []
 
     def test_save_and_load(self, vocab: Vocab, sample_tok2i: dict[str, int]) -> None:
         with tempfile.NamedTemporaryFile(delete=False) as f:
@@ -123,14 +122,16 @@ class TestVocab:
             dir_path = Path(temp_dir)
             # Create a .tokens file
             tokens_file = dir_path / "test.tokens"
-            tokens_file.write_text("token1 token2\ntoken3 token1\n")
+            tokens_file.write_text(
+                "token1 token2\ntoken3 token1\ntoken1 token2\ntoken3 token1\n"
+            )
             # Create another file
             sub_dir = dir_path / "sub"
             sub_dir.mkdir()
             tokens_file2 = sub_dir / "another.tokens"
-            tokens_file2.write_text("token4\n")
+            tokens_file2.write_text("token4\ntoken4\n")
 
-            vocab = Vocab.from_files(dir_path)
+            vocab = Vocab.from_files([tokens_file, tokens_file2])
             expected_tok2i = {
                 "EOS": 3,
                 "PAD": 0,
@@ -145,10 +146,8 @@ class TestVocab:
             assert vocab._tok2i == expected_tok2i
 
     def test_from_files_no_files(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            dir_path = Path(temp_dir)
-            vocab = Vocab.from_files(dir_path)
-            assert vocab._tok2i == {"EOS": 3, "PAD": 0, "SIL": 4, "SOS": 2, "UNK": 1}
+        vocab = Vocab.from_files([])
+        assert vocab._tok2i == {"EOS": 3, "PAD": 0, "SIL": 4, "SOS": 2, "UNK": 1}
 
     def test_constants(self) -> None:
         assert Vocab.PAD_T == (0, "PAD")

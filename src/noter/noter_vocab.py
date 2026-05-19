@@ -1,10 +1,13 @@
 import json
 import logging
 import re
+from collections import defaultdict
 from pathlib import Path
 
 import torch
 from torch import Tensor
+
+from dataset import PDMX
 
 
 class Vocab:
@@ -51,8 +54,8 @@ class Vocab:
                 dots -= 1
             return base | (duration << 16)
         elif m := self.BAR_RE.match(str_tok):
-            base = self._tok2i.get(m.group("base"), self.UNK)
-            return base | (int(m.group("barno")) << 16)
+            # We don't encode the bar number around.
+            return self._tok2i.get(m.group("base"), self.UNK)
         return self._tok2i.get(str_tok, self.UNK)
 
     def decode(self, int_tok: int) -> str:
@@ -91,26 +94,38 @@ class Vocab:
             json.dump(self._tok2i, f, indent=2)
 
     @staticmethod
-    def from_files(dir: Path) -> "Vocab":
+    def from_files(files: list[Path]) -> "Vocab":
         """Generates the vocabulary from all .tokens files in DIR
 
         returns: A Vocab instance.
         """
-        tok2i: dict[str, int] = {s: i for i, s in Vocab.RESERVED_TOKENS}
-
-        count = 0
-        logging.info(f"Tokenizing all .tokens files in {dir}")
-        for tokens_file in dir.rglob("*.tokens"):
-            count += 1
+        counts: dict[str, int] = defaultdict(int)
+        logging.info(f"Parsing all .tokens files in {dir}")
+        for tokens_file in files:
             with open(tokens_file, "r") as f:
                 for record in f:
                     for token in record.strip().split():
                         base = Vocab._get_base(token)
-                        if base not in tok2i:
-                            tok2i[base] = len(tok2i)
+                        counts[base] += 1
+
+        tok2i: dict[str, int] = {s: i for i, s in Vocab.RESERVED_TOKENS}
+        for key, value in counts.items():
+            if value > 1:
+                tok2i[key] = len(tok2i)
+
         vocab = Vocab(tok2i)
-        logging.info(f"\t{len(vocab):,} tokens created from {count:,} files.")
+        logging.info(f"\t{len(vocab):,} tokens created from {len(files):,} files.")
         return vocab
+
+    @staticmethod
+    def from_pdmx(pdmx: PDMX) -> "Vocab":
+        files: list[Path] = []
+        for _, row in pdmx.df.iterrows():
+            mxl_str = row["mxl"]
+            if not isinstance(mxl_str, str):
+                continue
+            files.append(pdmx.get_path(Path(mxl_str), "tokens"))
+        return Vocab.from_files(files)
 
     @staticmethod
     def load(path: Path) -> "Vocab":
