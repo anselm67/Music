@@ -3,7 +3,7 @@ from utils import from_json
 
 
 class TestScore:
-    def test_save(self):
+    def test_save(self) -> None:
         system = System(
             bar_numbers=[1],
             svg_bar_numbers=[],
@@ -22,7 +22,7 @@ class TestScore:
         saved = from_json(Score, text)
         assert saved == score
 
-    def test_computed_properties(self):
+    def test_computed_properties(self) -> None:
         system = System(
             bar_numbers=[1],
             svg_bar_numbers=[],
@@ -44,7 +44,7 @@ class TestScore:
 
 
 class TestScale:
-    def test_scale(self):
+    def test_scale(self) -> None:
         system = System(
             bar_numbers=[1],
             svg_bar_numbers=[],
