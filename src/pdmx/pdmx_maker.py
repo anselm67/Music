@@ -23,7 +23,7 @@ from pathlib import Path
 
 import aiofiles
 
-from dataset import Page, Score
+from .layout import Page, Score
 from kern import tokenize
 from verovio import (
     LayoutExtractor,

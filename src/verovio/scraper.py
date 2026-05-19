@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from xml.etree.ElementTree import Element, ElementTree, parse
 
-from dataset import Box, Page, Staff, System
+from pdmx import Box, Page, Staff, System
 
 
 class LayoutExtractor:

@@ -7,7 +7,7 @@ from pathlib import Path
 import torch
 from torch import Tensor
 
-from dataset import PDMX
+from pdmx import PDMX
 
 
 class Vocab:

@@ -12,7 +12,7 @@ import sys
 
 import click
 
-from dataset import PDMX, MxlEditor
+from pdmx import PDMX, MxlEditor
 from utils import print_histogram
 from verovio import mxl_to_kern
 from verovio import render as verovio_render

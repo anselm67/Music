@@ -2,7 +2,7 @@ import pytest
 import torch
 from torch import Tensor
 
-from models import Config, HierarchicalLoss, LossDict
+from staffer import Config, HierarchicalLoss, LossDict
 
 
 def make_boxes(n: int, padded: int) -> Tensor:

@@ -28,7 +28,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/cli", "src/dataset", "src/kern", "src/midi", "src/models", "src/noter", "src/utils", "src/verovio"]
+packages = ["src/cli", "src/kern", "src/midi", "src/noter", "src/pdmx", "src/staffer", "src/utils", "src/verovio"]
 
 [dependency-groups]
 dev = [

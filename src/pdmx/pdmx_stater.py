@@ -12,7 +12,7 @@ from pathlib import Path
 
 import aiofiles
 
-from dataset import Score
+from .layout import Score
 
 from .pdmx import PDMX
 

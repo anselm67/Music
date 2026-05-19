@@ -14,7 +14,7 @@ from torch import Tensor
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from dataset import PDMX
+from pdmx import PDMX
 from noter import NoterConfig, NoterDataset, NoterModule, Vocab
 from utils import print_histogram
 

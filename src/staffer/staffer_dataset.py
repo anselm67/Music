@@ -14,8 +14,8 @@ from torchvision.io import decode_image
 from torchvision.transforms import v2
 from tqdm import tqdm
 
-from dataset import PDMX, Score
-from models import Config
+from pdmx import PDMX, Score
+from .staffer_model import Config
 
 
 class StafferDataset(Dataset):

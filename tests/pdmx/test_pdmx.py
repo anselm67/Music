@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from dataset import PDMX
+from pdmx import PDMX
 
 
 class TestPDMX:

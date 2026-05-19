@@ -5,9 +5,9 @@ import logging
 import lightning as L
 from torch.utils.data import DataLoader, random_split
 
-from models import Config
+from .staffer_model import Config
 
-from .pdmx import PDMX
+from pdmx import PDMX
 from .staffer_dataset import StafferDataset, build_sampler
 
 

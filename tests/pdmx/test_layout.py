@@ -1,4 +1,4 @@
-from dataset import Box, Page, Score, Staff, System
+from pdmx import Box, Page, Score, Staff, System
 from utils import from_json
 
 

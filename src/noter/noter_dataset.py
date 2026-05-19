@@ -11,7 +11,7 @@ from torchvision.transforms.functional import crop
 from tqdm import tqdm
 
 # TODO This should eventually be NoterModel's Config
-from dataset import PDMX, Box, Score
+from pdmx import PDMX, Box, Score
 from kern.kern_reader import KernReader
 
 from .noter_model import NoterConfig

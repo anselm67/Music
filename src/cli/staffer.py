@@ -24,8 +24,9 @@ from torch.utils.data import DataLoader
 from torchinfo import summary as model_summary
 from torchvision.io import decode_image
 
-from dataset import PDMX, Box, StafferDataModule, StafferDataset
-from models import Config, HierarchicalDETR, StafferModule
+from pdmx import PDMX, Box
+from staffer import StafferDataModule, StafferDataset
+from staffer import Config, HierarchicalDETR, StafferModule
 
 HOME = Path("/home/anselm/datasets/PDMX")
 

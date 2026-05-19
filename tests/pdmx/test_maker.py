@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pandas as pd
 import pytest
 
-from dataset import PDMX
-from dataset.pdmx_maker import MxlSvgTask, PDMXMaker
+from pdmx import PDMX
+from pdmx.pdmx_maker import MxlSvgTask, PDMXMaker
 from verovio import rsvgconvert_binary, verovio_binary
 
 # ---------------------------------------------------------------------------
@@ -295,7 +295,7 @@ class TestDryRun:
         touch(mxl)
 
         with patch(
-            "dataset.pdmx_maker.render_command",
+            "pdmx.pdmx_maker.render_command",
             return_value=(Path("/usr/bin/verovio"), ["--arg"]),
         ):
             with patch.object(p, "collect_svg_files", return_value=[]):
@@ -313,7 +313,7 @@ class TestDryRun:
 
         with patch.object(p, "exec", new_callable=AsyncMock) as mock_exec:
             with patch(
-                "dataset.pdmx_maker.svg_to_png_command",
+                "pdmx.pdmx_maker.svg_to_png_command",
                 return_value=(Path("/usr/bin/rsvg"), ["--arg"]),
             ):
                 with patch.object(p, "make_layout", new_callable=AsyncMock):
