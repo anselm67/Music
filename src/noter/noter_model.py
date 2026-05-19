@@ -25,6 +25,7 @@ class NoterConfig:
     max_chords: int = 8
     max_seqlen: int = 128  # Also known as T
     vocab_size: int = -1
+    pad_idx: int = -1
 
     interpolation: InterpolationMode = InterpolationMode.BILINEAR
     antialias: bool = False
@@ -57,6 +58,7 @@ class NoterConfig:
 
     def use_vocab(self, vocab: Vocab) -> None:
         self.vocab_size = len(vocab)
+        self.pad_idx = vocab.PAD
 
 
 class SourceEmbedding(nn.Module):
@@ -88,7 +90,7 @@ class TargetEmbedder(nn.Module):
         self.embedding = nn.Embedding(
             num_embeddings=config.vocab_size,
             embedding_dim=config.embed_dim,
-            padding_idx=0,  # TODO
+            padding_idx=config.pad_idx,
         )
         self.chord_proj = nn.Linear(
             config.max_chords * config.embed_dim, config.embed_dim
