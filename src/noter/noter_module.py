@@ -60,6 +60,26 @@ class NoterModule(L.LightningModule):
 
         return loss
 
+    @torch.no_grad()
+    def predict(self, source: Tensor, source_widths: Tensor) -> Tensor:
+        B, c = source.shape[0], self.config
+        generated = torch.full(
+            (B, 1, c.max_chords), Vocab.SIL, device=self.device, dtype=torch.long
+        )
+        generated[:, 0, 0] = Vocab.SOS
+        memory, src_pad_mask = self.model.encode(source, source_widths)
+        for _ in range(c.max_seqlen - 1):
+            T = generated.shape[1]
+            tgt_pad_mask = (generated == Vocab.PAD).all(dim=-1)
+            logits = self.model.decode(
+                generated, memory, self._causal_mask(T), tgt_pad_mask, src_pad_mask
+            )
+            next_tokens = logits[:, -1, :, :].argmax(dim=-1)  # (B, max_chords)
+            generated = torch.cat([generated, next_tokens.unsqueeze(1)], dim=1)
+            if (next_tokens[:, 0] == Vocab.EOS).all():
+                break
+        return generated[:, 1:]  # strip SOS
+
     def training_step(self, batch: tuple, batch_idx: int) -> Tensor:
         return self._step(batch, "train")
 

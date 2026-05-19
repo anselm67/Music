@@ -16,9 +16,6 @@ class NoterConfig:
     id_name: str = "default"
     git_hash: str = current_commit()
 
-    # Maximums as obtained with the "stats" command.
-    max_width: int = 1024
-    max_height: int = 1449
     page_shape: tuple[int, int] = (966, 680)
 
     input_shape: tuple[int, int] = (64, 6 * 128)
@@ -179,10 +176,12 @@ class NoterModel(nn.Module):
         memory_pad_mask: Tensor,
     ) -> Tensor:
         target_embeds = self.target_embedder(target)
-        return self.transformer.decoder(
+        outs = self.transformer.decoder(
             target_embeds,
             memory,
             tgt_mask=target_mask,
             tgt_key_padding_mask=tgt_pad_mask,
             memory_key_padding_mask=memory_pad_mask,
         )
+        B, T, _ = outs.shape
+        return self.mlp(outs).view(B, T, self.config.max_chords, -1)
