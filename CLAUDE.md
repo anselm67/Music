@@ -73,6 +73,12 @@ kern ...   # Kern file utilities
 
 ---
 
+## Code review
+
+Before creating any git commit, always spawn the `code-reviewer` agent to review the staged changes first.
+
+---
+
 ## Repo layout
 
 ```

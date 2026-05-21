@@ -215,20 +215,20 @@ class NormHandler(BaseHandler):
 
     last_metric: Meter | None = None
 
-    def check_type(self, tokens: Iterable[Token], t: Type) -> bool:
-        return all([isinstance(token, t) for token in tokens])
+    def check_type(self, tokens: Iterable[Token], t: type | tuple[type, ...]) -> bool:
+        return all(isinstance(token, t) for token in tokens)
 
     def should_skip(self, tokens: list[tuple[Spine, Token]]) -> bool:
         # Sometimes we get both a 4/4 and C meter, skip.
         token = tokens[0][1]
-        if isinstance(token, Meter) and all([t == token for _, t in tokens]):
+        if isinstance(token, Meter) and all(t == token for _, t in tokens):
             if token == self.last_metric:
                 return True
             self.last_metric = token
         else:
             self.last_metric = None
-        # Skips all Comment.
-        if self.check_type((t for _, t in tokens), Comment):
+        # Skip metadata annotations — not musical content.
+        if self.check_type((t for _, t in tokens), (Comment, Instrument)):
             return True
         # Pure spine paths aren't interesting to us.
         if self.check_type((t for _, t in tokens), SpinePath):
@@ -253,7 +253,7 @@ class NormHandler(BaseHandler):
 
         # If we see a note or chord before any bar, emit a fake bar 0.
         if not self.bar_zero:
-            if any([requires_bar(t) for _, t in tokens]):
+            if any(requires_bar(t) for _, t in tokens):
                 bar = Bar("*fake*", 0, False, False, False, False)
                 if self.output:
                     self.output.write(
