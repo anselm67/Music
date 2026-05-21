@@ -2,20 +2,29 @@
 import logging
 import math
 import random
+import shutil
 import sys
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import Any, cast
 
 import click
 import cv2
+import lightning as L
+import matplotlib.pyplot as plt
+import pandas as pd
 import torch
+from lightning.pytorch.callbacks import Callback, EarlyStopping, ModelCheckpoint
+from lightning.pytorch.callbacks.early_stopping import EarlyStoppingReason
+from lightning.pytorch.loggers import CSVLogger
+from matplotlib.backend_bases import Event, KeyEvent
 from torch import Tensor
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from noter import NoterConfig, NoterDataModule, NoterDataset, NoterModule, Vocab
 from pdmx import PDMX
-from noter import NoterConfig, NoterDataset, NoterModule, Vocab
 from utils import print_histogram
 
 HOME = Path("/home/anselm/datasets/PDMX")
@@ -108,7 +117,7 @@ def show(ctx: ClickContext) -> None:
     dataset = NoterDataset(ctx.config, ctx.pdmx)
     while True:
         index = random.randint(0, len(dataset) - 1)
-        img_tensor, seq_tensor = dataset[index]
+        img_tensor, _, seq_tensor = dataset[index]
         img = img_tensor.squeeze(0).cpu().numpy()
         tokens = dataset.vocab.i2tok(seq_tensor)
         print(tokens)
@@ -164,7 +173,7 @@ def image_stats(ctx: ClickContext, num_workers: int) -> None:
     pix_sum = 0
     pix_sum2 = 0
     pix_count = 0
-    for images, _ in loader:
+    for images, _, _ in loader:
         for batch_index in range(len(images)):
             img = images[batch_index].squeeze(0).cpu().numpy()
             pix_sum += img.sum()
@@ -198,11 +207,278 @@ def summary(ctx: ClickContext) -> None:
     print(model)
 
 
+def config_from_checkpoint(checkpoint_path: Path) -> NoterConfig:
+    from torchvision.transforms.functional import InterpolationMode
+
+    torch.serialization.add_safe_globals([InterpolationMode])
+    checkpoint = torch.load(checkpoint_path, weights_only=False)
+    return NoterConfig(**checkpoint["hyper_parameters"])
+
+
+
+@click.command()
+@click.argument("name", type=str)
+@click.option(
+    "--hide-progress",
+    "-h",
+    type=bool,
+    is_flag=True,
+    default=False,
+    help="Hide progress report, e.g. to see the logging info.",
+)
+@click.option(
+    "--early-stopping",
+    "-s",
+    type=click.FloatRange(min=0),
+    default=0.0,
+    help="Enable early stopping with a patience of this amount of an epoch.",
+)
+@click.option(
+    "--epochs", "-e", type=int, default=4, help="Number of epochs to train for."
+)
+@click.option(
+    "--num-workers",
+    type=int,
+    default=8,
+    help="Number of workers for the dataset loader.",
+)
+@click.pass_obj
+def train(
+    ctx: ClickContext,
+    name: str,
+    hide_progress: bool,
+    early_stopping: float,
+    epochs: int,
+    num_workers: int,
+) -> None:
+    """Trains and/or resumes training of a Noter model instance.
+
+    NAME: sets id/name of the model being trained.
+    """
+    VAL_CHECK_INTERVAL = 250
+
+    ckpt_path: Path | None = None
+    ckpt_path = Path("checkpoints") / "noter" / name / "last.ckpt"
+    if ckpt_path.exists():
+        logging.info(f"Resuming training from {ckpt_path}")
+        config = config_from_checkpoint(ckpt_path)
+    else:
+        ckpt_path = None
+        config = replace(ctx.config, id_name=name)
+        vocab = Vocab.load(ctx.pdmx.home / "build" / "vocab.json")
+        config.use_vocab(vocab)
+
+    config.max_steps = epochs * (config.train_len // config.batch_size)
+    logging.info(
+        f"Training for {epochs} epochs, "
+        f"or {config.max_steps} steps of {config.batch_size}."
+    )
+
+    early_stopping_callback = None
+    if early_stopping > 0:
+        steps = int(early_stopping * (config.train_len // config.batch_size))
+        steps = steps // VAL_CHECK_INTERVAL
+        logging.info(f"EarlyStopping: patience is {steps} validation steps.")
+        early_stopping_callback = EarlyStopping(
+            monitor="val/loss",
+            patience=steps,
+            mode="min",
+            min_delta=1e-4,
+        )
+
+    callbacks: list[Callback] = [
+        callback
+        for callback in [
+            ModelCheckpoint(
+                dirpath=f"checkpoints/noter/{config.id_name}",
+                filename="{epoch}-{val/loss:.4f}",
+                monitor="val/loss",
+                mode="min",
+                save_top_k=3,
+                save_last=True,
+                save_on_train_epoch_end=True,
+                save_on_exception=True,
+            ),
+            early_stopping_callback,
+        ]
+        if callback is not None
+    ]
+
+    logger_path = Path("logs/noter") / config.id_name / "metrics.csv"
+    if logger_path.exists():
+        all_path = logger_path.with_stem("cumulated_metrics")
+        if all_path.exists():
+            prev_df = pd.read_csv(all_path)
+            new_df = pd.read_csv(logger_path)
+            pd.concat([prev_df, new_df], ignore_index=True).to_csv(
+                all_path, index=False
+            )
+        else:
+            shutil.copy(logger_path, all_path)
+        logger_path.unlink()
+
+    logger = CSVLogger(save_dir="logs", name="noter", version=config.id_name)
+
+    trainer = L.Trainer(
+        max_steps=config.max_steps,
+        logger=logger,
+        callbacks=callbacks,
+        log_every_n_steps=100,
+        val_check_interval=VAL_CHECK_INTERVAL,
+        precision="bf16-mixed",
+        enable_model_summary=False,
+        enable_progress_bar=not hide_progress,
+    )
+
+    trainer.fit(
+        NoterModule(config),
+        NoterDataModule(config, ctx.pdmx, num_workers=num_workers),
+        ckpt_path=ckpt_path,
+    )
+
+    if (
+        early_stopping_callback is not None
+        and early_stopping_callback.stopping_reason != EarlyStoppingReason.NOT_STOPPED
+    ):
+        logging.info(f"Early stopping: {early_stopping_callback.stopping_reason}")
+        logging.info(
+            f"       message: {early_stopping_callback.stopping_reason_message}"
+        )
+        logging.info(f"         epoch: {early_stopping_callback.stopped_epoch}")
+
+
+LOG_VARIABLES = [
+    "loss",
+    "lr",
+    "accuracy",
+]
+
+
+def plot_one(
+    ax_metrics: Any, name: str, columns: tuple[str, ...], ls: str = "solid"
+) -> None:
+    csv_path = Path(f"logs/noter/{name}/metrics.csv")
+    all_path = csv_path.with_stem("cumulated_metrics")
+    all_df = None
+    if all_path.exists():
+        all_df = pd.read_csv(all_path)
+
+    if csv_path.exists():
+        df = (
+            pd.read_csv(csv_path)
+            if all_df is None
+            else pd.concat([all_df, pd.read_csv(csv_path)])
+        )
+    elif all_df is not None:
+        df = all_df
+    else:
+        raise click.UsageError(f"No metrics file found for {name}.")
+
+    labels = tuple(f"{name}:{col}" for col in columns)
+    for col, label in zip(columns, labels):
+        if col in df.columns:
+            d = df[["step", col]].dropna()
+            ax_metrics.plot(d["step"], d[col], label=label, ls=ls)
+
+
+@click.command()
+@click.argument("names", type=str, nargs=-1)
+@click.option(
+    "--train-columns",
+    "-t",
+    type=str,
+    multiple=True,
+    metavar="METRIC,METRIC,...",
+    help="Select one or more training metrics to plot.",
+)
+@click.option(
+    "--valid-columns",
+    "-v",
+    type=str,
+    multiple=True,
+    metavar="METRIC,METRIC,...",
+    help="Select one or more validation metrics to plot.",
+)
+@click.option(
+    "--both-columns",
+    "-a",
+    type=str,
+    multiple=True,
+    metavar="METRIC,METRIC,...",
+    help="Selects one or more train and validation metrics to plot.",
+)
+def logs(
+    names: tuple[str, ...],
+    train_columns: tuple[str, ...],
+    valid_columns: tuple[str, ...],
+    both_columns: tuple[str, ...],
+) -> None:
+    """Displays training logs from multiple experiments in a single graph.
+
+    NAMES: List of the names of the model experiments you want graphed.
+
+    \b
+    The following METRIC are available:
+    - loss, lr (training only), accuracy
+    """
+    train_columns = tuple(i for c in train_columns for i in c.split(","))
+    valid_columns = tuple(i for c in valid_columns for i in c.split(","))
+    both_columns = tuple(i for c in both_columns for i in c.split(","))
+    for c in train_columns + valid_columns + both_columns:
+        if c not in LOG_VARIABLES:
+            raise click.UsageError(f"metric {c} doesn't exist.")
+    columns = tuple(f"train/{s}" for s in train_columns) + tuple(
+        f"val/{s}" for s in valid_columns
+    )
+    if len(both_columns) > 0:
+        columns += tuple(f"train/{s}" for s in both_columns)
+        columns += tuple(f"val/{s}" for s in both_columns)
+    if len(columns) == 0:
+        raise click.UsageError("Select at least one metric to plot.")
+    if not names:
+        raise click.UsageError("Provide at least one NAME to plot.")
+
+    (name, *others) = names
+    csv_path = Path(f"logs/noter/{name}/metrics.csv")
+
+    plt.ion()
+    fig, ax_metrics = plt.subplots(1, 1)
+
+    def on_key(event: Event) -> None:
+        key_event = cast(KeyEvent, event)
+        if key_event.key == "q":
+            plt.close("all")
+
+    fig.canvas.mpl_connect("key_press_event", on_key)
+    last_mod = 0.0
+
+    while plt.get_fignums():
+        mtime = csv_path.stat().st_mtime if csv_path.exists() else 0.0
+        if mtime != last_mod:
+            last_mod = mtime
+
+            ax_metrics.cla()
+            plot_one(ax_metrics, name, columns)
+            for other in others:
+                plot_one(ax_metrics, other, columns, ls="dashed")
+
+            ax_metrics.set_title("Training metrics")
+            ax_metrics.set_xlabel("step")
+            ax_metrics.legend()
+
+            fig.canvas.draw()
+
+        plt.pause(5.0)
+    print("Bye!")
+
+
 cli.add_command(vocab)
 cli.add_command(show)
 cli.add_command(stats)
 cli.add_command(image_stats)
 cli.add_command(summary)
+cli.add_command(train)
+cli.add_command(logs)
 
 
 def main() -> None:

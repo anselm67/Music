@@ -94,7 +94,9 @@ class NoterDataset(Dataset):
         records = reader.get_text(first_bar_number, last_bar_number)
         return (box.height, box.width), len(records) if records else -1
 
-    def _load_image(self, mxl_file: Path, png_file: Path, box: Box) -> Tensor | None:
+    def _load_image(
+        self, mxl_file: Path, png_file: Path, box: Box
+    ) -> tuple[Tensor, int] | None:
         # Gets the image and crop it to the system box.
         try:
             tensor = decode_image(png_file.as_posix())
@@ -120,7 +122,7 @@ class NoterDataset(Dataset):
         _, cropped_height, cropped_width = tensor.shape
         y0 = (height - cropped_height) // 2
         image[:, y0 : y0 + cropped_height, :cropped_width] = tensor
-        return image
+        return image, cropped_width
 
     def _load_sequence(
         self,
@@ -162,13 +164,13 @@ class NoterDataset(Dataset):
         tensor[len(records), :] = self.s_eos
         return torch.cat([self.s_sos, tensor])
 
-    def __getitem__(self, idx: int) -> tuple[Tensor, Tensor]:
+    def __getitem__(self, idx: int) -> tuple[Tensor, Tensor, Tensor]:
         while True:
             mxl_file, png_file, box, spine_number, first_bar_number, last_bar_number = (
                 self.items[idx]
             )
             logging.debug(f"Loading {mxl_file}")
-            if (image := self._load_image(mxl_file, png_file, box)) is None:
+            if (result := self._load_image(mxl_file, png_file, box)) is None:
                 idx = (idx + 1) % len(self)
             elif (
                 sequence := self._load_sequence(
@@ -177,4 +179,5 @@ class NoterDataset(Dataset):
             ) is None:
                 idx = (idx + 1) % len(self)
             else:
-                return (image, sequence)
+                image, actual_width = result
+                return (image, torch.tensor(actual_width), sequence)
