@@ -21,6 +21,8 @@ from lightning.pytorch.loggers import CSVLogger
 from matplotlib.backend_bases import Event, KeyEvent
 from torch import Tensor
 from torch.utils.data import DataLoader
+from collections.abc import Iterable
+
 from torchinfo import summary as model_summary
 from torchvision.io import decode_image
 
@@ -508,11 +510,12 @@ def unbox(size: tuple[int, int], t: Tensor) -> Box:
     type=click.Path(file_okay=True, exists=True, readable=True, path_type=Path),
 )
 @click.pass_obj
-def predict(ctx: ClickContext, name: str, img_paths: tuple[Path]) -> None:
+def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
     """Predicts bounding boxes for system and staves for a list of images.
 
     NAME: The model version to use to make the predictions.
-    IMG_PATHS: The list of images to process and visualize.
+    IMG_PATHS: The list of images to process and visualize. When omitted,
+    picks random images from the PDMX dataset (respecting --offset / --count).
     """
     ckpt_path = Path("checkpoints") / "staffer" / name / "last.ckpt"
     config = config_from_checkpoint(ckpt_path)
@@ -521,7 +524,13 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path]) -> None:
         ckpt_path, config=config, weights_only=False
     )
     model.eval()
-    for img_path in img_paths:
+    if img_paths:
+        source: Iterable[Path] = img_paths
+    else:
+        shuffled = list(dataset.items)
+        random.shuffle(shuffled)
+        source = (item[1] for item in shuffled)
+    for img_path in source:
         print(f"Path: {img_path.as_posix()}")
         img = decode_image(img_path.as_posix())
         img = dataset.transform(img).cuda()
