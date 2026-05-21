@@ -227,11 +227,8 @@ class NormHandler(BaseHandler):
             self.last_metric = token
         else:
             self.last_metric = None
-        # Skip metadata annotations — not musical content.
-        if self.check_type((t for _, t in tokens), (Comment, Instrument)):
-            return True
-        # Pure spine paths aren't interesting to us.
-        if self.check_type((t for _, t in tokens), SpinePath):
+        # Skip metadata annotations and spine-path rows — not musical content.
+        if self.check_type((t for _, t in tokens), (Comment, Instrument, SpinePath)):
             return True
         # Empty keys aren't interesting either:
         if self.check_type((t for _, t in tokens), Key):
