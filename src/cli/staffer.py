@@ -305,9 +305,11 @@ def train(
     if logger_path.exists():
         all_path = logger_path.with_stem("cumulated_metrics")
         if all_path.exists():
-            all = pd.read_csv(all_path)
-            new = pd.read_csv(logger_path)
-            pd.concat([all, new], ignore_index=True).to_csv(all_path, index=False)
+            prev_df = pd.read_csv(all_path)
+            new_df = pd.read_csv(logger_path)
+            pd.concat([prev_df, new_df], ignore_index=True).to_csv(
+                all_path, index=False
+            )
         else:
             shutil.copy(logger_path, all_path)
         logger_path.unlink()
@@ -447,6 +449,9 @@ def logs(
     if len(columns) == 0:
         raise click.UsageError("Select at least one metric to plot.")
 
+    if not names:
+        raise click.UsageError("Provide at least one NAME to plot.")
+
     # Plots the metrics.
     (name, *others) = names
     csv_path = Path(f"logs/staffer/{name}/metrics.csv")
@@ -463,7 +468,10 @@ def logs(
     last_mod = 0.0
 
     while plt.get_fignums():
-        mtime = csv_path.stat().st_mtime
+        try:
+            mtime = csv_path.stat().st_mtime
+        except FileNotFoundError:
+            mtime = 0.0
         if mtime != last_mod:
             last_mod = mtime
 

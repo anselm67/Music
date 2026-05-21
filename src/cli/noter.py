@@ -453,7 +453,10 @@ def logs(
     last_mod = 0.0
 
     while plt.get_fignums():
-        mtime = csv_path.stat().st_mtime if csv_path.exists() else 0.0
+        try:
+            mtime = csv_path.stat().st_mtime
+        except FileNotFoundError:
+            mtime = 0.0
         if mtime != last_mod:
             last_mod = mtime
 
