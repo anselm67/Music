@@ -84,7 +84,7 @@ class StafferModule(L.LightningModule):
         gt_boxes: list[Tensor],  # list of (M, 4) padded
         gt_assign: list[Tensor],
     ) -> Tensor:
-        """Mean absolute error on (cy, h), reported as 1 - normalised_error for consistency."""
+        """Mean L1 error on (cy, h) across GT staves."""
         errors = []
         for i in range(pred_yh.shape[0]):
             num_gt = int((gt_assign[i] != -1).sum().item())
