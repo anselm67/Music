@@ -41,7 +41,7 @@ class NoterConfig:
     # Training config.
     batch_size: int = 16
     train_len: int = 100_000
-    valid_len: int = 10_000
+    valid_len: int = 100
     lr: float = 3e-4
     weight_decay: float = 1e-2
     warmup_steps: int = 500
