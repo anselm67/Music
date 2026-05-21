@@ -2,7 +2,7 @@ import pytest
 import torch
 from torch import Tensor
 
-from staffer import Config, HierarchicalLoss, LossDict
+from staffer import StafferConfig, StafferLoss, LossDict
 
 
 def make_boxes(n: int, padded: int) -> Tensor:
@@ -24,17 +24,17 @@ def make_assign(num_staves: int, num_sys: int, padded: int) -> Tensor:
     return assigns
 
 
-class TestHierarchicalLoss:
+class TestStafferLoss:
     @pytest.fixture
-    def config(self) -> Config:
-        return Config()
+    def config(self) -> StafferConfig:
+        return StafferConfig()
 
     @pytest.fixture
-    def loss(self, config: Config) -> HierarchicalLoss:
-        return HierarchicalLoss(config)
+    def loss(self, config: StafferConfig) -> StafferLoss:
+        return StafferLoss(config)
 
     def _make_inputs(
-        self, config: Config, num_sys: int, num_staves: int, B: int = 2
+        self, config: StafferConfig, num_sys: int, num_staves: int, B: int = 2
     ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, list[Tensor], list[Tensor], list[Tensor]]:
         N, M = config.num_system_queries, config.num_stave_queries
         pred_sys_boxes = torch.rand(B, N, 4)
@@ -56,27 +56,27 @@ class TestHierarchicalLoss:
             gt_assign,
         )
 
-    def test_loss_is_scalar(self, loss: HierarchicalLoss, config: Config) -> None:
+    def test_loss_is_scalar(self, loss: StafferLoss, config: StafferConfig) -> None:
         inputs = self._make_inputs(config, num_sys=3, num_staves=5)
         result = loss(*inputs)
         assert isinstance(result, LossDict)
         assert result.total() > 0
 
     def test_loss_single_system_single_stave(
-        self, loss: HierarchicalLoss, config: Config
+        self, loss: StafferLoss, config: StafferConfig
     ) -> None:
         inputs = self._make_inputs(config, num_sys=1, num_staves=1)
         result = loss(*inputs)
         assert result.total() > 0
 
-    def test_loss_max_queries(self, loss: HierarchicalLoss, config: Config) -> None:
+    def test_loss_max_queries(self, loss: StafferLoss, config: StafferConfig) -> None:
         N, M = config.num_system_queries, config.num_stave_queries
         inputs = self._make_inputs(config, num_sys=N, num_staves=M)
         result = loss(*inputs)
         assert result.total() > 0
 
     def test_loss_decreases_with_better_predictions(
-        self, loss: HierarchicalLoss, config: Config
+        self, loss: StafferLoss, config: StafferConfig
     ) -> None:
         """Loss should be lower when predictions match GT than when far away."""
         B = 1
@@ -105,7 +105,7 @@ class TestHierarchicalLoss:
 
         assert good_loss.total() < bad_loss.total()
 
-    def test_loss_backward(self, loss: HierarchicalLoss, config: Config) -> None:
+    def test_loss_backward(self, loss: StafferLoss, config: StafferConfig) -> None:
         """Loss should be differentiable."""
         B = 2
         N, M = config.num_system_queries, config.num_stave_queries

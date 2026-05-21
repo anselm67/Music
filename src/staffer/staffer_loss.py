@@ -6,7 +6,7 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
-from .staffer_model import Config
+from .staffer_model import StafferConfig
 
 
 @dataclass
@@ -63,8 +63,8 @@ def generalized_iou(pred: Tensor, target: Tensor) -> Tensor:
     return iou - (enclosing - union) / enclosing.clamp(min=1e-6)
 
 
-class HierarchicalLoss(nn.Module):
-    def __init__(self, config: Config):
+class StafferLoss(nn.Module):
+    def __init__(self, config: StafferConfig):
         super().__init__()
         self.config = config
 

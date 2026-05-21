@@ -27,8 +27,8 @@ from torchvision.io import decode_image
 
 from pdmx import PDMX, Box
 from staffer import (
-    Config,
-    HierarchicalDETR,
+    StafferConfig,
+    StafferModel,
     StafferDataModule,
     StafferDataset,
     StafferModule,
@@ -39,7 +39,7 @@ HOME = Path("/home/anselm/datasets/PDMX")
 
 @dataclass
 class ClickContext:
-    config: Config
+    config: StafferConfig
     home: Path
     pdmx: PDMX
 
@@ -111,14 +111,14 @@ def cli(
         )
     logging.info("Running: %s", " ".join(sys.argv))
     pdmx = PDMX(home, csv, offset, count)
-    ctx.obj = ClickContext(Config(), home, pdmx)
+    ctx.obj = ClickContext(StafferConfig(), home, pdmx)
 
 
 @click.command()
 def summary() -> None:
-    """Displays a nice summary of the underlying HierarchicalDETR model."""
-    config = Config()
-    model = HierarchicalDETR(config)
+    """Displays a nice summary of the StafferModel architecture."""
+    config = StafferConfig()
+    model = StafferModel(config)
     model_summary(
         model, input_size=(config.batch_size, config.in_channels, *config.image_shape)
     )
@@ -127,8 +127,8 @@ def summary() -> None:
 @click.command()
 def check() -> None:
     """Checks the model input / output dimensions."""
-    config = Config()
-    model = HierarchicalDETR(config)
+    config = StafferConfig()
+    model = StafferModel(config)
 
     model.eval()
     x = torch.randn(config.batch_size, config.in_channels, *config.image_shape)
@@ -490,9 +490,9 @@ def logs(
     print("Bye!")
 
 
-def config_from_checkpoint(checkpoint_path: Path) -> Config:
+def config_from_checkpoint(checkpoint_path: Path) -> StafferConfig:
     checkpoint = torch.load(checkpoint_path, weights_only=False)
-    return Config(**checkpoint["hyper_parameters"])
+    return StafferConfig(**checkpoint["hyper_parameters"])
 
 
 def unbox(size: tuple[int, int], t: Tensor) -> Box:

@@ -5,20 +5,20 @@ import logging
 import lightning as L
 from torch.utils.data import DataLoader, random_split
 
-from .staffer_model import Config
+from .staffer_model import StafferConfig
 
 from pdmx import PDMX
 from .staffer_dataset import StafferDataset, build_sampler
 
 
 class StafferDataModule(L.LightningDataModule):
-    config: Config
+    config: StafferConfig
     pdmx: PDMX
     use_sampler: bool
     num_workers: int
 
     def __init__(
-        self, config: Config, pdmx: PDMX, use_sampler: bool, num_workers: int = 8
+        self, config: StafferConfig, pdmx: PDMX, use_sampler: bool, num_workers: int = 8
     ):
         super().__init__()
         self.config = config

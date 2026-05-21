@@ -10,16 +10,16 @@ from torch import Tensor
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
 
-from .staffer_loss import HierarchicalLoss, generalized_iou
-from .staffer_model import Config, HierarchicalDETR
+from .staffer_loss import StafferLoss, generalized_iou
+from .staffer_model import StafferConfig, StafferModel
 
 
 class StafferModule(L.LightningModule):
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: StafferConfig) -> None:
         super().__init__()
         self.config = config
-        self.model = HierarchicalDETR(config)
-        self.loss_fn = HierarchicalLoss(config)
+        self.model = StafferModel(config)
+        self.loss_fn = StafferLoss(config)
         self.save_hyperparameters(config.asdict())
 
     def forward(

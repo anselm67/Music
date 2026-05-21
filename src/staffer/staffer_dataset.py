@@ -15,7 +15,7 @@ from torchvision.transforms import v2
 from tqdm import tqdm
 
 from pdmx import PDMX, Score
-from .staffer_model import Config
+from .staffer_model import StafferConfig
 
 
 class StafferDataset(Dataset):
@@ -26,7 +26,7 @@ class StafferDataset(Dataset):
 
     transform: v2.Transform
 
-    def __init__(self, config: Config, pdmx: PDMX, count: int = -1):
+    def __init__(self, config: StafferConfig, pdmx: PDMX, count: int = -1):
         self.config = config
         self.pdmx = pdmx
         self.transform = v2.Compose(

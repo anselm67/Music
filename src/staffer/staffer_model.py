@@ -1,4 +1,4 @@
-"""A HierarchicalDETR model to compute the layout of a page of sheet music."""
+"""StafferModel: hierarchical layout detector for pages of sheet music."""
 
 from dataclasses import asdict, dataclass, field
 
@@ -10,7 +10,7 @@ from utils import current_commit
 
 
 @dataclass
-class Config:
+class StafferConfig:
     id_name: str = "default"
     git_hash: str = current_commit()
     image_shape: tuple[int, int] = field(init=False)
@@ -75,9 +75,9 @@ class Config:
 
 
 class PatchEmbedding(nn.Module):
-    config: Config
+    config: StafferConfig
 
-    def __init__(self, config: Config):
+    def __init__(self, config: StafferConfig):
         super().__init__()
         self.config = config
         num_patch = (
@@ -104,7 +104,7 @@ class PatchEmbedding(nn.Module):
 
 
 class TransformerBlock(nn.Module):
-    def __init__(self, config: Config):
+    def __init__(self, config: StafferConfig):
         super().__init__()
         self.config = config
         self.qkv = nn.Linear(config.embed_dim, 3 * config.embed_dim)
@@ -140,9 +140,9 @@ class TransformerBlock(nn.Module):
 
 
 class ViT(nn.Module):
-    config: Config
+    config: StafferConfig
 
-    def __init__(self, config: Config):
+    def __init__(self, config: StafferConfig):
         super().__init__()
         self.config = config
         self.patch_embed = PatchEmbedding(config)
@@ -158,7 +158,7 @@ class ViT(nn.Module):
 
 
 class DecoderLayer(nn.Module):
-    def __init__(self, config: Config):
+    def __init__(self, config: StafferConfig):
         super().__init__()
         D = config.embed_dim
         H = config.num_heads
@@ -231,8 +231,8 @@ class DecoderLayer(nn.Module):
         return sys_q, stave_q
 
 
-class HierarchicalDecoder(nn.Module):
-    def __init__(self, config: Config):
+class StafferDecoder(nn.Module):
+    def __init__(self, config: StafferConfig):
         super().__init__()
         self.sys_queries = nn.Embedding(config.num_system_queries, config.embed_dim)
         self.stave_queries = nn.Embedding(config.num_stave_queries, config.embed_dim)
@@ -250,7 +250,7 @@ class HierarchicalDecoder(nn.Module):
 
 
 class PredictionHeads(nn.Module):
-    def __init__(self, config: Config):
+    def __init__(self, config: StafferConfig):
         super().__init__()
         D = config.embed_dim
 
@@ -264,7 +264,7 @@ class PredictionHeads(nn.Module):
         self.stave_box_head = nn.Sequential(
             nn.Linear(D, D),
             nn.GELU(),
-            nn.Linear(D, 2),  # predict only cy, h — x-extent inherited from parent system
+            nn.Linear(D, 2),  # predict only cy, h — x inherited from parent system
         )
         self.stave_obj_head = nn.Linear(D, 1)
         self.assign_head = nn.Linear(D, config.num_system_queries)
@@ -288,12 +288,12 @@ class PredictionHeads(nn.Module):
         )
 
 
-class HierarchicalDETR(nn.Module):
-    def __init__(self, config: Config):
+class StafferModel(nn.Module):
+    def __init__(self, config: StafferConfig):
         super().__init__()
         self.config = config
         self.backbone = ViT(config)
-        self.decoder = HierarchicalDecoder(config)
+        self.decoder = StafferDecoder(config)
         self.heads = PredictionHeads(config)
 
     def forward(
