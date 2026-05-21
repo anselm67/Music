@@ -76,7 +76,7 @@ class Vocab:
     @staticmethod
     def from_files(files: list[Path]) -> "Vocab":
         counts: dict[str, int] = defaultdict(int)
-        logging.info(f"Parsing {len(files)} .tokens files...")
+        logging.info(f"Parsing {len(files):,} .tokens files...")
         for tokens_file in files:
             with open(tokens_file, "r") as f:
                 for record in f:
