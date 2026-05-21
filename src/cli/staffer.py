@@ -4,6 +4,7 @@ import math
 import random
 import shutil
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, cast
@@ -21,8 +22,6 @@ from lightning.pytorch.loggers import CSVLogger
 from matplotlib.backend_bases import Event, KeyEvent
 from torch import Tensor
 from torch.utils.data import DataLoader
-from collections.abc import Iterable
-
 from torchinfo import summary as model_summary
 from torchvision.io import decode_image
 
@@ -136,11 +135,11 @@ def check() -> None:
     print(f"input:          {x.shape}")
 
     with torch.no_grad():
-        sys_boxes, sys_logits, stave_boxes, stave_logits, assign_logits = model(x)
+        sys_boxes, sys_logits, stave_yh, stave_logits, assign_logits = model(x)
 
     print(f"sys_boxes:      {sys_boxes.shape}")  # (B, 16, 4)
     print(f"sys_logits:     {sys_logits.shape}")  # (B, 16, 1)
-    print(f"stave_boxes:    {stave_boxes.shape}")  # (B, 16, 4)
+    print(f"stave_yh:       {stave_yh.shape}")  # (B, 16, 2) — cy, h
     print(f"stave_logits:   {stave_logits.shape}")  # (B, 16, 1)
     print(f"assign_logits:  {assign_logits.shape}")  # (B, 16, 16)
 
@@ -352,20 +351,15 @@ LOG_VARIABLES = [
     # From StafferModule._step():
     "loss",
     "lr",  # Training only.
-    "stave_iou",
+    "stave_l1",
     "sys_iou",
     # From LossDict:
     "sys_box",
     "sys_giou",
     "sys_obj",
     "stave_box",
-    "stave_giou",
     "stave_obj",
     "assign",
-    "containment",
-    "alignment",
-    "bar_x",
-    "bar_obj",
 ]
 
 
@@ -435,9 +429,8 @@ def logs(
 
     \b
     The following METRIC are available:
-    - loss, lr (training only), stave_iou, sys_iou,
-    - {sys|stave}_{iou, giou, obj, box},
-    - assign (staves), containment (staves),
+    - loss, lr (training only), stave_l1, sys_iou,
+    - sys_{box, giou, obj}, stave_{box, obj}, assign,
     """
     # Parses the metric names and select train/valid variant.
     train_columns = tuple(i for c in train_columns for i in c.split(","))
@@ -538,7 +531,7 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
             (
                 pred_sys_boxes,
                 pred_sys_logits,
-                pred_stave_boxes,
+                pred_stave_yh,
                 pred_stave_logits,
                 pred_assign,
             ) = tuple(map(lambda t: t.squeeze(0), model.forward(img.unsqueeze(0))))
@@ -554,12 +547,16 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
                 cv2.rectangle(img, box.top_left, box.bot_right, (0, 0, 255), 2)
         stave_assignment = torch.argmax(pred_assign, dim=1)
         for staff_index in range(pred_assign.shape[0]):
+            sys_idx = int(stave_assignment[staff_index].item())
             print(
                 f"\tstaff[{staff_index}]: {pred_stave_logits[staff_index].item():.2f}, "
-                f"system: {stave_assignment[staff_index].item()}"
+                f"system: {sys_idx}"
             )
             if pred_stave_logits[staff_index].item() > 0.0:
-                box = unbox(width_height, pred_stave_boxes[staff_index])
+                cy, h = pred_stave_yh[staff_index]
+                cx, _, w, _ = pred_sys_boxes[sys_idx]
+                stave_box_4d = torch.stack([cx, cy, w, h])
+                box = unbox(width_height, stave_box_4d)
                 cv2.rectangle(img, box.top_left, box.bot_right, (0, 255, 0), 1)
         cv2.imshow("Page", img)
 

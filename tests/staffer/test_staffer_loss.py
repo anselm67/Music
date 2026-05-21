@@ -19,7 +19,6 @@ def make_assign(num_staves: int, num_sys: int, padded: int) -> Tensor:
     """Make stave->system assignments sorted consistently, padded with -1."""
     assigns = torch.full((padded,), -1, dtype=torch.long)
     if num_staves > 0 and num_sys > 0:
-        # distribute staves evenly across systems, in order
         assigns[:num_staves] = torch.arange(num_staves) % num_sys
         assigns[:num_staves] = assigns[:num_staves].sort().values
     return assigns
@@ -37,13 +36,10 @@ class TestHierarchicalLoss:
     def _make_inputs(
         self, config: Config, num_sys: int, num_staves: int, B: int = 2
     ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, list[Tensor], list[Tensor], list[Tensor]]:
-        N, M = (
-            config.num_system_queries,
-            config.num_stave_queries,
-        )
+        N, M = config.num_system_queries, config.num_stave_queries
         pred_sys_boxes = torch.rand(B, N, 4)
         pred_sys_logits = torch.randn(B, N, 1)
-        pred_stave_boxes = torch.rand(B, M, 4)
+        pred_stave_yh = torch.rand(B, M, 2)
         pred_stave_logits = torch.randn(B, M, 1)
         pred_assign = torch.randn(B, M, N)
         gt_sys_boxes = [make_boxes(num_sys, N) for _ in range(B)]
@@ -52,7 +48,7 @@ class TestHierarchicalLoss:
         return (
             pred_sys_boxes,
             pred_sys_logits,
-            pred_stave_boxes,
+            pred_stave_yh,
             pred_stave_logits,
             pred_assign,
             gt_sys_boxes,
@@ -61,7 +57,6 @@ class TestHierarchicalLoss:
         )
 
     def test_loss_is_scalar(self, loss: HierarchicalLoss, config: Config) -> None:
-        """Loss should return a scalar tensor."""
         inputs = self._make_inputs(config, num_sys=3, num_staves=5)
         result = loss(*inputs)
         assert isinstance(result, LossDict)
@@ -70,27 +65,22 @@ class TestHierarchicalLoss:
     def test_loss_single_system_single_stave(
         self, loss: HierarchicalLoss, config: Config
     ) -> None:
-        """Minimal case — one system, one stave."""
         inputs = self._make_inputs(config, num_sys=1, num_staves=1)
         result = loss(*inputs)
         assert result.total() > 0
 
     def test_loss_max_queries(self, loss: HierarchicalLoss, config: Config) -> None:
-        """Loss should handle num_gt == num_queries without crashing."""
         N, M = config.num_system_queries, config.num_stave_queries
         inputs = self._make_inputs(config, num_sys=N, num_staves=M)
         result = loss(*inputs)
         assert result.total() > 0
 
-    def test_loss_decreases_with_better_boxes(
+    def test_loss_decreases_with_better_predictions(
         self, loss: HierarchicalLoss, config: Config
     ) -> None:
-        """Loss should be lower when predicted boxes match GT than when far away."""
+        """Loss should be lower when predictions match GT than when far away."""
         B = 1
-        N, M = (
-            config.num_system_queries,
-            config.num_stave_queries,
-        )
+        N, M = config.num_system_queries, config.num_stave_queries
 
         gt_sys = make_boxes(3, N)
         gt_stave = make_boxes(5, M)
@@ -100,50 +90,29 @@ class TestHierarchicalLoss:
         stave_logits = torch.zeros(B, M, 1)
         pred_assign = torch.zeros(B, M, N)
 
-        # Good: predictions sorted by cy, first num_gt match GT exactly
         good_sys = torch.ones(B, N, 4)
         good_sys[0, :3] = gt_sys[:3]
-        good_stave = torch.ones(B, M, 4)
-        good_stave[0, :5] = gt_stave[:5]
+        good_stave_yh = torch.ones(B, M, 2)
+        good_stave_yh[0, :5] = gt_stave[:5, [1, 3]]
 
-        # Bad: predictions are all at opposite corner from GT
         bad_sys = torch.ones(B, N, 4) * 0.9
-        bad_stave = torch.ones(B, M, 4) * 0.9
+        bad_stave_yh = torch.ones(B, M, 2) * 0.9
 
-        good_loss = loss(
-            good_sys,
-            logits,
-            good_stave,
-            stave_logits,
-            pred_assign,
-            [gt_sys],
-            [gt_stave],
-            [gt_assign],
-        )
-        bad_loss = loss(
-            bad_sys,
-            logits,
-            bad_stave,
-            stave_logits,
-            pred_assign,
-            [gt_sys],
-            [gt_stave],
-            [gt_assign],
-        )
+        good_loss = loss(good_sys, logits, good_stave_yh, stave_logits, pred_assign,
+                         [gt_sys], [gt_stave], [gt_assign])
+        bad_loss = loss(bad_sys, logits, bad_stave_yh, stave_logits, pred_assign,
+                        [gt_sys], [gt_stave], [gt_assign])
 
         assert good_loss.total() < bad_loss.total()
 
     def test_loss_backward(self, loss: HierarchicalLoss, config: Config) -> None:
         """Loss should be differentiable."""
         B = 2
-        N, M = (
-            config.num_system_queries,
-            config.num_stave_queries,
-        )
+        N, M = config.num_system_queries, config.num_stave_queries
 
         pred_sys_boxes = torch.rand(B, N, 4, requires_grad=True)
         pred_sys_logits = torch.randn(B, N, 1, requires_grad=True)
-        pred_stave_boxes = torch.rand(B, M, 4, requires_grad=True)
+        pred_stave_yh = torch.rand(B, M, 2, requires_grad=True)
         pred_stave_logits = torch.randn(B, M, 1, requires_grad=True)
         pred_assign = torch.randn(B, M, N, requires_grad=True)
 
@@ -151,229 +120,10 @@ class TestHierarchicalLoss:
         gt_stave_boxes = [make_boxes(5, M) for _ in range(B)]
         gt_assign = [make_assign(5, 3, M) for _ in range(B)]
 
-        result = loss(
-            pred_sys_boxes,
-            pred_sys_logits,
-            pred_stave_boxes,
-            pred_stave_logits,
-            pred_assign,
-            gt_sys_boxes,
-            gt_stave_boxes,
-            gt_assign,
-        )
+        result = loss(pred_sys_boxes, pred_sys_logits, pred_stave_yh, pred_stave_logits,
+                      pred_assign, gt_sys_boxes, gt_stave_boxes, gt_assign)
         result.total().backward()
 
         assert pred_sys_boxes.grad is not None
-        assert pred_stave_boxes.grad is not None
+        assert pred_stave_yh.grad is not None
         assert pred_assign.grad is not None
-
-    def test_containment_loss_isolated(self, loss: HierarchicalLoss, config: Config) -> None:
-        """Directly test _containment_loss — stave outside system yields higher loss."""
-        N, M = config.num_system_queries, config.num_stave_queries
-
-        gt_assign = make_assign(2, 1, M)  # 2 staves, 1 system
-
-        # Good: sorted top-y stave boxes inside system box
-        good_sys = torch.zeros(N, 4)
-        good_sys[0] = torch.tensor([0.5, 0.5, 0.8, 0.6])  # large system
-        good_staves = torch.zeros(M, 4)
-        good_staves[0] = torch.tensor([0.5, 0.4, 0.4, 0.1])  # stave inside
-        good_staves[1] = torch.tensor([0.5, 0.6, 0.4, 0.1])  # stave inside
-
-        # Bad: top-y stave boxes outside system box
-        bad_sys = torch.zeros(N, 4)
-        bad_sys[0] = torch.tensor([0.5, 0.5, 0.1, 0.05])  # tiny system
-        bad_staves = torch.zeros(M, 4)
-        bad_staves[0] = torch.tensor([0.5, 0.4, 0.8, 0.3])  # stave outside
-        bad_staves[1] = torch.tensor([0.5, 0.6, 0.8, 0.3])  # stave outside
-
-        good = loss._containment_loss(good_sys, good_staves, gt_assign, 2, 1)
-        bad = loss._containment_loss(bad_sys, bad_staves, gt_assign, 2, 1)
-
-        assert good.item() == pytest.approx(0.0, abs=1e-5)
-        assert bad.item() > 0.0
-
-    def test_containment_loss_isolated2(self, loss: HierarchicalLoss, config: Config) -> None:
-        """Directly test _containment_loss — stave outside system yields higher loss."""
-        N, M = config.num_system_queries, config.num_stave_queries
-
-        gt_assign = make_assign(1, 1, M)  # 1 stave, 1 system
-
-        # Good: stave is inside system
-        good_sys = torch.zeros(N, 4)
-        good_sys[0] = torch.tensor([0.5, 0.3, 0.8, 0.2])
-        good_stave = torch.zeros(M, 4)
-        good_stave[0] = torch.tensor([0.5, 0.3, 0.4, 0.05])
-
-        good = loss._containment_loss(good_sys, good_stave, gt_assign, 1, 1)
-
-        assert good.item() == pytest.approx(0.0, abs=1e-5)
-
-    def test_containment_loss_activates(self, loss: HierarchicalLoss, config: Config) -> None:
-        """Containment loss should be higher when staves stick out of their system."""
-        B = 1
-        N, M = (
-            config.num_system_queries,
-            config.num_stave_queries,
-        )
-
-        sys_logits = torch.zeros(B, N, 1)
-        stave_logits = torch.zeros(B, M, 1)
-        pred_assign = torch.randn(B, M, N)
-
-        # One system containing one stave — GT matches predictions exactly
-        # so box/giou/obj losses are identical between good and bad cases
-        gt_assign = make_assign(1, 1, M)
-
-        # Good: stave is inside system
-        good_sys = torch.ones(B, N, 4)
-        good_sys[0, 0] = torch.tensor([0.5, 0.3, 0.8, 0.2])
-        good_stave = torch.ones(B, M, 4)
-        good_stave[0, 0] = torch.tensor([0.5, 0.3, 0.4, 0.05])
-        gt_sys_good = good_sys[0].clone()
-        gt_stave_good = good_stave[0].clone()
-
-        # Bad: stave is outside system (same cy so sorting is stable)
-        bad_sys = torch.ones(B, N, 4)
-        bad_sys[0, 0] = torch.tensor([0.5, 0.3, 0.4, 0.05])
-        bad_stave = torch.ones(B, M, 4)
-        bad_stave[0, 0] = torch.tensor([0.5, 0.3, 0.8, 0.2])
-        gt_sys_bad = bad_sys[0].clone()
-        gt_stave_bad = bad_stave[0].clone()
-
-        good_loss = loss(
-            good_sys,
-            sys_logits,
-            good_stave,
-            stave_logits,
-            pred_assign,
-            [gt_sys_good],
-            [gt_stave_good],
-            [gt_assign],
-        )
-        bad_loss = loss(
-            bad_sys,
-            sys_logits,
-            bad_stave,
-            stave_logits,
-            pred_assign,
-            [gt_sys_bad],
-            [gt_stave_bad],
-            [gt_assign],
-        )
-
-        assert bad_loss.total().item() > good_loss.total().item()
-
-
-class TestAlignmentLoss:
-    @pytest.fixture
-    def config(self) -> Config:
-        return Config()
-
-    @pytest.fixture
-    def loss(self, config: Config) -> HierarchicalLoss:
-        return HierarchicalLoss(config)
-
-    def _make_sys_and_staves(
-        self, config: Config, num_staves: int
-    ) -> tuple[Tensor, Tensor, Tensor, int]:
-        N, M = config.num_system_queries, config.num_stave_queries
-        gt_assign = make_assign(num_staves, 1, M)
-        sys_boxes = torch.ones(N, 4)
-        stave_boxes = torch.ones(M, 4)
-        return sys_boxes, stave_boxes, gt_assign, num_staves
-
-    def test_perfect_alignment_yields_zero(
-        self, loss: HierarchicalLoss, config: Config
-    ) -> None:
-        """When stave edges perfectly match system edges, loss should be zero."""
-        N, M = config.num_system_queries, config.num_stave_queries
-        gt_assign = make_assign(2, 1, M)
-
-        # System box
-        sys_boxes = torch.ones(N, 4)
-        sys_boxes[0] = torch.tensor([0.5, 0.5, 0.8, 0.6])  # cx cy w h
-
-        # Two staves with edges exactly matching system
-        # sys xyxy: left=0.1, top=0.2, right=0.9, bottom=0.8
-        stave_boxes = torch.ones(M, 4)
-        # top stave: top=0.2, left=0.1, right=0.9
-        stave_boxes[0] = torch.tensor([0.5, 0.3, 0.8, 0.2])
-        # bot stave: bottom=0.8, left=0.1, right=0.9
-        stave_boxes[1] = torch.tensor([0.5, 0.7, 0.8, 0.2])
-
-        result = loss._alignment_loss(sys_boxes, stave_boxes, gt_assign, 2, 1)
-        assert result.item() == pytest.approx(0.0, abs=1e-5)
-
-    def test_misaligned_top(self, loss: HierarchicalLoss, config: Config) -> None:
-        """Top of first stave not matching system top should yield positive loss."""
-        N, M = config.num_system_queries, config.num_stave_queries
-        gt_assign = make_assign(1, 1, M)
-
-        sys_boxes = torch.ones(N, 4)
-        sys_boxes[0] = torch.tensor([0.5, 0.5, 0.8, 0.6])  # top=0.2
-
-        # Stave top at 0.3 instead of 0.2
-        stave_boxes = torch.ones(M, 4)
-        stave_boxes[0] = torch.tensor([0.5, 0.35, 0.8, 0.1])  # top=0.3
-
-        result = loss._alignment_loss(sys_boxes, stave_boxes, gt_assign, 1, 1)
-        assert result.item() > 0.0
-
-    def test_misaligned_sides(self, loss: HierarchicalLoss, config: Config) -> None:
-        """Stave sides not matching system sides should yield positive loss."""
-        N, M = config.num_system_queries, config.num_stave_queries
-        gt_assign = make_assign(1, 1, M)
-
-        sys_boxes = torch.ones(N, 4)
-        sys_boxes[0] = torch.tensor([0.5, 0.5, 0.8, 0.4])  # left=0.1, right=0.9
-
-        # Stave narrower than system
-        stave_boxes = torch.ones(M, 4)
-        stave_boxes[0] = torch.tensor([0.5, 0.5, 0.4, 0.4])  # left=0.3, right=0.7
-
-        result = loss._alignment_loss(sys_boxes, stave_boxes, gt_assign, 1, 1)
-        assert result.item() > 0.0
-
-    def test_better_alignment_lower_loss(
-        self, loss: HierarchicalLoss, config: Config
-    ) -> None:
-        """Better aligned staves should yield lower loss than misaligned ones."""
-        N, M = config.num_system_queries, config.num_stave_queries
-        gt_assign = make_assign(2, 1, M)
-
-        sys_boxes = torch.ones(N, 4)
-        sys_boxes[0] = torch.tensor([0.5, 0.5, 0.8, 0.6])
-
-        # Good: staves closely matching system edges
-        good_staves = torch.ones(M, 4)
-        good_staves[0] = torch.tensor([0.5, 0.21, 0.8, 0.02])
-        good_staves[1] = torch.tensor([0.5, 0.79, 0.8, 0.02])
-
-        # Bad: staves far from system edges
-        bad_staves = torch.ones(M, 4)
-        bad_staves[0] = torch.tensor([0.5, 0.4, 0.4, 0.1])
-        bad_staves[1] = torch.tensor([0.5, 0.6, 0.4, 0.1])
-
-        good_loss = loss._alignment_loss(sys_boxes, good_staves, gt_assign, 2, 1)
-        bad_loss = loss._alignment_loss(sys_boxes, bad_staves, gt_assign, 2, 1)
-
-        assert good_loss.item() < bad_loss.item()
-
-    def test_multiple_systems(self, loss: HierarchicalLoss, config: Config) -> None:
-        """Loss should handle multiple systems correctly."""
-        N, M = config.num_system_queries, config.num_stave_queries
-        gt_assign = make_assign(4, 2, M)
-
-        sys_boxes = torch.ones(N, 4)
-        sys_boxes[0] = torch.tensor([0.5, 0.25, 0.8, 0.3])
-        sys_boxes[1] = torch.tensor([0.5, 0.75, 0.8, 0.3])
-
-        stave_boxes = torch.ones(M, 4)
-        stave_boxes[0] = torch.tensor([0.5, 0.25, 0.8, 0.1])
-        stave_boxes[1] = torch.tensor([0.5, 0.25, 0.8, 0.1])
-        stave_boxes[2] = torch.tensor([0.5, 0.75, 0.8, 0.1])
-        stave_boxes[3] = torch.tensor([0.5, 0.75, 0.8, 0.1])
-
-        result = loss._alignment_loss(sys_boxes, stave_boxes, gt_assign, 4, 2)
-        assert result.item() >= 0.0

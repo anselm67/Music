@@ -264,7 +264,7 @@ class PredictionHeads(nn.Module):
         self.stave_box_head = nn.Sequential(
             nn.Linear(D, D),
             nn.GELU(),
-            nn.Linear(D, 4),
+            nn.Linear(D, 2),  # predict only cy, h — x-extent inherited from parent system
         )
         self.stave_obj_head = nn.Linear(D, 1)
         self.assign_head = nn.Linear(D, config.num_system_queries)
@@ -276,13 +276,13 @@ class PredictionHeads(nn.Module):
     ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         sys_boxes = self.sys_box_head(sys_feats).sigmoid()  # (B, N, 4)
         sys_logits = self.sys_obj_head(sys_feats)  # (B, N, 1)
-        stave_boxes = self.stave_box_head(stave_feats).sigmoid()  # (B, M, 4)
+        stave_yh = self.stave_box_head(stave_feats).sigmoid()  # (B, M, 2) — cy, h
         stave_logits = self.stave_obj_head(stave_feats)  # (B, M, 1)
         assign_logits = self.assign_head(stave_feats)  # (B, M, N)
         return (
             sys_boxes,
             sys_logits,
-            stave_boxes,
+            stave_yh,
             stave_logits,
             assign_logits,
         )
@@ -298,14 +298,11 @@ class HierarchicalDETR(nn.Module):
 
     def forward(
         self, x: Tensor
-    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         memory = self.backbone(x)  # (B, P, D)
         sys_feats, stave_feats = self.decoder(memory)  # (B, N, D), (B, M, D)
-
+        # returns: sys_boxes, sys_logits, stave_yh (cy/h), stave_logits, assign_logits
         return self.heads(sys_feats, stave_feats)
-        # returns:
-        # sys_boxes, sys_logits,
-        # stave_boxes, stave_logits, assign_logits
 
 
 # vscode - End of file.

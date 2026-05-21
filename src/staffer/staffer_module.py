@@ -24,7 +24,7 @@ class StafferModule(L.LightningModule):
 
     def forward(
         self, x: Tensor
-    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         return self.model(x)
 
     def _step(self, batch: tuple, stage: str) -> Tensor:
@@ -32,7 +32,7 @@ class StafferModule(L.LightningModule):
         (
             pred_sys_boxes,
             pred_sys_logits,
-            pred_stave_boxes,
+            pred_stave_yh,
             pred_stave_logits,
             pred_assign,
         ) = self.model(images)
@@ -40,7 +40,7 @@ class StafferModule(L.LightningModule):
         loss = self.loss_fn.forward(
             pred_sys_boxes,
             pred_sys_logits,
-            pred_stave_boxes,
+            pred_stave_yh,
             pred_stave_logits,
             pred_assign,
             gt_sys_boxes,
@@ -49,14 +49,12 @@ class StafferModule(L.LightningModule):
         )
 
         # IoU metrics
-        sys_iou = self._mean_iou(pred_sys_boxes, gt_sys_boxes, gt_assign, is_sys=True)
-        stave_iou = self._mean_iou(
-            pred_stave_boxes, gt_stave_boxes, gt_assign, is_sys=False
-        )
+        sys_iou = self._mean_sys_iou(pred_sys_boxes, gt_sys_boxes, gt_assign)
+        stave_l1 = self._mean_stave_l1(pred_stave_yh, gt_stave_boxes, gt_assign)
 
         self.log(f"{stage}/loss", loss.total(), prog_bar=True)
         self.log(f"{stage}/sys_iou", sys_iou)
-        self.log(f"{stage}/stave_iou", stave_iou)
+        self.log(f"{stage}/stave_l1", stave_l1)
         for f in fields(loss):
             self.log(f"{stage}/{f.name}", getattr(loss, f.name))
 
@@ -65,24 +63,35 @@ class StafferModule(L.LightningModule):
 
         return loss.total()
 
-    def _mean_iou(
+    def _mean_sys_iou(
         self,
-        pred_boxes: Tensor,  # (B, N, 4)
+        pred_boxes: Tensor,      # (B, N, 4)
         gt_boxes: list[Tensor],  # list of (N, 4) padded
-        gt_assign: list[Tensor],  # list of (M,) padded with -1
-        is_sys: bool,
+        gt_assign: list[Tensor],
     ) -> Tensor:
         ious = []
         for i in range(pred_boxes.shape[0]):
-            if is_sys:
-                num_gt = int(gt_assign[i][gt_assign[i] != -1].max().item()) + 1
-            else:
-                num_gt = int((gt_assign[i] != -1).sum().item())
+            num_gt = int(gt_assign[i][gt_assign[i] != -1].max().item()) + 1
             matched = pred_boxes[i][:num_gt]
             gt = gt_boxes[i][:num_gt]
             iou = generalized_iou(matched, gt).clamp(min=0).mean()
             ious.append(1.0 - iou)
         return torch.stack(ious).mean()
+
+    def _mean_stave_l1(
+        self,
+        pred_yh: Tensor,         # (B, M, 2) — cy, h
+        gt_boxes: list[Tensor],  # list of (M, 4) padded
+        gt_assign: list[Tensor],
+    ) -> Tensor:
+        """Mean absolute error on (cy, h), reported as 1 - normalised_error for consistency."""
+        errors = []
+        for i in range(pred_yh.shape[0]):
+            num_gt = int((gt_assign[i] != -1).sum().item())
+            matched = pred_yh[i][:num_gt]
+            gt = gt_boxes[i][:num_gt, [1, 3]]
+            errors.append(torch.abs(matched - gt).mean())
+        return torch.stack(errors).mean()
 
     def training_step(self, batch: tuple, batch_idx: int) -> Tensor:
         return self._step(batch, "train")
