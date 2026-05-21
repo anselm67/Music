@@ -72,3 +72,35 @@ def test_remove_unused_keys(tmp_path: Path, input: str, expected: list[str]) -> 
     reader = tokenize_input(tmp_path, input)
     for line, check in zip(reader.lines, expected):
         assert line == check
+
+
+def test_instrument_all_spines_skipped(tmp_path: Path) -> None:
+    """Rows where every spine is an instrument annotation must not appear in output."""
+    kern = """
+**kern\t**kern
+*clefG2\t*clefF4
+*k[]\t*k[]
+*M4/4\t*M4/4
+*IPiano\t*IPiano
+=1\t=1
+4c\t4C
+==2\t==2
+""".strip()
+    reader = tokenize_input(tmp_path, kern)
+    assert not any("Instr:" in line for line in reader.lines)
+
+
+def test_instrument_mixed_with_spine_path_skipped(tmp_path: Path) -> None:
+    """Rows mixing instrument and spine-path tokens must not appear in output."""
+    kern = """
+**kern\t**kern
+*clefG2\t*clefF4
+*k[]\t*k[]
+*M4/4\t*M4/4
+*IPiano\t*
+=1\t=1
+4c\t4C
+==2\t==2
+""".strip()
+    reader = tokenize_input(tmp_path, kern)
+    assert not any("Instr:" in line for line in reader.lines)
