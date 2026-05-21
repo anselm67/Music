@@ -351,13 +351,12 @@ LOG_VARIABLES = [
     # From StafferModule._step():
     "loss",
     "lr",  # Training only.
-    "stave_l1",
-    "sys_iou",
     # From LossDict:
     "sys_box",
     "sys_giou",
     "sys_obj",
-    "stave_box",
+    "sys_iou",
+    "stave_l1",
     "stave_obj",
     "assign",
 ]

@@ -14,7 +14,7 @@ class LossDict:
     sys_box: Tensor
     sys_giou: Tensor
     sys_obj: Tensor
-    stave_box: Tensor
+    stave_l1: Tensor
     stave_obj: Tensor
     assign: Tensor
 
@@ -23,7 +23,7 @@ class LossDict:
             self.sys_box
             + self.sys_giou
             + self.sys_obj
-            + self.stave_box
+            + self.stave_l1
             + self.stave_obj
             + self.assign
         )
@@ -135,7 +135,7 @@ class HierarchicalLoss(nn.Module):
         sys_box = torch.tensor(0.0, device=pred_sys_boxes.device)
         sys_giou = torch.tensor(0.0, device=pred_sys_boxes.device)
         sys_obj = torch.tensor(0.0, device=pred_sys_boxes.device)
-        stave_box = torch.tensor(0.0, device=pred_sys_boxes.device)
+        stave_l1 = torch.tensor(0.0, device=pred_sys_boxes.device)
         stave_obj = torch.tensor(0.0, device=pred_sys_boxes.device)
         assign = torch.tensor(0.0, device=pred_sys_boxes.device)
 
@@ -161,7 +161,7 @@ class HierarchicalLoss(nn.Module):
                 num_gt_staves,
                 self.config.num_stave_queries,
             )
-            stave_box = stave_box + b
+            stave_l1 = stave_l1 + b
             stave_obj = stave_obj + o
 
             assign = assign + self._assignment_loss(
@@ -174,7 +174,7 @@ class HierarchicalLoss(nn.Module):
             sys_box=self.config.box_loss_multiplier * (sys_box / B),
             sys_giou=self.config.box_loss_multiplier * (sys_giou / B),
             sys_obj=sys_obj / B,
-            stave_box=self.config.box_loss_multiplier * (stave_box / B),
+            stave_l1=self.config.box_loss_multiplier * (stave_l1 / B),
             stave_obj=stave_obj / B,
             assign=assign / B,
         )
