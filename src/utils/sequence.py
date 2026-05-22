@@ -87,4 +87,4 @@ def sequence_edit_distance(seq1: Tensor, seq2: Tensor, sil_id: int) -> int:
 def strip_eos(seq: Tensor, eos_id: int) -> Tensor:
     """Return seq sliced up to (not including) the first EOS timestep."""
     eos_pos = (seq[:, 0] == eos_id).nonzero(as_tuple=False)
-    return seq[: eos_pos[0].item()] if eos_pos.numel() > 0 else seq
+    return seq[: int(eos_pos[0].item())] if eos_pos.numel() > 0 else seq
