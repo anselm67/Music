@@ -22,7 +22,9 @@ class NoterModule(L.LightningModule):
         self.save_hyperparameters(config.asdict())
         self.register_buffer(
             "_causal_mask_buf",
-            torch.ones(config.max_seqlen, config.max_seqlen, dtype=torch.bool).triu(diagonal=1),
+            torch.ones(config.max_seqlen, config.max_seqlen, dtype=torch.bool).triu(
+                diagonal=1
+            ),
         )
 
     def _causal_mask(self, size: int) -> Tensor:
