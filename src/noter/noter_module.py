@@ -74,7 +74,7 @@ class NoterModule(L.LightningModule):
         done = torch.zeros(B, dtype=torch.bool, device=self.device)
         for _ in range(c.max_seqlen - 1):
             T = generated.shape[1]
-            tgt_pad_mask = (generated == Vocab.PAD).all(dim=-1)
+            tgt_pad_mask = (generated == Vocab.SIL).all(dim=-1)
             logits = self.model.decode(
                 generated, memory, self._causal_mask(T), tgt_pad_mask, src_pad_mask
             )
