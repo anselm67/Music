@@ -36,13 +36,10 @@ def format_sequence_columns(
     return "\n".join(rows)
 
 
-def chord_distance(chord1: Tensor, chord2: Tensor, sil_id: int) -> int:
-    """Edit distance between the actual notes in two SIL-padded chord tensors.
-
-    SIL padding is stripped before comparison so only real note tokens count.
-    """
-    c1 = sorted(t for t in chord1.tolist() if t != sil_id)
-    c2 = sorted(t for t in chord2.tolist() if t != sil_id)
+def chord_distance(chord1: Tensor, chord2: Tensor, pad_id: int) -> int:
+    """Edit distance between the actual notes in two PAD-padded chord tensors."""
+    c1 = sorted(t for t in chord1.tolist() if t != pad_id)
+    c2 = sorted(t for t in chord2.tolist() if t != pad_id)
     m, n = len(c1), len(c2)
     dp = np.zeros((m + 1, n + 1), dtype=int)
     for i in range(m + 1):
@@ -60,7 +57,7 @@ def chord_distance(chord1: Tensor, chord2: Tensor, sil_id: int) -> int:
     return int(dp[m][n])
 
 
-def sequence_edit_distance(seq1: Tensor, seq2: Tensor, sil_id: int) -> int:
+def sequence_edit_distance(seq1: Tensor, seq2: Tensor, pad_id: int) -> int:
     """Sequence-level edit distance where each element is a chord.
 
     Insertion/deletion of a whole chord costs max_chords so it stays on the
@@ -75,7 +72,7 @@ def sequence_edit_distance(seq1: Tensor, seq2: Tensor, sil_id: int) -> int:
         dp[0][j] = j * max_chords
     for i in range(1, len1 + 1):
         for j in range(1, len2 + 1):
-            cost = chord_distance(seq1[i - 1], seq2[j - 1], sil_id)
+            cost = chord_distance(seq1[i - 1], seq2[j - 1], pad_id)
             dp[i][j] = min(
                 dp[i - 1][j] + max_chords,
                 dp[i][j - 1] + max_chords,

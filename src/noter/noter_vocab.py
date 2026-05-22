@@ -11,15 +11,14 @@ from pdmx import PDMX
 
 
 class Vocab:
-    PAD_T = (0, "PAD")  # Padding value for images and sequences.
+    PAD_T = (0, "PAD")  # Padding value for images, sequences, and chord slots.
     UNK_T = (1, "UNK")  # Unknown sequence token.
     SOS_T = (2, "SOS")  # Start of sequence.
     EOS_T = (3, "EOS")  # End of sequence.
-    SIL_T = (4, "SIL")  # Padding value for chords.
 
-    RESERVED_TOKENS = [PAD_T, UNK_T, SOS_T, EOS_T, SIL_T]
+    RESERVED_TOKENS = [PAD_T, UNK_T, SOS_T, EOS_T]
 
-    PAD, UNK, SOS, EOS, SIL = map(lambda x: x[0], RESERVED_TOKENS)
+    PAD, UNK, SOS, EOS = map(lambda x: x[0], RESERVED_TOKENS)
 
     _tok2i: dict[str, int]
     _i2tok: dict[int, str]
@@ -52,7 +51,7 @@ class Vocab:
             raise ValueError(
                 f"Number of tokens ({len(tokens)}) exceeds max_chords ({max_chords})"
             )
-        tensor = torch.full((max_chords,), self.SIL)
+        tensor = torch.full((max_chords,), self.PAD)
         for idx, tok in enumerate(tokens):
             tensor[idx] = self.encode(tok)
         return tensor
@@ -62,7 +61,7 @@ class Vocab:
         for i in range(0, len(ids)):
             tokens.append(
                 " ".join(
-                    self.decode(int(id.item())) for id in ids[i, :] if id != self.SIL
+                    self.decode(int(id.item())) for id in ids[i, :] if id != self.PAD
                 )
             )
             if ids[i, 0] == self.EOS:

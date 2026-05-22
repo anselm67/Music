@@ -42,7 +42,7 @@ class TestVocab:
         tokens = ["token1", "token2"]
         max_chords = 4
         result = vocab.tok2i(tokens, max_chords)
-        expected = torch.tensor([5, 6, 4, 4])  # 4 is SIL
+        expected = torch.tensor([5, 6, 0, 0])  # 0 is PAD
         assert torch.equal(result, expected)
 
     def test_tok2i_with_unknown(self, vocab: Vocab) -> None:
@@ -56,7 +56,7 @@ class TestVocab:
         tokens: list[str] = []
         max_chords = 2
         result = vocab.tok2i(tokens, max_chords)
-        expected = torch.tensor([4, 4])
+        expected = torch.tensor([0, 0])  # 0 is PAD
         assert torch.equal(result, expected)
 
     def test_tok2i_max_chords_zero(self, vocab: Vocab) -> None:
@@ -122,35 +122,31 @@ class TestVocab:
             expected_tok2i = {
                 "EOS": 3,
                 "PAD": 0,
-                "SIL": 4,
                 "SOS": 2,
                 "UNK": 1,
-                "token1": 5,
-                "token2": 6,
-                "token3": 7,
-                "token4": 8,
+                "token1": 4,
+                "token2": 5,
+                "token3": 6,
+                "token4": 7,
             }
             assert vocab._tok2i == expected_tok2i
 
     def test_from_files_no_files(self) -> None:
         vocab = Vocab.from_files([])
-        assert vocab._tok2i == {"EOS": 3, "PAD": 0, "SIL": 4, "SOS": 2, "UNK": 1}
+        assert vocab._tok2i == {"EOS": 3, "PAD": 0, "SOS": 2, "UNK": 1}
 
     def test_constants(self) -> None:
         assert Vocab.PAD_T == (0, "PAD")
         assert Vocab.UNK_T == (1, "UNK")
         assert Vocab.SOS_T == (2, "SOS")
         assert Vocab.EOS_T == (3, "EOS")
-        assert Vocab.SIL_T == (4, "SIL")
         assert Vocab.RESERVED_TOKENS == [
             Vocab.PAD_T,
             Vocab.UNK_T,
             Vocab.SOS_T,
             Vocab.EOS_T,
-            Vocab.SIL_T,
         ]
         assert Vocab.PAD == 0
         assert Vocab.UNK == 1
         assert Vocab.SOS == 2
         assert Vocab.EOS == 3
-        assert Vocab.SIL == 4

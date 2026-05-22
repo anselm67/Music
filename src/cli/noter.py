@@ -518,7 +518,7 @@ def predict(ctx: ClickContext, name: str) -> None:
 
         gt_content = strip_eos(gt_sequence[1:], Vocab.EOS)
         pred_content = strip_eos(predicted[0].cpu(), Vocab.EOS)
-        edit_dist = sequence_edit_distance(gt_content, pred_content, Vocab.SIL)
+        edit_dist = sequence_edit_distance(gt_content, pred_content, Vocab.PAD)
         max_cost = max(len(gt_content), len(pred_content)) * config.max_chords
         similarity = 1.0 - edit_dist / max_cost if max_cost > 0 else 1.0
 
