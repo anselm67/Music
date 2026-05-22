@@ -1,5 +1,10 @@
 from .json_query import compile_filter, compile_query
-from .sequence import format_sequence_columns
+from .sequence import (
+    chord_distance,
+    format_sequence_columns,
+    sequence_edit_distance,
+    strip_eos,
+)
 from .utils import (
     current_commit,
     from_json,
@@ -19,4 +24,7 @@ __all__ = [
     "compile_query",
     "compile_filter",
     "format_sequence_columns",
+    "chord_distance",
+    "sequence_edit_distance",
+    "strip_eos",
 ]

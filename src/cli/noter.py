@@ -26,7 +26,12 @@ from tqdm import tqdm
 
 from noter import NoterConfig, NoterDataModule, NoterDataset, NoterModule, Vocab
 from pdmx import PDMX
-from utils import format_sequence_columns, print_histogram
+from utils import (
+    format_sequence_columns,
+    print_histogram,
+    sequence_edit_distance,
+    strip_eos,
+)
 
 HOME = Path("/home/anselm/datasets/PDMX")
 
@@ -494,8 +499,7 @@ def predict(ctx: ClickContext, name: str) -> None:
     shuffled_indices = list(range(len(dataset)))
     random.shuffle(shuffled_indices)
 
-    total_correct = 0
-    total_tokens = 0
+    total_similarity = 0.0
     n_samples = 0
 
     for idx in shuffled_indices:
@@ -509,20 +513,21 @@ def predict(ctx: ClickContext, name: str) -> None:
         gt_tokens = dataset.vocab.i2tok(gt_sequence[1:])  # skip SOS
         pred_tokens = dataset.vocab.i2tok(predicted[0].cpu())
 
-        n_correct = sum(g == p for g, p in zip(gt_tokens, pred_tokens))
-        n_total = len(gt_tokens)
-        accuracy = n_correct / n_total if n_total else 0.0
+        gt_content = strip_eos(gt_sequence[1:], Vocab.EOS)
+        pred_content = strip_eos(predicted[0].cpu(), Vocab.EOS)
+        edit_dist = sequence_edit_distance(gt_content, pred_content, Vocab.SIL)
+        max_cost = max(len(gt_content), len(pred_content)) * config.max_chords
+        similarity = 1.0 - edit_dist / max_cost if max_cost > 0 else 1.0
 
-        total_correct += n_correct
-        total_tokens += n_total
+        total_similarity += similarity
         n_samples += 1
-        avg_accuracy = total_correct / total_tokens if total_tokens else 0.0
+        avg_similarity = total_similarity / n_samples
 
         click.clear()
         print(f"Item {idx}")
         print(format_sequence_columns(gt_tokens, pred_tokens))
-        print(f"\nAccuracy: {accuracy:.1%}  ({n_correct}/{n_total} tokens)")
-        print(f"     Avg: {avg_accuracy:.1%}  ({total_correct}/{total_tokens} tokens over {n_samples} samples)")
+        print(f"\nSimilarity: {similarity:.1%}  (edit {edit_dist} / max {max_cost})")
+        print(f"   Avg sim: {avg_similarity:.1%}  ({n_samples} samples)")
 
         # Denormalize and display.
         img = image.squeeze(0).cpu().numpy()

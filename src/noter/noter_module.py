@@ -64,9 +64,8 @@ class NoterModule(L.LightningModule):
     def predict(self, source: Tensor, source_widths: Tensor) -> Tensor:
         B, c = source.shape[0], self.config
         generated = torch.full(
-            (B, 1, c.max_chords), Vocab.SIL, device=self.device, dtype=torch.long
+            (B, 1, c.max_chords), Vocab.SOS, device=self.device, dtype=torch.long
         )
-        generated[:, 0, 0] = Vocab.SOS
         memory, src_pad_mask = self.model.encode(source, source_widths)
         for _ in range(c.max_seqlen - 1):
             T = generated.shape[1]
