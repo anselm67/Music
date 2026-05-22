@@ -494,6 +494,10 @@ def predict(ctx: ClickContext, name: str) -> None:
     shuffled_indices = list(range(len(dataset)))
     random.shuffle(shuffled_indices)
 
+    total_correct = 0
+    total_tokens = 0
+    n_samples = 0
+
     for idx in shuffled_indices:
         image, source_width, gt_sequence = dataset[idx]
 
@@ -509,10 +513,16 @@ def predict(ctx: ClickContext, name: str) -> None:
         n_total = len(gt_tokens)
         accuracy = n_correct / n_total if n_total else 0.0
 
+        total_correct += n_correct
+        total_tokens += n_total
+        n_samples += 1
+        avg_accuracy = total_correct / total_tokens if total_tokens else 0.0
+
         click.clear()
         print(f"Item {idx}")
         print(format_sequence_columns(gt_tokens, pred_tokens))
         print(f"\nAccuracy: {accuracy:.1%}  ({n_correct}/{n_total} tokens)")
+        print(f"     Avg: {avg_accuracy:.1%}  ({total_correct}/{total_tokens} tokens over {n_samples} samples)")
 
         # Denormalize and display.
         img = image.squeeze(0).cpu().numpy()
