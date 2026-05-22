@@ -121,6 +121,7 @@ def vocab(ctx: ClickContext) -> None:
 def show(ctx: ClickContext) -> None:
     """Displays random samples from the dataset."""
     dataset = NoterDataset(ctx.config, ctx.pdmx)
+    cv2.namedWindow("Staff")
     while True:
         index = random.randint(0, len(dataset) - 1)
         img_tensor, _, seq_tensor = dataset[index]
@@ -130,6 +131,7 @@ def show(ctx: ClickContext) -> None:
         cv2.imshow("Staff", img)
         if cv2.waitKey(0) == ord("q"):
             break
+    cv2.destroyAllWindows()
 
 
 @click.command()

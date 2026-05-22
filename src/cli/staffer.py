@@ -149,6 +149,7 @@ def check() -> None:
 def show(ctx: ClickContext) -> None:
     """Displays random samples from the dataset."""
     dataset = StafferDataset(ctx.config, ctx.pdmx)
+    cv2.namedWindow("Page")
     while True:
         index = random.randint(0, len(dataset) - 1)
         img_tensor, sys, staff, assign = dataset[index]
@@ -171,7 +172,8 @@ def show(ctx: ClickContext) -> None:
         cv2.imshow("Page", img)
 
         if cv2.waitKey(0) == ord("q"):
-            return
+            break
+    cv2.destroyAllWindows()
 
 
 @click.command()
