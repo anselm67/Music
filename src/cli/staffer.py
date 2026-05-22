@@ -530,6 +530,7 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
         shuffled = list(dataset.items)
         random.shuffle(shuffled)
         source = (item[1] for item in shuffled)
+    cv2.namedWindow("Page")
     for img_path in source:
         print(f"Path: {img_path.as_posix()}")
         img = decode_image(img_path.as_posix())
@@ -568,8 +569,8 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
         cv2.imshow("Page", img)
 
         if cv2.waitKey(0) == ord("q"):
-            return
-        cv2.destroyAllWindows()
+            break
+    cv2.destroyAllWindows()
 
 
 cli.add_command(summary)

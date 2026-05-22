@@ -502,6 +502,7 @@ def predict(ctx: ClickContext, name: str) -> None:
     total_similarity = 0.0
     n_samples = 0
 
+    cv2.namedWindow("Staff")
     for idx in shuffled_indices:
         image, source_width, gt_sequence = dataset[idx]
 
@@ -536,9 +537,8 @@ def predict(ctx: ClickContext, name: str) -> None:
         cv2.imshow("Staff", np.stack([img] * 3, axis=-1))
 
         if cv2.waitKey(0) == ord("q"):
-            cv2.destroyAllWindows()
-            return
-        cv2.destroyAllWindows()
+            break
+    cv2.destroyAllWindows()
 
 
 cli.add_command(vocab)
