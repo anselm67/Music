@@ -484,6 +484,57 @@ def logs(
 
 @click.command()
 @click.argument("name", type=str)
+@click.option(
+    "--size",
+    type=int,
+    default=1024,
+    show_default=True,
+    help="Number of random samples to evaluate.",
+)
+@click.pass_obj
+def run_eval(ctx: ClickContext, name: str, size: int) -> None:
+    """Evaluates prediction accuracy on N random samples from the dataset.
+
+    NAME: The model version to use to make the predictions.
+    """
+    ckpt_path = Path("checkpoints") / "noter" / name / "last.ckpt"
+    config = config_from_checkpoint(ckpt_path)
+    dataset = NoterDataset(config, ctx.pdmx)
+    module = NoterModule.load_from_checkpoint(
+        ckpt_path, config=config, weights_only=False
+    )
+    module.eval()
+
+    n = min(size, len(dataset))
+    indices = random.sample(range(len(dataset)), n)
+
+    similarities: list[float] = []
+    for idx in tqdm(indices, desc="Evaluating"):
+        image, source_width, gt_sequence = dataset[idx]
+
+        device = module.device
+        predicted = module.predict(
+            image.unsqueeze(0).to(device), source_width.unsqueeze(0).to(device)
+        )
+
+        gt_content = strip_eos(gt_sequence[1:], Vocab.EOS)
+        pred_content = strip_eos(predicted[0].cpu(), Vocab.EOS)
+        edit_dist = sequence_edit_distance(gt_content, pred_content, Vocab.PAD)
+        max_cost = max(len(gt_content), len(pred_content)) * config.max_chords
+        similarity = 1.0 - edit_dist / max_cost if max_cost > 0 else 1.0
+        similarities.append(similarity)
+
+    if not similarities:
+        print("No samples to evaluate.")
+        return
+    print(f"\nEvaluated {n} samples from '{name}':")
+    print(f"  min: {min(similarities):.1%}")
+    print(f"  avg: {sum(similarities) / len(similarities):.1%}")
+    print(f"  max: {max(similarities):.1%}")
+
+
+@click.command()
+@click.argument("name", type=str)
 @click.pass_obj
 def predict(ctx: ClickContext, name: str) -> None:
     """Predicts token sequences for random samples from the dataset.
@@ -550,6 +601,7 @@ cli.add_command(image_stats)
 cli.add_command(summary)
 cli.add_command(train)
 cli.add_command(logs)
+cli.add_command(run_eval, name="eval")
 cli.add_command(predict)
 
 
