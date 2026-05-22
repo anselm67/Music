@@ -13,16 +13,20 @@ from .noter_vocab import Vocab
 
 
 class NoterModule(L.LightningModule):
+    _causal_mask_buf: Tensor
+
     def __init__(self, config: NoterConfig) -> None:
         super().__init__()
         self.config = config
         self.model = NoterModel(config)
         self.save_hyperparameters(config.asdict())
+        self.register_buffer(
+            "_causal_mask_buf",
+            torch.ones(config.max_seqlen, config.max_seqlen, dtype=torch.bool).triu(diagonal=1),
+        )
 
     def _causal_mask(self, size: int) -> Tensor:
-        return torch.ones(size, size, device=self.device, dtype=torch.bool).triu(
-            diagonal=1
-        )
+        return self._causal_mask_buf[:size, :size]
 
     def forward(self, source: Tensor, source_widths: Tensor, target: Tensor) -> Tensor:
         attention_mask = self._causal_mask(target.shape[1])
