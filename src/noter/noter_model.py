@@ -74,13 +74,14 @@ class SourceEmbedding(nn.Module):
             config.input_shape[1] // config.patch_width
         )
         self.pos_embed = nn.Parameter(0.02 * torch.randn(num_patches, config.embed_dim))
+        self.norm = nn.LayerNorm(config.embed_dim)
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.proj(x)  # (B, D, H, W)
         x = x.flatten(2).transpose(1, 2)  # B, num_patches, D)
         x += self.pos_embed
-        return self.dropout(x)
+        return self.dropout(self.norm(x))
 
 
 class TargetEmbedder(nn.Module):
@@ -94,11 +95,18 @@ class TargetEmbedder(nn.Module):
         self.chord_proj = nn.Linear(
             config.max_chords * config.embed_dim, config.embed_dim
         )
+        self.pos_embed = nn.Parameter(
+            0.02 * torch.randn(config.max_seqlen, config.embed_dim)
+        )
+        self.norm = nn.LayerNorm(config.embed_dim)
+        self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, target: Tensor) -> Tensor:
         embeds = self.embedding(target)
         B, T, H, D = embeds.shape
-        return self.chord_proj(embeds.view(B, T, H * D))
+        assert T <= self.pos_embed.shape[0], f"T={T} exceeds max_seqlen={self.pos_embed.shape[0]}"
+        x = self.chord_proj(embeds.view(B, T, H * D))
+        return self.dropout(self.norm(x + self.pos_embed[:T]))
 
 
 class NoterModel(nn.Module):

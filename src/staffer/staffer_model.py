@@ -93,14 +93,14 @@ class PatchEmbedding(nn.Module):
         self.pos_embed = nn.Parameter(
             0.02 * randn(num_patch[0] * num_patch[1], config.embed_dim)
         )
-
+        self.norm = nn.LayerNorm(config.embed_dim)
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.proj(x)
         x = x.flatten(2).transpose(1, 2)
         x += self.pos_embed
-        return self.dropout(x)
+        return self.dropout(self.norm(x))
 
 
 class TransformerBlock(nn.Module):
