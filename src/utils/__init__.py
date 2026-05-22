@@ -1,4 +1,5 @@
 from .json_query import compile_filter, compile_query
+from .sequence import format_sequence_columns
 from .utils import (
     current_commit,
     from_json,
@@ -17,4 +18,5 @@ __all__ = [
     "Walker",
     "compile_query",
     "compile_filter",
+    "format_sequence_columns",
 ]

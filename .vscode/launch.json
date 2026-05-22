@@ -200,6 +200,22 @@
             "args": [
                 "vocab"
             ]
+        },
+        {
+            "name": "noter predict",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "cli.noter",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "args": [
+                "-o",
+                "150000",
+                "-n",
+                "250",
+                "predict",
+                "basic"
+            ]
         }
     ]
 }

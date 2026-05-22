@@ -26,7 +26,7 @@ from tqdm import tqdm
 
 from noter import NoterConfig, NoterDataModule, NoterDataset, NoterModule, Vocab
 from pdmx import PDMX
-from utils import print_histogram
+from utils import format_sequence_columns, print_histogram
 
 HOME = Path("/home/anselm/datasets/PDMX")
 
@@ -214,7 +214,6 @@ def config_from_checkpoint(checkpoint_path: Path) -> NoterConfig:
     torch.serialization.add_safe_globals([InterpolationMode])
     checkpoint = torch.load(checkpoint_path, weights_only=False)
     return NoterConfig(**checkpoint["hyper_parameters"])
-
 
 
 @click.command()
@@ -497,7 +496,6 @@ def predict(ctx: ClickContext, name: str) -> None:
 
     for idx in shuffled_indices:
         image, source_width, gt_sequence = dataset[idx]
-        print(f"Item {idx}")
 
         device = module.device
         predicted = module.predict(
@@ -507,8 +505,14 @@ def predict(ctx: ClickContext, name: str) -> None:
         gt_tokens = dataset.vocab.i2tok(gt_sequence[1:])  # skip SOS
         pred_tokens = dataset.vocab.i2tok(predicted[0].cpu())
 
-        print(f"  GT:   {gt_tokens}")
-        print(f"  Pred: {pred_tokens}")
+        n_correct = sum(g == p for g, p in zip(gt_tokens, pred_tokens))
+        n_total = len(gt_tokens)
+        accuracy = n_correct / n_total if n_total else 0.0
+
+        click.clear()
+        print(f"Item {idx}")
+        print(format_sequence_columns(gt_tokens, pred_tokens))
+        print(f"\nAccuracy: {accuracy:.1%}  ({n_correct}/{n_total} tokens)")
 
         # Denormalize and display.
         img = image.squeeze(0).cpu().numpy()
