@@ -220,7 +220,9 @@ def config_from_checkpoint(checkpoint_path: Path) -> NoterConfig:
 
     torch.serialization.add_safe_globals([InterpolationMode])
     checkpoint = torch.load(checkpoint_path, weights_only=False)
-    return NoterConfig(**checkpoint["hyper_parameters"])
+    hyper_params = checkpoint["hyper_parameters"]
+    hyper_params.pop("max_steps", None)
+    return NoterConfig(**hyper_params)
 
 
 @click.command()

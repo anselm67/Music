@@ -1,6 +1,6 @@
 """A ViT model from converting staves to kern tokens."""
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 
 import torch
 from torch import Tensor, nn
@@ -40,19 +40,25 @@ class NoterConfig:
 
     # Training config.
     batch_size: int = 16
-    train_len: int = 100_000
-    valid_len: int = 100
+    train_len: int = -1
+    valid_len: int = -1
     lr: float = 3e-4
     weight_decay: float = 1e-2
     warmup_steps: int = 500
-    max_steps: int = 50_000
+    max_steps: int = field(init=False)
 
     def __post_init__(self) -> None:
         if self.patch_height == -1:
             self.patch_height = self.input_shape[0]
+        if self.train_len == -1:
+            self.train_len = 12500 * self.batch_size
+        if self.valid_len == -1:
+            self.valid_len = 100 * self.batch_size
+        self.max_steps = 4 * (self.train_len // self.batch_size)
 
     def asdict(self) -> dict[str, object]:
         obj = asdict(self)
+        obj.pop("max_steps")
         return obj
 
     def use_vocab(self, vocab: Vocab) -> None:
