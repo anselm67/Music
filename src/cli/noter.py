@@ -13,6 +13,7 @@ import click
 import cv2
 import lightning as L
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import torch
 from lightning.pytorch.callbacks import Callback, EarlyStopping, ModelCheckpoint
@@ -475,6 +476,52 @@ def logs(
     print("Bye!")
 
 
+@click.command()
+@click.argument("name", type=str)
+@click.pass_obj
+def predict(ctx: ClickContext, name: str) -> None:
+    """Predicts token sequences for random samples from the dataset.
+
+    NAME: The model version to use to make the predictions.
+    """
+    ckpt_path = Path("checkpoints") / "noter" / name / "last.ckpt"
+    config = config_from_checkpoint(ckpt_path)
+    dataset = NoterDataset(config, ctx.pdmx)
+    module = NoterModule.load_from_checkpoint(
+        ckpt_path, config=config, weights_only=False
+    )
+    module.eval()
+
+    shuffled_indices = list(range(len(dataset)))
+    random.shuffle(shuffled_indices)
+
+    for idx in shuffled_indices:
+        image, source_width, gt_sequence = dataset[idx]
+        print(f"Item {idx}")
+
+        device = module.device
+        predicted = module.predict(
+            image.unsqueeze(0).to(device), source_width.unsqueeze(0).to(device)
+        )  # (1, T, max_chords)
+
+        gt_tokens = dataset.vocab.i2tok(gt_sequence[1:])  # skip SOS
+        pred_tokens = dataset.vocab.i2tok(predicted[0].cpu())
+
+        print(f"  GT:   {gt_tokens}")
+        print(f"  Pred: {pred_tokens}")
+
+        # Denormalize and display.
+        img = image.squeeze(0).cpu().numpy()
+        img = img * 0.17525607175008864 + 0.9482423663139343
+        img = (np.clip(img, 0.0, 1.0) * 255).astype(np.uint8)
+        cv2.imshow("Staff", np.stack([img] * 3, axis=-1))
+
+        if cv2.waitKey(0) == ord("q"):
+            cv2.destroyAllWindows()
+            return
+        cv2.destroyAllWindows()
+
+
 cli.add_command(vocab)
 cli.add_command(show)
 cli.add_command(stats)
@@ -482,6 +529,7 @@ cli.add_command(image_stats)
 cli.add_command(summary)
 cli.add_command(train)
 cli.add_command(logs)
+cli.add_command(predict)
 
 
 def main() -> None:
