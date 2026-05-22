@@ -71,6 +71,7 @@ class NoterModule(L.LightningModule):
             (B, 1, c.max_chords), Vocab.SOS, device=self.device, dtype=torch.long
         )
         memory, src_pad_mask = self.model.encode(source, source_widths)
+        done = torch.zeros(B, dtype=torch.bool, device=self.device)
         for _ in range(c.max_seqlen - 1):
             T = generated.shape[1]
             tgt_pad_mask = (generated == Vocab.PAD).all(dim=-1)
@@ -78,8 +79,10 @@ class NoterModule(L.LightningModule):
                 generated, memory, self._causal_mask(T), tgt_pad_mask, src_pad_mask
             )
             next_tokens = logits[:, -1, :, :].argmax(dim=-1)  # (B, max_chords)
+            next_tokens[done] = Vocab.EOS  # keep finished sequences at EOS
+            done = done | (next_tokens[:, 0] == Vocab.EOS)
             generated = torch.cat([generated, next_tokens.unsqueeze(1)], dim=1)
-            if (next_tokens[:, 0] == Vocab.EOS).all():
+            if done.all():
                 break
         return generated[:, 1:]  # strip SOS
 

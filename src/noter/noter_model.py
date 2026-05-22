@@ -95,6 +95,9 @@ class TargetEmbedder(nn.Module):
         self.chord_proj = nn.Linear(
             config.max_chords * config.embed_dim, config.embed_dim
         )
+        self.chord_pos_embed = nn.Parameter(
+            0.02 * torch.randn(config.max_chords, config.embed_dim)
+        )
         self.pos_embed = nn.Parameter(
             0.02 * torch.randn(config.max_seqlen, config.embed_dim)
         )
@@ -102,9 +105,12 @@ class TargetEmbedder(nn.Module):
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, target: Tensor) -> Tensor:
-        embeds = self.embedding(target)
+        embeds = self.embedding(target)  # (B, T, H, D)
+        embeds = embeds + self.chord_pos_embed  # per-slot position signal
         B, T, H, D = embeds.shape
-        assert T <= self.pos_embed.shape[0], f"T={T} exceeds max_seqlen={self.pos_embed.shape[0]}"
+        assert T <= self.pos_embed.shape[0], (
+            f"T={T} exceeds max_seqlen={self.pos_embed.shape[0]}"
+        )
         x = self.chord_proj(embeds.view(B, T, H * D))
         return self.dropout(self.norm(x + self.pos_embed[:T]))
 
