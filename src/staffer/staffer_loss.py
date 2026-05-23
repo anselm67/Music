@@ -9,6 +9,18 @@ from torch import Tensor, nn
 from .staffer_model import StafferConfig
 
 
+def relative_stave_yh(
+    gt_stave_boxes: Tensor,  # (M, 4) padded cxcywh
+    gt_assign: Tensor,       # (M,) padded with -1
+    gt_sys_boxes: Tensor,    # (N, 4) padded cxcywh
+    num_gt: int,
+) -> Tensor:                 # (num_gt, 2) — cy_delta, h
+    """GT target for stave prediction: cy relative to parent system, plus h."""
+    parent_cy = gt_sys_boxes[gt_assign[:num_gt].clamp(min=0), 1]
+    gt_cy_delta = gt_stave_boxes[:num_gt, 1] - parent_cy
+    return torch.stack([gt_cy_delta, gt_stave_boxes[:num_gt, 3]], dim=1)
+
+
 @dataclass
 class LossDict:
     sys_box: Tensor
@@ -92,16 +104,19 @@ class StafferLoss(nn.Module):
 
     def _stave_yh_loss(
         self,
-        pred_yh: Tensor,      # (M, 2) — cy, h predictions
+        pred_yh: Tensor,  # (M, 2) — cy_delta, h predictions
         pred_logits: Tensor,  # (M, 1)
-        gt_boxes: Tensor,     # (M, 4) padded
-        num_gt: int,
+        gt_boxes: Tensor,  # (M, 4) padded cxcywh
+        gt_assign: Tensor,  # (M,) padded with -1
+        gt_sys_boxes: Tensor,  # (N, 4) padded cxcywh
+        num_gt_staves: int,
         num_queries: int,
     ) -> tuple[Tensor, Tensor]:
-        yh_loss = F.l1_loss(pred_yh[:num_gt], gt_boxes[:num_gt, [1, 3]])
+        gt_yh = relative_stave_yh(gt_boxes, gt_assign, gt_sys_boxes, num_gt_staves)
+        yh_loss = F.l1_loss(pred_yh[:num_gt_staves], gt_yh)
 
         obj_target = torch.zeros(num_queries, device=pred_yh.device)
-        obj_target[:num_gt] = 1.0
+        obj_target[:num_gt_staves] = 1.0
         obj_loss = F.binary_cross_entropy_with_logits(
             pred_logits.squeeze(-1), obj_target
         )
@@ -123,7 +138,7 @@ class StafferLoss(nn.Module):
         self,
         pred_sys_boxes: Tensor,
         pred_sys_logits: Tensor,
-        pred_stave_yh: Tensor,     # (B, M, 2) — cy, h
+        pred_stave_yh: Tensor,  # (B, M, 2) — cy_delta, h
         pred_stave_logits: Tensor,
         pred_assign: Tensor,
         gt_sys_boxes: Tensor,
@@ -158,6 +173,8 @@ class StafferLoss(nn.Module):
                 pred_stave_yh[i],
                 pred_stave_logits[i],
                 gt_stave_boxes[i],
+                gt_assign[i],
+                gt_sys_boxes[i],
                 num_gt_staves,
                 self.config.num_stave_queries,
             )
