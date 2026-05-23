@@ -698,6 +698,15 @@
   Everything needed to go from the two standalone checkpoints to a working E2E model.
   No decisions are left open — only write code.
 </p>
+<div class="callout">
+  <strong>Non-destructive principle:</strong> the existing <code>staffer</code> and
+  <code>noter</code> CLIs and models are unchanged. <code>E2EModel</code> composes them
+  by <em>importing</em> their sub-modules (e.g. <code>StafferModel.backbone.blocks</code>,
+  <code>NoterModel.target_embedder</code>) — not by modifying those classes. Both
+  standalone training pipelines continue to work exactly as before. Where helpful,
+  expose a <code>build_encoder()</code> or similar factory on the existing model classes
+  so <code>E2EModel</code> can construct the right sub-graph without duplicating code.
+</div>
 
 <h3>7.1 Pre-trained checkpoints</h3>
 <table>
@@ -714,12 +723,19 @@
 </p>
 
 <h3>7.2 New files to create</h3>
+<p style="font-size:.875rem;color:var(--muted);">
+  All E2E code lives in a new top-level package <code>src/e2e/</code>, mirroring the
+  <code>src/noter/</code> and <code>src/models/</code> layout. No existing source files are
+  modified.
+</p>
 <table>
   <thead><tr><th>File</th><th>Contents</th></tr></thead>
   <tbody>
-    <tr><td><code>src/noter/e2e_model.py</code></td><td><code>E2EConfig</code>, <code>E2EModel</code> (shared embed, down branch, noter branch), <code>build_stave_boxes()</code></td></tr>
-    <tr><td><code>src/noter/e2e_module.py</code></td><td><code>E2EModule</code> (Lightning): joint loss, <code>load_from_checkpoints()</code></td></tr>
-    <tr><td><code>src/noter/e2e_dataset.py</code></td><td><code>E2EDataset</code> / <code>E2EDataModule</code>: yields full-page image + layout GT + token sequences per stave</td></tr>
+    <tr><td><code>src/e2e/__init__.py</code></td><td>empty (package marker)</td></tr>
+    <tr><td><code>src/e2e/e2e_model.py</code></td><td><code>E2EConfig</code>, <code>E2EModel</code> (shared embed, down branch, noter branch), <code>build_stave_boxes()</code></td></tr>
+    <tr><td><code>src/e2e/e2e_module.py</code></td><td><code>E2EModule</code> (Lightning): joint loss, <code>load_from_checkpoints()</code></td></tr>
+    <tr><td><code>src/e2e/e2e_dataset.py</code></td><td><code>E2EDataset</code>: yields full-page image + layout GT + token sequences per stave</td></tr>
+    <tr><td><code>src/e2e/e2e_datamodule.py</code></td><td><code>E2EDataModule</code>: Lightning DataModule wrapping <code>E2EDataset</code></td></tr>
   </tbody>
 </table>
 
@@ -842,7 +858,7 @@ memory = crops.squeeze(2).permute(0, 2, 1)  # (B*M, 192, 256)  ← noter memory<
     <tr><td>Detection loss</td><td><code>StafferLoss</code> unchanged</td><td>sys L1 + GIoU + obj; stave cy/h L1 + obj; assign CE; box_loss_multiplier=2</td></tr>
     <tr><td>Transcription loss</td><td>CE over <code>(B*M*T*H, V)</code>, ignore PAD</td><td>same as <code>NoterModule._step</code>; mask inactive stave slots</td></tr>
     <tr><td>Joint loss</td><td><code>λ_det · det_loss + λ_tr · tr_loss</code></td><td>start with λ_det=1, λ_tr=1; tune if one dominates</td></tr>
-    <tr><td>Optimiser</td><td>AdamW, lr=1e-4, weight_decay=1e-2, eps=1e-4</td><td>same eps as <code>NoterModule</code></td></tr>
+    <tr><td>Optimiser</td><td>AdamW, lr=1e-4, weight_decay=1e-2</td><td>PyTorch default eps (1e-8)</td></tr>
     <tr><td>Schedule</td><td>linear warmup 500 steps → cosine decay</td><td>same pattern as standalone modules</td></tr>
     <tr><td>Precision</td><td>bf16-mixed</td><td>Lightning <code>Trainer(precision="bf16-mixed")</code></td></tr>
     <tr><td>Backbone freeze</td><td>Freeze ViT + Staffer decoder for first N steps</td><td>Recommended: N = warmup_steps; unfreeze with a lower lr group</td></tr>
