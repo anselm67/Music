@@ -259,9 +259,9 @@
   <thead><tr><th>Quantity</th><th>Value</th><th>Notes</th></tr></thead>
   <tbody>
     <tr><td>Shared feature map</td><td><code>(B, 256, 240, 172)</code></td><td>From shared Conv2d(k=4,s=4); 240×172 positions at 4px/patch</td></tr>
-    <tr><td>Stave box inputs</td><td><code>(N_staves, 5)</code></td><td><code>[batch_idx, x₁, y₁, x₂, y₂]</code> in feature-map coords (image coords ÷ 4)</td></tr>
+    <tr><td>Stave box inputs</td><td><code>(N_staves, 5)</code></td><td><code>[batch_idx, x₁, y₁, x₂, y₂]</code> in feature-map pixel coords (normalised × H_feat/W_feat)</td></tr>
     <tr><td><code>output_size</code></td><td><code>(16, 192)</code></td><td>16 height bins × 192 width bins</td></tr>
-    <tr><td><code>spatial_scale</code></td><td><code>1/4</code></td><td>Image coordinate → feature coordinate (patch_size=4)</td></tr>
+    <tr><td><code>spatial_scale</code></td><td><code>1.0</code></td><td>Boxes are already in feature-map coords — no further scaling needed</td></tr>
     <tr><td>RoIAlign output</td><td><code>(N_staves, 256, 16, 192)</code></td><td>One fixed-size crop per stave</td></tr>
     <tr><td>Height-merge conv</td><td><code>Conv2d(256→256, k=(16,1), s=(16,1))</code></td><td>Receptive field: 16×4px=<strong>64px tall</strong>, 1×4px=<strong>4px wide</strong> — matches standalone noter patch exactly</td></tr>
     <tr><td>After height-merge + permute</td><td><code>(N_staves, 192, 256)</code></td><td>Matches noter decoder memory shape — no projection needed</td></tr>
@@ -590,10 +590,10 @@
   <tbody>
     <tr><td>Shared PatchEmbed Conv2d(1→256, k=4)</td><td>4 K</td><td>&lt; 1 MB</td><td>—</td><td>—</td><td>✓ new</td></tr>
     <tr><td>Staffer DownConv Conv2d(256→256, k=4) + pos_embed</td><td>1.71 M</td><td>3.4 MB</td><td>—</td><td>—</td><td>✓ new</td></tr>
-    <tr><td>ViT Backbone (4 encoder blocks, d=256)</td><td>3.89 M</td><td>7.8 MB</td><td>✓ (k=16 embed)</td><td>—</td><td>✓ (frozen→unfrozen)</td></tr>
+    <tr><td>ViT Backbone — 4 blocks only, d=256 (excl. PatchEmbed)</td><td>3.16 M</td><td>6.3 MB</td><td>✓</td><td>—</td><td>✓ (frozen→unfrozen)</td></tr>
     <tr><td>StafferDecoder + PredictionHeads</td><td>9.63 M</td><td>19.3 MB</td><td>✓</td><td>—</td><td>✓</td></tr>
-    <tr><td>Staffer PatchEmbed k=16  (standalone only)</td><td>0.73 M</td><td>1.5 MB</td><td>✓</td><td>—</td><td>✗ replaced</td></tr>
-    <tr><td>noter SourceEmbedding + Encoder  (standalone only)</td><td>3.89 M</td><td>7.8 MB</td><td>—</td><td>✓</td><td>✗ replaced</td></tr>
+    <tr><td>Staffer PatchEmbed k=16 + pos_embed + norm  (standalone only)</td><td>0.73 M</td><td>1.5 MB</td><td>✓ (part of ViT)</td><td>—</td><td>✗ replaced</td></tr>
+    <tr><td>noter SourceEmbedding + Encoder  (standalone only)</td><td>3.28 M</td><td>6.6 MB</td><td>—</td><td>✓</td><td>✗ replaced</td></tr>
     <tr><td>Height-Merge Conv2d(256→256, k=(16,1))</td><td>1.05 M</td><td>2.1 MB</td><td>—</td><td>—</td><td>✓ new</td></tr>
     <tr><td>TargetEmbedder (Embedding + chord_proj + pos)</td><td>1.78 M</td><td>3.6 MB</td><td>—</td><td>✓</td><td>✓ fine-tuned</td></tr>
     <tr><td>Transformer Decoder (4 blocks)</td><td>4.21 M</td><td>8.4 MB</td><td>—</td><td>✓</td><td>✓ fine-tuned</td></tr>
@@ -607,11 +607,10 @@
 <p style="margin-top:0.75rem;font-size:0.88rem;color:#64748b;">
   <strong>Training VRAM (B=16, E2E fine-tuning, bf16-mixed):</strong>
   bf16 compute weights 64 MB + fp32 master weights 128 MB + AdamW fp32 m/v states 256 MB ≈ 448 MB;
-  shared feature map (B, 256, 240, 172) in bf16 ≈ 1.35 GB;
-  bf16 activations through 8 Transformer layers + RoIAlign ≈ 0.75 GB.
-  <strong>Estimated total ≈ 2.6 GB</strong> — fits very comfortably on RTX 4060/5060 Ti 16 GB.
+  shared feature map (B, 256, 240, 172) in bf16 ≈ 340 MB;
+  bf16 activations through 8 Transformer layers + RoIAlign ≈ 600 MB.
+  <strong>Estimated total ≈ 1.4 GB</strong> — fits very comfortably on RTX 4060/5060 Ti 16 GB.
   Compared with fp32, bf16-mixed roughly halves activation and feature-map memory.
-  The dominant cost is the shared 4×4 feature map (240×172 grid per image), not the weights.
 </p>
 </section>
 
@@ -640,8 +639,9 @@
     <h4>Attempt: full 4×4 patch backbone</h4>
     <p>
       Moving to 4×4 patches on the full page gives 240×172 = 41 280 positions.
-      Running a ViT on 41 280 tokens is quadratically expensive — roughly 1 000×
-      more attention computation per layer than today's 2 580-token model.
+      Running a ViT on 41 280 tokens is quadratically expensive — roughly 256×
+      more attention computation per layer than today's 2 580-token model
+      ((41 280 / 2 580)² ≈ 256).
     </p>
     <p>
       <strong>Rejected</strong> on compute grounds. But fine-grained shared features
@@ -703,7 +703,7 @@
 <table>
   <thead><tr><th>Model</th><th>Path</th><th>Val metric</th></tr></thead>
   <tbody>
-    <tr><td>Staffer</td><td><code>checkpoints/staffer/enhanced2/last.ckpt</code></td><td>sys IoU &gt;0.95, stave L1 ≈ 0.93</td></tr>
+    <tr><td>Staffer</td><td><code>checkpoints/staffer/enhanced2/last.ckpt</code></td><td>sys IoU &gt;0.95, stave IoU ≈ 0.93</td></tr>
     <tr><td>noter</td><td><code>checkpoints/noter/basic/last.ckpt</code></td><td>val token accuracy 95.7 %</td></tr>
   </tbody>
 </table>
