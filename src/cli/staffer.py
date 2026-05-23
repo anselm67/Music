@@ -24,6 +24,7 @@ from torch import Tensor
 from torch.utils.data import DataLoader
 from torchinfo import summary as model_summary
 from torchvision.io import decode_image
+from tqdm import tqdm
 
 from pdmx import PDMX, Box
 from staffer import (
@@ -575,6 +576,72 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
     cv2.destroyAllWindows()
 
 
+@click.command()
+@click.argument("name", type=str)
+@click.option(
+    "--size",
+    type=int,
+    default=500,
+    show_default=True,
+    help="Number of random samples to evaluate.",
+)
+@click.pass_obj
+def run_eval(ctx: ClickContext, name: str, size: int) -> None:
+    """Evaluates stave cy/h accuracy bucketed by vertical position.
+
+    NAME: The model version to evaluate.
+    """
+    NUM_BINS = 16
+    ckpt_path = Path("checkpoints") / "staffer" / name / "last.ckpt"
+    config = config_from_checkpoint(ckpt_path)
+    H = config.image_shape[0]
+    bin_size = H / NUM_BINS
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    dataset = StafferDataset(config, ctx.pdmx)
+    model = StafferModule.load_from_checkpoint(
+        ckpt_path, config=config, weights_only=False, map_location=device
+    )
+    model.eval()
+
+    # bins[b] = list of (cy_err_px, h_err_px)
+    bins: list[list[tuple[float, float]]] = [[] for _ in range(NUM_BINS)]
+
+    n = min(size, len(dataset))
+    indices = random.sample(range(len(dataset)), n)
+
+    with torch.no_grad():
+        for idx in tqdm(indices, desc="Evaluating"):
+            img_tensor, _gt_sys, gt_staff, gt_assign = dataset[idx]
+            _, _, pred_stave_yh, _, _ = model.forward(
+                img_tensor.unsqueeze(0).to(device)
+            )
+            pred_stave_yh = pred_stave_yh.squeeze(0)  # (num_stave_queries, 2)
+
+            for i in range(gt_assign.shape[0]):
+                if gt_assign[i].item() < 0:
+                    break
+                gt_cy = gt_staff[i, 1].item() * H
+                gt_h = gt_staff[i, 3].item() * H
+                pred_cy = pred_stave_yh[i, 0].item() * H
+                pred_h = pred_stave_yh[i, 1].item() * H
+                cy_err = abs(pred_cy - gt_cy)
+                h_err = abs(pred_h - gt_h)
+                bin_idx = min(int(gt_cy / bin_size), NUM_BINS - 1)
+                bins[bin_idx].append((cy_err, h_err))
+
+    print(f"\nStave coordinate error by vertical position ({n} samples, H={H}px):")
+    print(f"  {'bin':>3}  {'y range':>11}  {'n':>5}  {'cy_err':>8}  {'h_err':>8}")
+    for b, errors in enumerate(bins):
+        y_lo = int(b * bin_size)
+        y_hi = int((b + 1) * bin_size)
+        if errors:
+            avg_cy = sum(e[0] for e in errors) / len(errors)
+            avg_h = sum(e[1] for e in errors) / len(errors)
+            print(f"  {b:>3}  {y_lo:>5}-{y_hi:<5}  {len(errors):>5}  {avg_cy:>7.1f}px  {avg_h:>7.1f}px")
+        else:
+            print(f"  {b:>3}  {y_lo:>5}-{y_hi:<5}  {0:>5}  {'—':>8}  {'—':>8}")
+
+
 cli.add_command(summary)
 cli.add_command(check)
 cli.add_command(show)
@@ -582,6 +649,7 @@ cli.add_command(stats)
 cli.add_command(train)
 cli.add_command(logs)
 cli.add_command(predict)
+cli.add_command(run_eval, name="eval")
 
 
 def main() -> None:
