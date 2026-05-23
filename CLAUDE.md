@@ -187,6 +187,7 @@ Multi-page scores store per-page PNGs; single-page scores use a flat filename.
 - Tests in `tests/` with pytest; `asyncio_mode = "auto"`
 - CLI entry points via Click
 - Git: tag checkpoints before major architectural changes
+- make sure a train/xxx tag is commited before training a model, so we can get back to it if needed.
 
 ---
 
