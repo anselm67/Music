@@ -140,7 +140,7 @@ def check() -> None:
 
     print(f"sys_boxes:      {sys_boxes.shape}")  # (B, 16, 4)
     print(f"sys_logits:     {sys_logits.shape}")  # (B, 16, 1)
-    print(f"stave_yh:       {stave_yh.shape}")  # (B, 16, 2) — cy_delta, h
+    print(f"stave_yh:       {stave_yh.shape}")  # (B, 16, 2) — cy, h
     print(f"stave_logits:   {stave_logits.shape}")  # (B, 16, 1)
     print(f"assign_logits:  {assign_logits.shape}")  # (B, 16, 16)
 
@@ -564,9 +564,9 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
                 f"system: {sys_idx}"
             )
             if pred_stave_logits[staff_index].item() > 0.0:
-                cy_delta, h = pred_stave_yh[staff_index]
-                cx, parent_cy, w, _ = pred_sys_boxes[sys_idx]
-                stave_box_4d = torch.stack([cx, cy_delta + parent_cy, w, h])
+                cy, h = pred_stave_yh[staff_index]
+                cx, _, w, _ = pred_sys_boxes[sys_idx]
+                stave_box_4d = torch.stack([cx, cy, w, h])
                 box = unbox(width_height, stave_box_4d)
                 cv2.rectangle(img, box.top_left, box.bot_right, (0, 255, 0), 1)
         cv2.imshow("Page", img)
@@ -612,21 +612,17 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
     with torch.no_grad():
         for idx in tqdm(indices, desc="Evaluating"):
             img_tensor, _gt_sys, gt_staff, gt_assign = dataset[idx]
-            pred_sys_boxes, _, pred_stave_yh, _, pred_assign = model.forward(
+            _, _, pred_stave_yh, _, _ = model.forward(
                 img_tensor.unsqueeze(0).to(device)
             )
-            pred_sys_boxes = pred_sys_boxes.squeeze(0)   # (N, 4)
-            pred_stave_yh = pred_stave_yh.squeeze(0)    # (M, 2)
-            pred_assign = pred_assign.squeeze(0)         # (M, N)
+            pred_stave_yh = pred_stave_yh.squeeze(0)  # (num_stave_queries, 2)
 
             for i in range(gt_assign.shape[0]):
                 if gt_assign[i].item() < 0:
                     break
                 gt_cy = gt_staff[i, 1].item() * H
                 gt_h = gt_staff[i, 3].item() * H
-                sys_idx = int(pred_assign[i].argmax().item())
-                parent_cy = pred_sys_boxes[sys_idx, 1].item()
-                pred_cy = (pred_stave_yh[i, 0].item() + parent_cy) * H
+                pred_cy = pred_stave_yh[i, 0].item() * H
                 pred_h = pred_stave_yh[i, 1].item() * H
                 cy_err = abs(pred_cy - gt_cy)
                 h_err = abs(pred_h - gt_h)

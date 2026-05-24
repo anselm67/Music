@@ -2,7 +2,6 @@
 
 from dataclasses import asdict, dataclass, field
 
-import torch
 import torch.nn.functional as F
 from torch import Tensor, nn, randn
 from torchvision.transforms import InterpolationMode
@@ -277,9 +276,7 @@ class PredictionHeads(nn.Module):
     ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         sys_boxes = self.sys_box_head(sys_feats).sigmoid()  # (B, N, 4)
         sys_logits = self.sys_obj_head(sys_feats)  # (B, N, 1)
-        stave_yh = self.stave_box_head(stave_feats).sigmoid()  # (B, M, 2)
-        # cy_delta ∈ (-0.5, 0.5) relative to parent system cy; h ∈ (0, 1) absolute
-        stave_yh = torch.stack([stave_yh[..., 0] - 0.5, stave_yh[..., 1]], dim=-1)
+        stave_yh = self.stave_box_head(stave_feats).sigmoid()  # (B, M, 2) — cy, h
         stave_logits = self.stave_obj_head(stave_feats)  # (B, M, 1)
         assign_logits = self.assign_head(stave_feats)  # (B, M, N)
         return (
