@@ -712,7 +712,7 @@
 <table>
   <thead><tr><th>Model</th><th>Path</th><th>Val metric</th></tr></thead>
   <tbody>
-    <tr><td>Staffer</td><td><code>checkpoints/staffer/enhanced2/last.ckpt</code></td><td>sys IoU &gt;0.95, stave IoU ≈ 0.93</td></tr>
+    <tr><td>staffer</td><td><code>checkpoints/staffer/enhanced2/last.ckpt</code></td><td>sys IoU &gt;0.95, stave IoU ≈ 0.93</td></tr>
     <tr><td>noter</td><td><code>checkpoints/noter/basic/last.ckpt</code></td><td>val token accuracy 95.7 %</td></tr>
   </tbody>
 </table>
@@ -747,12 +747,12 @@
 <table>
   <thead><tr><th>Source checkpoint</th><th>Source key prefix</th><th>E2E module attribute</th><th>Action</th></tr></thead>
   <tbody>
-    <tr><td>Staffer</td><td><code>backbone.blocks.*</code></td><td><code>vit_blocks</code></td><td>transfer ✓</td></tr>
-    <tr><td>Staffer</td><td><code>backbone.patch_embed.pos_embed</code></td><td><code>down_branch.pos_embed</code></td><td>transfer ✓</td></tr>
-    <tr><td>Staffer</td><td><code>backbone.patch_embed.norm.*</code></td><td><code>down_branch.norm.*</code></td><td>transfer ✓</td></tr>
-    <tr><td>Staffer</td><td><code>backbone.patch_embed.proj.*</code></td><td>—</td><td>discard (k=16 → k=4 change)</td></tr>
-    <tr><td>Staffer</td><td><code>decoder.*</code></td><td><code>staffer_decoder</code></td><td>transfer ✓</td></tr>
-    <tr><td>Staffer</td><td><code>heads.*</code></td><td><code>staffer_heads</code></td><td>transfer ✓</td></tr>
+    <tr><td>staffer</td><td><code>backbone.blocks.*</code></td><td><code>vit_blocks</code></td><td>transfer ✓</td></tr>
+    <tr><td>staffer</td><td><code>backbone.patch_embed.pos_embed</code></td><td><code>down_branch.pos_embed</code></td><td>transfer ✓</td></tr>
+    <tr><td>staffer</td><td><code>backbone.patch_embed.norm.*</code></td><td><code>down_branch.norm.*</code></td><td>transfer ✓</td></tr>
+    <tr><td>staffer</td><td><code>backbone.patch_embed.proj.*</code></td><td>—</td><td>discard (k=16 → k=4 change)</td></tr>
+    <tr><td>staffer</td><td><code>decoder.*</code></td><td><code>staffer_decoder</code></td><td>transfer ✓</td></tr>
+    <tr><td>staffer</td><td><code>heads.*</code></td><td><code>staffer_heads</code></td><td>transfer ✓</td></tr>
     <tr><td>noter</td><td><code>target_embedder.*</code></td><td><code>noter_target_embedder</code></td><td>transfer ✓</td></tr>
     <tr><td>noter</td><td><code>transformer.decoder.*</code></td><td><code>noter_decoder</code></td><td>transfer ✓</td></tr>
     <tr><td>noter</td><td><code>mlp.*</code></td><td><code>noter_mlp</code></td><td>transfer ✓</td></tr>
