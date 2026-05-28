@@ -5,7 +5,7 @@ import random
 import shutil
 import sys
 from collections.abc import Iterable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from typing import Any, cast
 
@@ -495,7 +495,12 @@ def logs(
 
 def config_from_checkpoint(checkpoint_path: Path) -> StafferConfig:
     checkpoint = torch.load(checkpoint_path, weights_only=False)
-    return StafferConfig(**checkpoint["hyper_parameters"])
+    known = {f.name for f in fields(StafferConfig)}
+    hp = checkpoint["hyper_parameters"]
+    unknown = set(hp) - known
+    if unknown:
+        logging.warning("config_from_checkpoint: ignoring unknown fields %s", unknown)
+    return StafferConfig(**{k: v for k, v in hp.items() if k in known})
 
 
 def unbox(size: tuple[int, int], t: Tensor) -> Box:

@@ -97,6 +97,9 @@ class StafferDataset(Dataset):
             assigns = torch.full((self.config.num_stave_queries,), -1, dtype=torch.long)
             staff_idx = 0
             for sys_idx, system in enumerate(page.systems):
+                if sys_idx >= self.config.num_system_queries:
+                    is_ok = False
+                    break
                 sys_boxes[sys_idx] = torch.tensor(
                     system.box.to_cxcywh(page.image_width, page.image_height)
                 )
