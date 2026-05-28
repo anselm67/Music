@@ -146,10 +146,12 @@ def check() -> None:
 
 
 @click.command()
+@click.option("--vflip", type=float, default=0.0, help="Vertical flip probability (0=off).")
 @click.pass_obj
-def show(ctx: ClickContext) -> None:
+def show(ctx: ClickContext, vflip: float) -> None:
     """Displays random samples from the dataset."""
-    dataset = StafferDataset(ctx.config, ctx.pdmx)
+    config = replace(ctx.config, vflip=vflip)
+    dataset = StafferDataset(config, ctx.pdmx)
     cv2.namedWindow("Page")
     while True:
         index = random.randint(0, len(dataset) - 1)
@@ -240,6 +242,12 @@ def stats(ctx: ClickContext, num_workers: int) -> None:
     default=8,
     help="Number of workers for the dataset loader.",
 )
+@click.option(
+    "--vflip",
+    type=float,
+    default=0.0,
+    help="Vertical flip augmentation probability (0=off).",
+)
 @click.pass_obj
 def train(
     ctx: ClickContext,
@@ -249,6 +257,7 @@ def train(
     epochs: int,
     use_sampler: bool,
     num_workers: int,
+    vflip: float,
 ) -> None:
     """Trains and/or resume training of a Staffer model instance.
 
@@ -267,6 +276,8 @@ def train(
         config = replace(
             ctx.config,
             id_name=name,
+            vflip=vflip,
+            use_sampler=use_sampler,
         )
     config.max_steps = epochs * (config.train_len // config.batch_size)
     logging.info(
@@ -337,7 +348,7 @@ def train(
 
     trainer.fit(
         StafferModule(config),
-        StafferDataModule(config, ctx.pdmx, use_sampler, num_workers=num_workers),
+        StafferDataModule(config, ctx.pdmx, num_workers=num_workers),
         ckpt_path=ckpt_path,
     )
 
@@ -493,9 +504,13 @@ def logs(
     print("Bye!")
 
 
-def config_from_checkpoint(checkpoint_path: Path) -> StafferConfig:
+def config_from_checkpoint(checkpoint_path: Path, for_inference: bool = False) -> StafferConfig:
     checkpoint = torch.load(checkpoint_path, weights_only=False)
-    return StafferConfig(**checkpoint["hyper_parameters"])
+    config = StafferConfig(**checkpoint["hyper_parameters"])
+    if for_inference:
+        config.vflip = 0.0
+        config.use_sampler = False
+    return config
 
 
 def unbox(size: tuple[int, int], t: Tensor) -> Box:
@@ -521,7 +536,7 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
     picks random images from the PDMX dataset (respecting --offset / --count).
     """
     ckpt_path = Path("checkpoints") / "staffer" / name / "last.ckpt"
-    config = config_from_checkpoint(ckpt_path)
+    config = config_from_checkpoint(ckpt_path, for_inference=True)
     dataset = StafferDataset(config, ctx.pdmx)
     model = StafferModule.load_from_checkpoint(
         ckpt_path, config=config, weights_only=False
@@ -593,7 +608,7 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
     """
     NUM_BINS = 16
     ckpt_path = Path("checkpoints") / "staffer" / name / "last.ckpt"
-    config = config_from_checkpoint(ckpt_path)
+    config = config_from_checkpoint(ckpt_path, for_inference=True)
     H = config.image_shape[0]
     bin_size = H / NUM_BINS
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

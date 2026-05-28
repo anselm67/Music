@@ -5,25 +5,23 @@ import logging
 import lightning as L
 from torch.utils.data import DataLoader, random_split
 
-from .staffer_model import StafferConfig
-
 from pdmx import PDMX
+
 from .staffer_dataset import StafferDataset, build_sampler
+from .staffer_model import StafferConfig
 
 
 class StafferDataModule(L.LightningDataModule):
     config: StafferConfig
     pdmx: PDMX
-    use_sampler: bool
     num_workers: int
 
     def __init__(
-        self, config: StafferConfig, pdmx: PDMX, use_sampler: bool, num_workers: int = 8
-    ):
+        self, config: StafferConfig, pdmx: PDMX, num_workers: int = 8
+    ) -> None:
         super().__init__()
         self.config = config
         self.pdmx = pdmx.slice(0, self.config.train_len + self.config.valid_len)
-        self.use_sampler = use_sampler
         self.num_workers = num_workers
 
     def setup(self, stage: str | None = None) -> None:
@@ -35,7 +33,7 @@ class StafferDataModule(L.LightningDataModule):
         )
 
     def train_dataloader(self) -> DataLoader:
-        if self.use_sampler:
+        if self.config.use_sampler:
             logging.info(f"train_dataloader: {self.num_workers} workers with sampler.")
             return DataLoader(
                 self.train_ds,
