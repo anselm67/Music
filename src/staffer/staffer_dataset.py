@@ -112,6 +112,7 @@ class StafferDataset(Dataset):
 
             if is_ok:
                 return image, sys_boxes, staff_boxes, assigns
+            idx += 1
 
 
 def build_sampler(ds: Dataset, last_page_weight: float = 1.5) -> WeightedRandomSampler:
