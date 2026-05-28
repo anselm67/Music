@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Noter Training Log</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --blue-bg:   #dbeafe; --blue-bd:   #2563eb; --blue-tx:   #1e40af;
+      --green-bg:  #d1fae5; --green-bd:  #059669; --green-tx:  #065f46;
+      --amber-bg:  #fef3c7; --amber-bd:  #d97706; --amber-tx:  #92400e;
+      --violet-bg: #ede9fe; --violet-bd: #7c3aed; --violet-tx: #4c1d95;
+      --slate-bg:  #f1f5f9; --slate-bd:  #475569; --slate-tx:  #334155;
+      --rose-bg:   #ffe4e6; --rose-bd:   #e11d48; --rose-tx:   #9f1239;
+      --body-bg:   #f8fafc; --surface:   #ffffff;
+      --border:    #e2e8f0; --muted:     #64748b; --text:      #1e293b;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+           background: var(--body-bg); color: var(--text); margin: 0; padding: 2rem 1rem; line-height: 1.65; }
+    main { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 2rem; margin: 0 0 0.35rem; color: #0f172a; }
+    .subtitle { color: var(--muted); font-size: 1rem; margin: 0 0 2rem; }
+    h2 { font-size: 1.35rem; margin: 2.5rem 0 0.6rem; border-bottom: 2px solid var(--border); padding-bottom: 0.4rem; }
+    h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; }
+    p  { margin: 0.4rem 0 0.9rem; }
+    code { background: var(--slate-bg); border-radius: 3px; padding: 1px 5px; font-size: 0.88em; }
+
+    .tag  { display: inline-block; font-family: monospace; font-size: 0.82rem;
+            background: var(--slate-bg); border: 1px solid var(--border);
+            border-radius: 4px; padding: 0 5px; color: var(--slate-tx); }
+    .badge { display: inline-block; font-size: 0.75rem; font-weight: 600;
+             border-radius: 4px; padding: 1px 7px; }
+    .badge-green  { background: var(--green-bg);  color: var(--green-tx);  border: 1px solid var(--green-bd); }
+    .badge-amber  { background: var(--amber-bg);  color: var(--amber-tx);  border: 1px solid var(--amber-bd); }
+    .badge-slate  { background: var(--slate-bg);  color: var(--slate-tx);  border: 1px solid var(--slate-bd); }
+
+    .summary-table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; font-size: 0.88rem; }
+    .summary-table th { background: var(--slate-bg); padding: 0.5rem 0.7rem; text-align: left;
+                        border-bottom: 2px solid var(--border); font-weight: 600; white-space: nowrap; }
+    .summary-table td { padding: 0.45rem 0.7rem; border-bottom: 1px solid var(--border); }
+    .summary-table tr:hover td { background: #f8fafc; }
+
+    .session { background: var(--surface); border: 1px solid var(--border);
+               border-radius: 10px; padding: 1.5rem 1.75rem; margin-bottom: 2rem; }
+    .session-header { display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.25rem; }
+    .session-header h2 { margin: 0; border: none; padding: 0; font-size: 1.4rem; }
+    .session-meta { color: var(--muted); font-size: 0.88rem; }
+
+    /* Architecture diagram */
+    .arch { display: flex; gap: 0.6rem; align-items: flex-start; margin: 1rem 0; flex-wrap: wrap; }
+    .arch-col { display: flex; flex-direction: column; gap: 0.3rem; align-items: center; }
+    .arch-label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+                  letter-spacing: 0.05em; color: var(--muted); margin-bottom: 0.1rem; text-align: center; }
+    .arch-block { width: 140px; padding: 0.35rem 0.5rem; border-radius: 6px; font-size: 0.8rem;
+                  text-align: center; font-weight: 500; border: 1.5px solid; line-height: 1.35; }
+    .arch-block.blue   { background: var(--blue-bg);   color: var(--blue-tx);   border-color: var(--blue-bd); }
+    .arch-block.green  { background: var(--green-bg);  color: var(--green-tx);  border-color: var(--green-bd); }
+    .arch-block.amber  { background: var(--amber-bg);  color: var(--amber-tx);  border-color: var(--amber-bd); }
+    .arch-block.slate  { background: var(--slate-bg);  color: var(--slate-tx);  border-color: var(--slate-bd); }
+    .arch-block.violet { background: var(--violet-bg); color: var(--violet-tx); border-color: var(--violet-bd); }
+    .arch-arrow { font-size: 1rem; color: var(--muted); line-height: 1; }
+    .arch-divider { width: 1px; background: var(--border); align-self: stretch; }
+    .arch-legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.8rem; margin-top: 0.35rem; }
+    .arch-legend-item { display: flex; align-items: center; gap: 0.4rem; }
+    .arch-legend-swatch { width: 13px; height: 13px; border-radius: 3px; border: 1.5px solid; flex-shrink: 0; }
+
+    .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin: 1rem 0; }
+    .chart-card { background: var(--slate-bg); border-radius: 8px; padding: 0.9rem; }
+    .chart-card h4 { margin: 0 0 0.65rem; font-size: 0.82rem; color: var(--muted);
+                     font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+
+    .changes { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.4rem 0 1rem; }
+    .change-item { display: flex; gap: 0.6rem; align-items: baseline; font-size: 0.9rem; }
+    .change-sym { font-weight: 700; font-size: 1rem; width: 1rem; flex-shrink: 0; }
+    .change-sym.add  { color: #059669; }
+    .change-sym.rem  { color: #e11d48; }
+    .change-sym.mod  { color: #d97706; }
+
+    .result-box { border-radius: 6px; padding: 0.6rem 1rem; font-size: 0.88rem; margin: 0.75rem 0; }
+    .result-box.positive { background: var(--green-bg); border-left: 3px solid var(--green-bd); color: var(--green-tx); }
+    .result-box.negative { background: var(--rose-bg);  border-left: 3px solid var(--rose-bd);  color: var(--rose-tx); }
+    .result-box.neutral  { background: var(--slate-bg); border-left: 3px solid var(--slate-bd); color: var(--slate-tx); }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Noter Training Log</h1>
+  <p class="subtitle">Architecture diagrams, training curves, and results for the staff-image → token transcription model.</p>
+
+  <p>The noter model is an encoder-decoder Transformer. The encoder reads a cropped staff image (64×768 px, grayscale) and produces patch embeddings; the decoder autoregressively generates a sequence of Kern tokens, each with up to 8 simultaneous chord notes. Dataset: PDMX subset with ≤2 staves/system (<code>System2.csv</code>). Metric: per-token accuracy (ignoring PAD).</p>
+
+  <h2>All runs</h2>
+  <table class="summary-table">
+    <thead>
+      <tr>
+        <th>Model</th><th>Date</th><th>Epochs</th>
+        <th>Final val acc</th><th>Final val loss</th>
+        <th>Key change</th><th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="tag">basic</span></td><td>2026-05-21</td><td>12</td>
+        <td>95.71%</td><td>0.164</td>
+        <td>First model; fixed-width sources; SIL as chord padding</td>
+        <td><span class="badge badge-slate">archived</span></td>
+      </tr>
+      <tr>
+        <td><span class="tag">enhanced</span></td><td>2026-05-22</td><td>12</td>
+        <td>94.26%</td><td>0.206</td>
+        <td>Variable-width sources; instrument annotation filtering</td>
+        <td><span class="badge badge-amber">regression</span></td>
+      </tr>
+      <tr>
+        <td><span class="tag">enhanced2</span></td><td>2026-05-22</td><td>12</td>
+        <td>99.08%</td><td>0.036</td>
+        <td>Pos embed + LayerNorm in encoder/decoder; chord-slot pos embed; SIL restored; 2× dataset</td>
+        <td><span class="badge badge-slate">archived</span></td>
+      </tr>
+      <tr>
+        <td><span class="tag">enhanced3</span></td><td>2026-05-23</td><td>12</td>
+        <td>99.58%</td><td>0.018</td>
+        <td>AdamW eps 1e-4 → default 1e-8</td>
+        <td><span class="badge badge-green">current best</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ════════════════════════ Comparison chart ════════════════════════ -->
+  <h2>Cross-run comparison</h2>
+  <div class="charts">
+    <div class="chart-card"><h4>Val accuracy — all runs</h4><canvas id="cmp-acc"></canvas></div>
+    <div class="chart-card"><h4>Val loss — all runs</h4><canvas id="cmp-loss"></canvas></div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ basic -->
+  <div class="session">
+    <div class="session-header">
+      <h2><span class="tag">basic</span></h2>
+      <span class="session-meta">2026-05-21 · milestone: <code>milestone/basic-noter-staffer</code> · 12 epochs · D=256</span>
+    </div>
+    <p>First functional noter model. Staff images are treated as fixed width — no variable-width padding mask. Chord slots use <code>SIL</code> (silence token) as padding. Reaches 95.71% token accuracy, converging around epoch 10.</p>
+
+    <h3>Architecture</h3>
+    <div class="arch">
+      <div class="arch-col">
+        <div class="arch-label">Source (image)</div>
+        <div class="arch-block slate">Staff image<br><small>1×64×W</small></div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block slate">Conv2d patches<br><small>patch_w=4 patch_h=64</small></div>
+        <div class="arch-arrow">↓ 192 patches</div>
+        <div class="arch-block slate">Transformer encoder<br><small>D=256 · 4 layers</small></div>
+      </div>
+      <div class="arch-divider"></div>
+      <div class="arch-col">
+        <div class="arch-label">Target (tokens)</div>
+        <div class="arch-block slate">Token embed<br><small>(T, max_chords=8)</small></div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block slate">Chord projection</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block slate">Transformer decoder<br><small>D=256 · 4 layers</small></div>
+      </div>
+      <div class="arch-divider"></div>
+      <div class="arch-col">
+        <div class="arch-label">Output</div>
+        <div class="arch-block green">Linear head<br><small>→ vocab logits</small></div>
+        <div class="arch-block green">Cross-entropy loss<br><small>(ignore PAD)</small></div>
+      </div>
+    </div>
+
+    <h3>Training curves</h3>
+    <div class="charts">
+      <div class="chart-card"><h4>Val accuracy</h4><canvas id="c-basic-acc"></canvas></div>
+      <div class="chart-card"><h4>Val loss</h4><canvas id="c-basic-loss"></canvas></div>
+    </div>
+    <div class="result-box neutral">95.71% token accuracy. Solid first result. Fixed-width assumption and SIL padding are the main limitations.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ enhanced -->
+  <div class="session">
+    <div class="session-header">
+      <h2><span class="tag">enhanced</span></h2>
+      <span class="session-meta">2026-05-22 · 12 epochs · D=256</span>
+    </div>
+    <p>Introduces variable-width source handling: real staff widths are passed to <code>make_src_padding_mask</code> so the encoder ignores padding patches beyond the actual image content. Also filters instrument annotation tokens from the vocabulary to reduce noise. Despite these improvements, accuracy regressed slightly — the variable-width masking changes the learning problem enough that the model needed more epochs or other changes to recover.</p>
+
+    <h3>Changes from basic</h3>
+    <div class="changes">
+      <div class="change-item"><span class="change-sym add">+</span> Variable-width source padding mask (<code>make_src_padding_mask</code> from actual pixel widths)</div>
+      <div class="change-item"><span class="change-sym add">+</span> Instrument annotation tokens filtered from vocab</div>
+      <div class="change-item"><span class="change-sym add">+</span> <code>NoterDataModule</code> with proper source width tracking</div>
+    </div>
+
+    <h3>Training curves</h3>
+    <div class="charts">
+      <div class="chart-card"><h4>Val accuracy — vs basic</h4><canvas id="c-enh-acc"></canvas></div>
+      <div class="chart-card"><h4>Val loss — vs basic</h4><canvas id="c-enh-loss"></canvas></div>
+    </div>
+    <div class="result-box negative">Slight regression: 95.71% → 94.26%. Variable-width masking is the right approach but training starts from scratch with a harder, more realistic task. Epoch 0 accuracy (33%) is much lower than basic (85%) — the distribution shift is significant.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ enhanced2 -->
+  <div class="session">
+    <div class="session-header">
+      <h2><span class="tag">enhanced2</span></h2>
+      <span class="session-meta">2026-05-22 · 12 epochs · D=256</span>
+    </div>
+    <p>Major batch of improvements, all landing on the same day. Positional embeddings are added to both the encoder (patch positions) and decoder (target sequence positions and chord-slot positions). The SOS token mismatch in inference is fixed. Dataset doubled. The combined effect is a large jump: 94% → 99%.</p>
+
+    <h3>Changes from enhanced</h3>
+    <div class="changes">
+      <div class="change-item"><span class="change-sym add">+</span> Positional embedding + LayerNorm in <code>SourceEmbedding</code> (encoder input)</div>
+      <div class="change-item"><span class="change-sym add">+</span> Positional embedding + LayerNorm in <code>TargetEmbedder</code> (decoder input)</div>
+      <div class="change-item"><span class="change-sym add">+</span> Chord-slot positional embedding in <code>TargetEmbedder</code></div>
+      <div class="change-item"><span class="change-sym mod">~</span> SIL token restored as dedicated chord-slot padding (replaces PAD)</div>
+      <div class="change-item"><span class="change-sym mod">~</span> Fix SOS token mismatch in greedy predict</div>
+      <div class="change-item"><span class="change-sym mod">~</span> Dataset doubled (train_len × 2)</div>
+    </div>
+
+    <h3>Architecture</h3>
+    <div class="arch">
+      <div class="arch-col">
+        <div class="arch-label">Source (image)</div>
+        <div class="arch-block slate">Staff image<br><small>1×64×W</small></div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block amber">Conv2d patches<br>+ pos embed<br>+ LayerNorm</div>
+        <div class="arch-arrow">↓ masked by width</div>
+        <div class="arch-block slate">Transformer encoder<br><small>D=256 · 4 layers</small></div>
+      </div>
+      <div class="arch-divider"></div>
+      <div class="arch-col">
+        <div class="arch-label">Target (tokens)</div>
+        <div class="arch-block amber">Token embed<br>+ pos embed<br>+ LayerNorm</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block amber">Chord projection<br>+ chord-slot pos embed</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block slate">Transformer decoder<br><small>D=256 · 4 layers</small></div>
+      </div>
+      <div class="arch-divider"></div>
+      <div class="arch-col">
+        <div class="arch-label">Output</div>
+        <div class="arch-block green">Linear head<br><small>→ vocab logits</small></div>
+        <div class="arch-block green">Cross-entropy loss<br><small>(ignore PAD)</small></div>
+      </div>
+    </div>
+    <div class="arch-legend">
+      <div class="arch-legend-item"><div class="arch-legend-swatch" style="background:var(--slate-bg);border-color:var(--slate-bd)"></div> Unchanged</div>
+      <div class="arch-legend-item"><div class="arch-legend-swatch" style="background:var(--amber-bg);border-color:var(--amber-bd)"></div> Changed / added</div>
+    </div>
+
+    <h3>Training curves</h3>
+    <div class="charts">
+      <div class="chart-card"><h4>Val accuracy — vs enhanced</h4><canvas id="c-e2-acc"></canvas></div>
+      <div class="chart-card"><h4>Val loss — vs enhanced</h4><canvas id="c-e2-loss"></canvas></div>
+    </div>
+    <div class="result-box positive">Large jump: 94.26% → 99.08%. Positional embeddings + chord-slot pos embed account for most of the gain. Converges around epoch 8.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ enhanced3 -->
+  <div class="session">
+    <div class="session-header">
+      <h2><span class="tag">enhanced3</span></h2>
+      <span class="session-meta">2026-05-23 · 12 epochs · D=256</span>
+    </div>
+    <p>Single targeted fix: the non-standard AdamW <code>eps=1e-4</code> introduced in an earlier session is removed, restoring PyTorch's default of 1e-8. The smaller epsilon allows the optimiser to take more aggressive steps in low-gradient regions, noticeably improving convergence speed and final accuracy.</p>
+
+    <h3>Changes from enhanced2</h3>
+    <div class="changes">
+      <div class="change-item"><span class="change-sym mod">~</span> AdamW <code>eps</code>: 1e-4 → 1e-8 (PyTorch default)</div>
+    </div>
+
+    <h3>Training curves</h3>
+    <div class="charts">
+      <div class="chart-card"><h4>Val accuracy — vs enhanced2</h4><canvas id="c-e3-acc"></canvas></div>
+      <div class="chart-card"><h4>Val loss — vs enhanced2</h4><canvas id="c-e3-loss"></canvas></div>
+    </div>
+    <div class="result-box positive">Best result: 99.58% token accuracy. Converges faster (epoch 2 already at 98.15% vs 92.56% for enhanced2). The non-standard eps was meaningfully hurting training.</div>
+  </div>
+
+</main>
+<script>
+const ep12 = [0,1,2,3,4,5,6,7,8,9,10,11];
+const C = { basic: '#64748b', enh: '#7c3aed', e2: '#2563eb', e3: '#059669' };
+
+const basic = {
+  acc:  [0.853,0.893,0.906,0.903,0.920,0.917,0.928,0.930,0.941,0.950,0.955,0.957],
+  loss: [1.427,0.419,0.366,0.372,0.306,0.309,0.276,0.259,0.214,0.188,0.171,0.164],
+};
+const enh = {
+  acc:  [0.332,0.493,0.565,0.731,0.844,0.876,0.905,0.919,0.929,0.938,0.943,0.943],
+  loss: [4.087,1.908,1.598,0.962,0.569,0.447,0.338,0.279,0.253,0.223,0.209,0.206],
+};
+const e2 = {
+  acc:  [0.856,0.912,0.926,0.945,0.972,0.981,0.984,0.987,0.989,0.990,0.990,0.991],
+  loss: [1.380,0.344,0.283,0.207,0.109,0.074,0.061,0.050,0.044,0.039,0.037,0.036],
+};
+const e3 = {
+  acc:  [0.856,0.957,0.982,0.987,0.990,0.992,0.993,0.994,0.995,0.995,0.996,0.996],
+  loss: [0.938,0.164,0.070,0.049,0.038,0.032,0.027,0.023,0.021,0.019,0.018,0.018],
+};
+
+function line(label, data, color, opts={}) {
+  return { label, data, borderColor: color, backgroundColor: color+'18',
+           fill: opts.fill ?? false, borderWidth: opts.dashed ? 1.5 : 2,
+           borderDash: opts.dashed ? [4,3] : [], pointRadius: opts.dashed ? 2 : 3,
+           tension: 0.3 };
+}
+function makeChart(id, datasets, yOpts={}) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  new Chart(ctx, {
+    type: 'line',
+    data: { labels: ep12, datasets },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } },
+      scales: {
+        x: { title: { display: true, text: 'Epoch', font: { size: 10 } }, ticks: { font: { size: 9 } } },
+        y: { ...yOpts, ticks: { font: { size: 9 } } },
+      },
+    }
+  });
+}
+
+// Cross-run comparison
+makeChart('cmp-acc',
+  [line('basic',basic.acc,C.basic), line('enhanced',enh.acc,C.enh),
+   line('enhanced2',e2.acc,C.e2), line('enhanced3',e3.acc,C.e3)],
+  {min:0,max:1});
+makeChart('cmp-loss',
+  [line('basic',basic.loss,C.basic), line('enhanced',enh.loss,C.enh),
+   line('enhanced2',e2.loss,C.e2), line('enhanced3',e3.loss,C.e3)]);
+
+// basic solo
+makeChart('c-basic-acc',  [line('basic',basic.acc, C.basic,{fill:true})], {min:0,max:1});
+makeChart('c-basic-loss', [line('basic',basic.loss,C.basic,{fill:true})]);
+
+// enhanced vs basic
+makeChart('c-enh-acc',  [line('basic',basic.acc, C.basic,{dashed:true}), line('enhanced',enh.acc, C.enh,{fill:true})], {min:0,max:1});
+makeChart('c-enh-loss', [line('basic',basic.loss,C.basic,{dashed:true}), line('enhanced',enh.loss,C.enh,{fill:true})]);
+
+// enhanced2 vs enhanced
+makeChart('c-e2-acc',  [line('enhanced',enh.acc, C.enh,{dashed:true}), line('enhanced2',e2.acc, C.e2,{fill:true})], {min:0,max:1});
+makeChart('c-e2-loss', [line('enhanced',enh.loss,C.enh,{dashed:true}), line('enhanced2',e2.loss,C.e2,{fill:true})]);
+
+// enhanced3 vs enhanced2
+makeChart('c-e3-acc',  [line('enhanced2',e2.acc, C.e2,{dashed:true}), line('enhanced3',e3.acc, C.e3,{fill:true})], {min:0,max:1});
+makeChart('c-e3-loss', [line('enhanced2',e2.loss,C.e2,{dashed:true}), line('enhanced3',e3.loss,C.e3,{fill:true})]);
+</script>
+</body>
+</html>
