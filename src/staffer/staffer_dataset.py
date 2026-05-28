@@ -108,46 +108,7 @@ class StafferDataset(Dataset):
                     staff_idx += 1
 
             if is_ok:
-                if self.config.vflip > 0 and torch.rand(1).item() < self.config.vflip:
-                    image, sys_boxes, staff_boxes, assigns = _vflip_gt(
-                        image, sys_boxes, staff_boxes, assigns
-                    )
                 return image, sys_boxes, staff_boxes, assigns
-
-
-def _vflip_gt(
-    image: Tensor,
-    sys_boxes: Tensor,
-    staff_boxes: Tensor,
-    assigns: Tensor,
-) -> tuple[Tensor, Tensor, Tensor, Tensor]:
-    """Vertical (top↔bottom) flip of image and GT tensors.
-
-    After flipping the image, the system that was at the bottom is now at the
-    top, so system order is reversed and stave assignments are remapped
-    accordingly.  All boxes remain in cxcywh format; only cy changes.
-    """
-    image = torch.flip(image, dims=[-2])
-
-    num_staves = int((assigns != -1).sum().item())
-    if num_staves == 0:
-        return image, sys_boxes, staff_boxes, assigns
-
-    num_sys = int(assigns[:num_staves].max().item()) + 1
-
-    sys_boxes[:num_sys, 1] = 1.0 - sys_boxes[:num_sys, 1]  # flip cy
-    sys_boxes[:num_sys] = sys_boxes[:num_sys].flip(0)        # reverse order
-
-    staff_boxes[:num_staves, 1] = 1.0 - staff_boxes[:num_staves, 1]  # flip cy
-
-    assigns[:num_staves] = (num_sys - 1) - assigns[:num_staves]  # remap sys indices
-
-    # Re-sort staves top-to-bottom by their new cy
-    sort_idx = staff_boxes[:num_staves, 1].argsort()
-    staff_boxes[:num_staves] = staff_boxes[:num_staves][sort_idx]
-    assigns[:num_staves] = assigns[:num_staves][sort_idx]
-
-    return image, sys_boxes, staff_boxes, assigns
 
 
 def build_sampler(ds: Dataset, last_page_weight: float = 1.5) -> WeightedRandomSampler:

@@ -21,10 +21,10 @@ class StafferConfig:
 
     in_channels: int = 1
     divider: float = 1.5
-    embed_dim: int = 256  # Also known as D
-    mlp_dim: int = 1024
+    embed_dim: int = 128  # Also known as D
+    mlp_dim: int = 512
 
-    num_heads: int = 8  # Also known as H
+    num_heads: int = 4  # Also known as H
     patch_size: int = 16
     dropout: float = 0.1
     num_encoder_layers: int = 4
@@ -45,8 +45,6 @@ class StafferConfig:
     batch_size: int = 16
     train_len: int = -1
     valid_len: int = -1
-    vflip: float = 0.0  # vertical flip augmentation probability (0 = disabled)
-    use_sampler: bool = False
     max_steps: int = field(init=False)
     lr: float = 1e-4
     weight_decay: float = 1e-4

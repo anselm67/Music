@@ -217,22 +217,17 @@
 
 <h3>PredictionHeads (<code>staffer_model.py</code>)</h3>
 <p>
-  <code>sys_box_head</code> output changes from 4 → 3 per query: predicts <code>(left, right, gap_or_bottom)</code>.<br>
-  The third output is supervised as <code>gap_below_i</code> for non-last matched queries and as <code>tight_bottom</code> for the last matched query (same head, position-dependent supervision in the loss).<br>
-  New <code>sys_top_head = nn.Linear(D, 1)</code> applied only to query 0: predicts tight <code>top₀</code>.<br>
-  The forward pass packs raw predictions into <code>(B, N, 4)</code>; tight boxes are reconstructed in the loss:
+  <code>sys_box_head</code> output changes from 4 → 3 per query: predicts <code>(left, right, bottom)</code>.<br>
+  New <code>sys_top_head = nn.Linear(D, 1)</code> applied only to query 0: predicts <code>top₀</code>.<br>
+  The forward pass reconstructs full <code>(B, N, 4)</code> boxes by chaining:
 </p>
-<pre>top_0   = sys_top_head(sys_feats[:, 0:1, :]).sigmoid()  # (B, 1, 1): tight top₀
-lrg     = sys_box_head(sys_feats).sigmoid()              # (B, N, 3): (left, right, gap_or_bottom)
-zeros   = torch.zeros_like(lrg[:, 1:, :1])              # (B, N-1, 1) placeholder
-tops    = torch.cat([top_0, zeros], dim=1)               # (B, N, 1)
-sys_raw = torch.cat([lrg[:, :, :2], tops, lrg[:, :, 2:]], dim=-1)  # (B, N, 4)
-# sys_raw[:, i] = (left_i, right_i, top₀ if i==0 else 0, gap_or_bottom_i)
-# non-last matched i: sys_raw[:, i, 3] supervised as gap_below_i
-# last matched:       sys_raw[:, last, 3] supervised as tight_bottom</pre>
+<pre>top_0  = sys_top_head(sys_feats[:, 0:1, :]).sigmoid()   # (B, 1, 1)
+lrb    = sys_box_head(sys_feats).sigmoid()               # (B, N, 3)
+tops   = torch.cat([top_0, lrb[:, :-1, 2:3]], dim=1)   # (B, N, 1)
+sys_boxes = torch.cat([lrb[:, :, :2], tops, lrb[:, :, 2:]], dim=-1)
+# sys_boxes: (B, N, 4) = (left, right, top, bottom)</pre>
 <p>
-  Output shape <code>(B, N, 4)</code> is preserved. Tight boxes are reconstructed by the loss using
-  GT tight bottoms for GIoU (teacher-forced during training).
+  Output tensor shape <code>(B, N, 4)</code> is preserved — downstream code sees the same shape.
 </p>
 
 <h2>Dataset changes</h2>
@@ -245,16 +240,16 @@ sys_raw = torch.cat([lrg[:, :, :2], tops, lrg[:, :, 2:]], dim=-1)  # (B, N, 4)
 W, H = page.image_width, page.image_height
 
 for sys_idx, system in enumerate(systems):
+    top    = system.box.top / H
+    bottom = systems[sys_idx + 1].box.top / H if sys_idx &lt; len(systems) - 1 else 1.0
     sys_boxes[sys_idx] = torch.tensor([
-        system.box.left   / W,
-        system.box.right  / W,
-        system.box.top    / H,   # tight top = top of first stave
-        system.box.bottom / H,   # tight bottom = bottom of last stave
+        system.box.left  / W,
+        system.box.right / W,
+        top,
+        bottom,
     ])</pre>
 <p>
-  GT stores tight bounding boxes. Inter-system gaps are computed on-the-fly in the loss:
-  <code>gt_gap_i = gt_sys_boxes[i+1, 2] − gt_sys_boxes[i, 3]</code>
-  (tight top of next system minus tight bottom of current system).
+  Chaining holds exactly: <code>top[i+1] = systems[i+1].box.top / H = bottom[i]</code>.
 </p>
 
 <h2>Loss changes</h2>
@@ -263,15 +258,7 @@ for sys_idx, system in enumerate(systems):
 <ul>
   <li>Replace <code>box_cxcywh_to_xyxy</code> with <code>box_lrtb_to_xyxy</code>: reorder columns <code>(l,r,t,b) → (l,t,r,b)</code>.</li>
   <li><code>generalized_iou</code>: call new conversion function.</li>
-  <li><code>_box_loss</code>: decomposed L1 over the 3N+1 predicted scalars (matched queries only):
-    <ul>
-      <li><strong>left, right</strong>: L1 vs GT left, right for all matched queries.</li>
-      <li><strong>top₀</strong>: L1 of <code>sys_raw[0, 2]</code> vs <code>gt[0, 2]</code> (GT tight top of system 0).</li>
-      <li><strong>gap_i</strong>: L1 of <code>sys_raw[i, 3]</code> vs <code>gt[i+1, 2] − gt[i, 3]</code> for each non-last matched i.</li>
-      <li><strong>bottom_last</strong>: L1 of <code>sys_raw[num_sys−1, 3]</code> vs <code>gt[num_sys−1, 3]</code>.</li>
-      <li><strong>GIoU</strong>: reconstruct tight boxes using predicted left/right, GT tops/bottoms for non-first systems; compute GIoU vs GT tight boxes.</li>
-    </ul>
-  </li>
+  <li><code>_box_loss</code>: L1 loss on <code>(left, right, top, bottom)</code> directly — formula unchanged.</li>
 </ul>
 <pre>def box_lrtb_to_xyxy(boxes: Tensor) -> Tensor:
     l, r, t, b = boxes.unbind(-1)
