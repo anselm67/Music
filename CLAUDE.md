@@ -131,7 +131,7 @@ staffer --log-file logs/staffer/<model-name>.log train OPTIONS...
 noter --log-file logs/noter/<model-name>.log train OPTIONS...
 ```
 - Training metrics will be available - eg for staffer - as logs/staffer/<model-name>/metrics.csv
-
+- Finally you should always update the training log (docs/staffer-training.html or docs/noter-training.html) with eval results and metrics for the run.
 
 **Current checkpoint status:** system IoU >0.95, stave IoU ~0.93 (tagged in Git
 before bar detection work began).
