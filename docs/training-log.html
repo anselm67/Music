@@ -17,289 +17,455 @@
       --border:    #e2e8f0; --muted:     #64748b; --text:      #1e293b;
     }
     *, *::before, *::after { box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: var(--body-bg); color: var(--text);
-      margin: 0; padding: 2rem 1rem; line-height: 1.65;
-    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+           background: var(--body-bg); color: var(--text); margin: 0; padding: 2rem 1rem; line-height: 1.65; }
     main { max-width: 1100px; margin: 0 auto; }
     h1 { font-size: 2rem; margin: 0 0 0.35rem; color: #0f172a; }
     .subtitle { color: var(--muted); font-size: 1rem; margin: 0 0 2rem; }
-    h2 { font-size: 1.35rem; margin: 2.5rem 0 0.6rem;
-         border-bottom: 2px solid var(--border); padding-bottom: 0.4rem; }
+    h2 { font-size: 1.35rem; margin: 2.5rem 0 0.6rem; border-bottom: 2px solid var(--border); padding-bottom: 0.4rem; }
     h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; }
     p  { margin: 0.4rem 0 0.9rem; }
 
-    /* Summary table */
-    .summary-table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; font-size: 0.9rem; }
-    .summary-table th { background: var(--slate-bg); padding: 0.5rem 0.75rem; text-align: left;
-                        border-bottom: 2px solid var(--border); font-weight: 600; }
-    .summary-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
-    .summary-table tr:hover td { background: var(--slate-bg); }
-    .tag { display: inline-block; font-family: monospace; font-size: 0.82rem;
-           background: var(--slate-bg); border: 1px solid var(--border);
-           border-radius: 4px; padding: 0 5px; color: var(--slate-tx); }
+    .tag  { display: inline-block; font-family: monospace; font-size: 0.82rem;
+            background: var(--slate-bg); border: 1px solid var(--border);
+            border-radius: 4px; padding: 0 5px; color: var(--slate-tx); }
     .badge { display: inline-block; font-size: 0.75rem; font-weight: 600;
              border-radius: 4px; padding: 1px 7px; }
-    .badge-green { background: var(--green-bg); color: var(--green-tx); border: 1px solid var(--green-bd); }
-    .badge-amber { background: var(--amber-bg); color: var(--amber-tx); border: 1px solid var(--amber-bd); }
+    .badge-green  { background: var(--green-bg);  color: var(--green-tx);  border: 1px solid var(--green-bd); }
+    .badge-amber  { background: var(--amber-bg);  color: var(--amber-tx);  border: 1px solid var(--amber-bd); }
     .badge-violet { background: var(--violet-bg); color: var(--violet-tx); border: 1px solid var(--violet-bd); }
-    .badge-blue  { background: var(--blue-bg);   color: var(--blue-tx);   border: 1px solid var(--blue-bd); }
+    .badge-blue   { background: var(--blue-bg);   color: var(--blue-tx);   border: 1px solid var(--blue-bd); }
+    .badge-slate  { background: var(--slate-bg);  color: var(--slate-tx);  border: 1px solid var(--slate-bd); }
+
+    /* Summary table */
+    .summary-table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; font-size: 0.88rem; }
+    .summary-table th { background: var(--slate-bg); padding: 0.5rem 0.7rem; text-align: left;
+                        border-bottom: 2px solid var(--border); font-weight: 600; white-space: nowrap; }
+    .summary-table td { padding: 0.45rem 0.7rem; border-bottom: 1px solid var(--border); }
+    .summary-table tr:hover td { background: #f8fafc; }
 
     /* Session cards */
     .session { background: var(--surface); border: 1px solid var(--border);
                border-radius: 10px; padding: 1.5rem 1.75rem; margin-bottom: 2rem; }
-    .session-header { display: flex; align-items: baseline; gap: 1rem; margin-bottom: 0.25rem; }
+    .session-header { display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.25rem; }
     .session-header h2 { margin: 0; border: none; padding: 0; font-size: 1.4rem; }
     .session-meta { color: var(--muted); font-size: 0.88rem; }
 
     /* Architecture diagram */
-    .arch { display: flex; gap: 1rem; align-items: flex-start; margin: 1rem 0 1.5rem; flex-wrap: wrap; }
-    .arch-col { display: flex; flex-direction: column; gap: 0.35rem; align-items: center; min-width: 130px; }
-    .arch-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
-                  letter-spacing: 0.05em; color: var(--muted); margin-bottom: 0.1rem; }
-    .arch-block {
-      width: 130px; padding: 0.4rem 0.6rem; border-radius: 6px; font-size: 0.82rem;
-      text-align: center; font-weight: 500; border: 1.5px solid;
-    }
+    .arch { display: flex; gap: 0.75rem; align-items: flex-start; margin: 1rem 0 1rem; flex-wrap: wrap; }
+    .arch-col { display: flex; flex-direction: column; gap: 0.3rem; align-items: center; }
+    .arch-label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+                  letter-spacing: 0.05em; color: var(--muted); margin-bottom: 0.1rem; text-align: center; }
+    .arch-block { width: 126px; padding: 0.35rem 0.5rem; border-radius: 6px; font-size: 0.8rem;
+                  text-align: center; font-weight: 500; border: 1.5px solid; line-height: 1.3; }
     .arch-block.blue   { background: var(--blue-bg);   color: var(--blue-tx);   border-color: var(--blue-bd); }
     .arch-block.green  { background: var(--green-bg);  color: var(--green-tx);  border-color: var(--green-bd); }
     .arch-block.amber  { background: var(--amber-bg);  color: var(--amber-tx);  border-color: var(--amber-bd); }
     .arch-block.slate  { background: var(--slate-bg);  color: var(--slate-tx);  border-color: var(--slate-bd); }
     .arch-block.violet { background: var(--violet-bg); color: var(--violet-tx); border-color: var(--violet-bd); }
     .arch-block.removed { background: #fff1f2; color: #9f1239; border-color: #e11d48;
-                          text-decoration: line-through; opacity: 0.65; }
-    .arch-arrow { font-size: 1.1rem; color: var(--muted); line-height: 1; }
-    .arch-divider { width: 1px; background: var(--border); align-self: stretch; margin: 0 0.25rem; }
-    .arch-legend { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.5rem; font-size: 0.8rem; }
+                          text-decoration: line-through; opacity: 0.6; }
+    .arch-arrow { font-size: 1rem; color: var(--muted); line-height: 1; }
+    .arch-divider { width: 1px; background: var(--border); align-self: stretch; margin: 0; }
+    .arch-legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.8rem; margin-top: 0.25rem; }
     .arch-legend-item { display: flex; align-items: center; gap: 0.4rem; }
-    .arch-legend-swatch { width: 14px; height: 14px; border-radius: 3px; border: 1.5px solid; flex-shrink: 0; }
+    .arch-legend-swatch { width: 13px; height: 13px; border-radius: 3px; border: 1.5px solid; flex-shrink: 0; }
 
     /* Charts */
-    .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.25rem; margin: 1.25rem 0; }
-    .chart-card { background: var(--slate-bg); border-radius: 8px; padding: 1rem; }
-    .chart-card h4 { margin: 0 0 0.75rem; font-size: 0.88rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+    .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin: 1rem 0; }
+    .chart-card { background: var(--slate-bg); border-radius: 8px; padding: 0.9rem; }
+    .chart-card h4 { margin: 0 0 0.65rem; font-size: 0.82rem; color: var(--muted);
+                     font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 
     /* Eval table */
     .eval-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 0.75rem 0; }
     .eval-table th { background: var(--slate-bg); padding: 0.4rem 0.65rem; text-align: right;
                      border-bottom: 2px solid var(--border); font-weight: 600; }
     .eval-table th:first-child { text-align: left; }
-    .eval-table td { padding: 0.35rem 0.65rem; border-bottom: 1px solid var(--border); text-align: right; font-family: monospace; font-size: 0.82rem; }
+    .eval-table td { padding: 0.35rem 0.65rem; border-bottom: 1px solid var(--border);
+                     text-align: right; font-family: monospace; font-size: 0.82rem; }
     .eval-table td:first-child { text-align: left; font-family: inherit; }
     .eval-table tr.warn td { color: var(--amber-tx); }
     .eval-bar { display: inline-block; height: 8px; border-radius: 2px; vertical-align: middle; margin-left: 4px; }
 
     /* Changes list */
-    .changes { display: flex; flex-direction: column; gap: 0.3rem; margin: 0.5rem 0 1rem; }
+    .changes { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.4rem 0 1rem; }
     .change-item { display: flex; gap: 0.6rem; align-items: baseline; font-size: 0.9rem; }
     .change-sym { font-weight: 700; font-size: 1rem; width: 1rem; flex-shrink: 0; }
     .change-sym.add  { color: #059669; }
     .change-sym.rem  { color: #e11d48; }
     .change-sym.mod  { color: #d97706; }
 
-    .in-progress { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.82rem;
-                   color: var(--blue-tx); font-weight: 600; }
-    .dot-pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--blue-bd);
-                 animation: pulse 1.4s ease-in-out infinite; }
-    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
-
     .result-box { border-radius: 6px; padding: 0.6rem 1rem; font-size: 0.88rem; margin: 0.75rem 0; }
     .result-box.positive { background: var(--green-bg); border-left: 3px solid var(--green-bd); color: var(--green-tx); }
     .result-box.negative { background: var(--rose-bg);  border-left: 3px solid var(--rose-bd);  color: var(--rose-tx); }
     .result-box.pending  { background: var(--blue-bg);  border-left: 3px solid var(--blue-bd);  color: var(--blue-tx); }
+    .result-box.neutral  { background: var(--slate-bg); border-left: 3px solid var(--slate-bd); color: var(--slate-tx); }
+
+    .in-progress { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; color: var(--blue-tx); font-weight: 600; }
+    .dot-pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--blue-bd); animation: pulse 1.4s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+
+    .config-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.4rem 1.5rem; font-size: 0.86rem; margin: 0.5rem 0 1rem; }
+    .config-item { display: flex; gap: 0.4rem; }
+    .config-key { color: var(--muted); }
+    .config-val { font-weight: 600; font-family: monospace; }
+    .config-val.changed { color: var(--amber-tx); }
   </style>
 </head>
 <body>
 <main>
   <h1>Staffer Training Log</h1>
-  <p class="subtitle">Per-run architecture diagrams, training curves, and eval results for the layout detector.</p>
+  <p class="subtitle">Architecture diagrams, training curves, and eval results for all layout detector runs.</p>
 
-  <!-- Summary table -->
   <h2>All runs</h2>
   <table class="summary-table">
     <thead>
       <tr>
-        <th>Model</th><th>Date</th><th>Epochs</th>
-        <th>Final val/loss</th><th>Final sys IoU</th><th>Final stave L1</th>
-        <th>Eval result</th><th>Status</th>
+        <th>Model</th><th>Date</th><th>D</th><th>N sys</th>
+        <th>Final val/loss</th><th>Final sys IoU</th><th>Stave metric (final)</th>
+        <th>Key change</th><th>Status</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><span class="tag">enhanced2</span></td>
-        <td>2026-05-22</td><td>12</td>
-        <td>0.217</td><td>0.919</td><td>0.00282</td>
-        <td>cy 0.9→16 px (top→bot)</td>
+        <td><span class="tag">basic</span></td><td>2026-05-20</td><td>256</td><td>16</td>
+        <td>0.616</td><td>0.913</td><td>stave IoU 0.863</td>
+        <td>First model; full stave box; AdamW eps=1e-4</td>
+        <td><span class="badge badge-slate">archived</span></td>
+      </tr>
+      <tr>
+        <td><span class="tag">noeps</span></td><td>2026-05-21</td><td>256</td><td>16</td>
+        <td>0.499</td><td>0.926</td><td>stave IoU 0.862</td>
+        <td>AdamW eps 1e-4 → default 1e-8</td>
+        <td><span class="badge badge-slate">archived</span></td>
+      </tr>
+      <tr>
+        <td><span class="tag">staffyh</span></td><td>2026-05-21</td><td>256</td><td>16</td>
+        <td>0.214</td><td>0.915</td><td>stave L1 0.00286</td>
+        <td>Stave → (cy, h) only; drop alignment &amp; containment</td>
+        <td><span class="badge badge-slate">archived</span></td>
+      </tr>
+      <tr>
+        <td><span class="tag">enhanced2</span></td><td>2026-05-22</td><td>256</td><td>16</td>
+        <td>0.217</td><td>0.919</td><td>stave L1 0.00282</td>
+        <td>Positional embedding + LayerNorm in backbone</td>
         <td><span class="badge badge-green">baseline</span></td>
       </tr>
       <tr>
-        <td><span class="tag">enhanced2-vflip</span></td>
-        <td>2026-05-28</td><td>12</td>
-        <td>0.309</td><td>0.872</td><td>0.00438</td>
-        <td>cy 1.9→18.5 px (top→bot)</td>
+        <td><span class="tag">enhanced3</span></td><td>2026-05-23</td><td>256</td><td>16</td>
+        <td>0.205</td><td>0.922</td><td>stave L1 0.00351</td>
+        <td>Stave cy relative to parent system; later reverted</td>
+        <td><span class="badge badge-amber">reverted</span></td>
+      </tr>
+      <tr>
+        <td><span class="tag">enhanced2-staffer-small</span></td><td>2026-05-24</td><td>128</td><td>16</td>
+        <td>0.254</td><td>0.900</td><td>stave L1 0.00360</td>
+        <td>Smaller model (D=128, H=4)</td>
+        <td><span class="badge badge-slate">archived</span></td>
+      </tr>
+      <tr>
+        <td><span class="tag">enhanced2-vflip</span></td><td>2026-05-28</td><td>256</td><td>16</td>
+        <td>0.309</td><td>0.872</td><td>stave L1 0.00438</td>
+        <td>Vertical flip augmentation (p=0.5)</td>
         <td><span class="badge badge-amber">negative</span></td>
       </tr>
       <tr>
-        <td><span class="tag">flat</span></td>
-        <td>2026-05-28</td><td>12</td>
+        <td><span class="tag">flat</span></td><td>2026-05-28</td><td>128</td><td>10</td>
         <td>—</td><td>—</td><td>—</td>
-        <td>—</td>
+        <td>Flat stave pool; N 16→10; remove group attention</td>
         <td><span class="badge badge-blue">in progress</span></td>
       </tr>
     </tbody>
   </table>
 
-  <!-- ═══════════════════════════════════════════════════════ enhanced2 -->
+  <!-- ════════════════════ Comparison charts ════════════════════ -->
+  <h2>Cross-run comparison</h2>
+  <p style="color:var(--muted);font-size:0.9rem">Models with the newer metrics format (staffyh onward). basic and noeps used a different CSV schema and tracked full-box stave IoU instead of stave L1.</p>
+  <div class="charts">
+    <div class="chart-card"><h4>Val loss</h4><canvas id="cmp-loss"></canvas></div>
+    <div class="chart-card"><h4>Val sys IoU (actual = 1 − stored)</h4><canvas id="cmp-iou"></canvas></div>
+    <div class="chart-card"><h4>Val stave L1</h4><canvas id="cmp-l1"></canvas></div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ basic -->
   <div class="session">
     <div class="session-header">
-      <h2><span class="tag">enhanced2</span></h2>
-      <span class="session-meta">2026-05-22 · tag: <code>train/enhanced2</code> · 12 epochs</span>
+      <h2><span class="tag">basic</span></h2>
+      <span class="session-meta">~2026-05-20 · milestone: <code>milestone/basic-noter-staffer</code> · 12 epochs · D=256 H=8</span>
     </div>
-    <p>Baseline hierarchical detector. System queries cross-attend to image memory; stave queries additionally cross-attend to system queries via <em>group attention</em>, providing explicit parent-system context to each stave prediction.</p>
-
+    <p>First functional staffer model. Staves predict a full (cx, cy, w, h) box. Loss includes containment and alignment terms. AdamW uses a non-standard eps=1e-4.</p>
     <h3>Architecture</h3>
     <div class="arch">
       <div class="arch-col">
         <div class="arch-label">Backbone</div>
-        <div class="arch-block blue">ViT encoder<br><small>D=128 · 4 layers</small></div>
-        <div class="arch-arrow">↓ memory</div>
+        <div class="arch-block blue">ViT<br><small>D=256 · H=8</small></div>
       </div>
       <div class="arch-divider"></div>
       <div class="arch-col">
-        <div class="arch-label">System stream (N=16)</div>
+        <div class="arch-label">System (N=16)</div>
         <div class="arch-block slate">Self-Attn</div>
         <div class="arch-arrow">↓</div>
         <div class="arch-block slate">Cross-Attn (img)</div>
         <div class="arch-arrow">↓</div>
         <div class="arch-block slate">FFN</div>
         <div class="arch-arrow">↓</div>
-        <div class="arch-block green">Sys box head<br><small>(cx cy w h)</small></div>
-        <div class="arch-block green">Sys obj head</div>
+        <div class="arch-block green">Sys box (cx cy w h)</div>
+        <div class="arch-block green">Sys obj</div>
       </div>
       <div class="arch-divider"></div>
       <div class="arch-col">
-        <div class="arch-label">Stave stream (M=16)</div>
+        <div class="arch-label">Stave (M=16)</div>
         <div class="arch-block slate">Self-Attn</div>
         <div class="arch-arrow">↓</div>
         <div class="arch-block slate">Cross-Attn (img)</div>
         <div class="arch-arrow">↓</div>
-        <div class="arch-block violet">Group-Attn (sys) ←sys</div>
+        <div class="arch-block violet">Group-Attn (sys)</div>
         <div class="arch-arrow">↓</div>
         <div class="arch-block slate">FFN</div>
         <div class="arch-arrow">↓</div>
-        <div class="arch-block green">Stave yh head<br><small>(cy h)</small></div>
-        <div class="arch-block green">Stave obj head</div>
-        <div class="arch-block green">Assign head<br><small>(→ sys idx)</small></div>
+        <div class="arch-block green">Stave box (cx cy w h)</div>
+        <div class="arch-block green">Stave obj</div>
+        <div class="arch-block green">Assign head</div>
+      </div>
+      <div class="arch-divider"></div>
+      <div class="arch-col">
+        <div class="arch-label">Loss terms</div>
+        <div class="arch-block slate">Sys L1 + GIoU</div>
+        <div class="arch-block amber">Containment</div>
+        <div class="arch-block amber">Alignment</div>
+        <div class="arch-block slate">Stave L1 + GIoU</div>
+        <div class="arch-block slate">Assignment CE</div>
       </div>
     </div>
-    <div class="arch-legend">
-      <div class="arch-legend-item"><div class="arch-legend-swatch" style="background:var(--slate-bg);border-color:var(--slate-bd)"></div> Shared / unchanged</div>
-      <div class="arch-legend-item"><div class="arch-legend-swatch" style="background:var(--violet-bg);border-color:var(--violet-bd)"></div> Group attention (stave→sys)</div>
-      <div class="arch-legend-item"><div class="arch-legend-swatch" style="background:var(--green-bg);border-color:var(--green-bd)"></div> Prediction heads</div>
+    <h3>Training curves</h3>
+    <div class="charts">
+      <div class="chart-card"><h4>Val loss</h4><canvas id="c-basic-loss"></canvas></div>
+      <div class="chart-card"><h4>Val sys IoU (actual)</h4><canvas id="c-basic-siou"></canvas></div>
+      <div class="chart-card"><h4>Val stave IoU (actual)</h4><canvas id="c-basic-tiou"></canvas></div>
     </div>
+    <div class="result-box neutral">Final: sys IoU 0.913, stave IoU 0.863. Stave full-box prediction proved harder to converge than (cy, h) only.</div>
+  </div>
 
+  <!-- ════════════════════════════════════════════ noeps -->
+  <div class="session">
+    <div class="session-header">
+      <h2><span class="tag">noeps</span></h2>
+      <span class="session-meta">2026-05-21 · 12 epochs · D=256 H=8</span>
+    </div>
+    <p>Same architecture as basic. Restores AdamW eps to the PyTorch default (1e-8). The custom 1e-4 in basic was non-standard and may have destabilised late training.</p>
+    <h3>Changes from basic</h3>
+    <div class="changes">
+      <div class="change-item"><span class="change-sym mod">~</span> AdamW <code>eps</code>: 1e-4 → 1e-8 (default)</div>
+    </div>
+    <h3>Training curves</h3>
+    <div class="charts">
+      <div class="chart-card"><h4>Val loss — vs basic</h4><canvas id="c-noeps-loss"></canvas></div>
+      <div class="chart-card"><h4>Val sys IoU — vs basic</h4><canvas id="c-noeps-siou"></canvas></div>
+      <div class="chart-card"><h4>Val stave IoU — vs basic</h4><canvas id="c-noeps-tiou"></canvas></div>
+    </div>
+    <div class="result-box positive">Modest improvement: val loss 0.616→0.499, sys IoU 0.913→0.926. Default eps is the right setting.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ staffyh -->
+  <div class="session">
+    <div class="session-header">
+      <h2><span class="tag">staffyh</span></h2>
+      <span class="session-meta">2026-05-21 · 12 epochs · D=256 H=8</span>
+    </div>
+    <p>Key architectural simplification: staves no longer predict a full box. Instead they predict only (cy, h), inheriting (cx, w) from the assigned parent system. Containment and alignment loss terms are removed. Loss drops dramatically — the model no longer has to solve box localisation for two separate outputs.</p>
+    <h3>Changes from noeps</h3>
+    <div class="changes">
+      <div class="change-item"><span class="change-sym mod">~</span> Stave head: full (cx cy w h) → <strong>(cy, h) only</strong></div>
+      <div class="change-item"><span class="change-sym rem">−</span> Containment loss term</div>
+      <div class="change-item"><span class="change-sym rem">−</span> Alignment loss term</div>
+      <div class="change-item"><span class="change-sym rem">−</span> Stave GIoU loss term</div>
+    </div>
+    <h3>Training curves</h3>
+    <div class="charts">
+      <div class="chart-card"><h4>Val loss</h4><canvas id="c-staffyh-loss"></canvas></div>
+      <div class="chart-card"><h4>Val sys IoU</h4><canvas id="c-staffyh-iou"></canvas></div>
+      <div class="chart-card"><h4>Val stave L1</h4><canvas id="c-staffyh-l1"></canvas></div>
+    </div>
+    <div class="result-box positive">Large improvement: val loss 0.499→0.214. Stave L1 metric now directly measures cy/h precision.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ enhanced2 -->
+  <div class="session">
+    <div class="session-header">
+      <h2><span class="tag">enhanced2</span></h2>
+      <span class="session-meta">2026-05-22 · tag: <code>train/enhanced2</code> · 12 epochs · D=256 H=8</span>
+    </div>
+    <p>Adds positional embedding and LayerNorm to the backbone's patch embedder. This is the main reference baseline from which later experiments branch.</p>
+    <h3>Changes from staffyh</h3>
+    <div class="changes">
+      <div class="change-item"><span class="change-sym add">+</span> Positional embedding in <code>PatchEmbedding</code></div>
+      <div class="change-item"><span class="change-sym add">+</span> LayerNorm in <code>PatchEmbedding</code></div>
+    </div>
+    <h3>Architecture</h3>
+    <div class="arch">
+      <div class="arch-col">
+        <div class="arch-label">Backbone</div>
+        <div class="arch-block amber">ViT + pos embed<br>+ LayerNorm<br><small>D=256 · H=8</small></div>
+      </div>
+      <div class="arch-divider"></div>
+      <div class="arch-col">
+        <div class="arch-label">System (N=16)</div>
+        <div class="arch-block slate">Self-Attn</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block slate">Cross-Attn (img)</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block slate">FFN</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block green">Sys box</div>
+        <div class="arch-block green">Sys obj</div>
+      </div>
+      <div class="arch-divider"></div>
+      <div class="arch-col">
+        <div class="arch-label">Stave (M=16)</div>
+        <div class="arch-block slate">Self-Attn</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block slate">Cross-Attn (img)</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block violet">Group-Attn (sys)</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block slate">FFN</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block green">Stave (cy, h)</div>
+        <div class="arch-block green">Stave obj</div>
+        <div class="arch-block green">Assign head</div>
+      </div>
+    </div>
     <h3>Training curves</h3>
     <div class="charts">
       <div class="chart-card"><h4>Val loss</h4><canvas id="c-e2-loss"></canvas></div>
-      <div class="chart-card"><h4>Val sys IoU (actual)</h4><canvas id="c-e2-iou"></canvas></div>
+      <div class="chart-card"><h4>Val sys IoU</h4><canvas id="c-e2-iou"></canvas></div>
       <div class="chart-card"><h4>Val stave L1</h4><canvas id="c-e2-l1"></canvas></div>
     </div>
-
-    <h3>Eval — stave cy error by vertical position</h3>
-    <p>Approximate baseline from a 500-sample eval run. Full per-bin output was not captured.</p>
-    <div class="result-box positive">Final: cy error ~0.9 px at top of page, growing to ~16 px at bottom. Systematic top→bottom drift identified as main failure mode.</div>
+    <div class="result-box positive">Marginal improvement over staffyh. Establishes the clean reference baseline: sys IoU 0.919, stave L1 0.00282, cy error 0.9→16 px top-to-bottom.</div>
   </div>
 
-  <!-- ═══════════════════════════════════════════════════ enhanced2-vflip -->
+  <!-- ════════════════════════════════════════════ enhanced3 -->
+  <div class="session">
+    <div class="session-header">
+      <h2><span class="tag">enhanced3</span></h2>
+      <span class="session-meta">2026-05-23 · tag: <code>train/enhanced3</code> · 12 epochs · D=256 H=8</span>
+    </div>
+    <p>Hypothesis: predicting stave cy <em>relative to the parent system's cy</em> (cy_delta) should reduce the top→bottom drift, as residuals are smaller and more uniform. Stave cy output becomes a delta; full cy is reconstructed as sys_cy + stave_cy_delta at inference. This was later reverted — the relative prediction did not hold up under eval.</p>
+    <h3>Changes from enhanced2</h3>
+    <div class="changes">
+      <div class="change-item"><span class="change-sym mod">~</span> Stave cy: absolute → <strong>relative to parent system cy</strong> (delta)</div>
+    </div>
+    <h3>Training curves</h3>
+    <div class="charts">
+      <div class="chart-card"><h4>Val loss — vs enhanced2</h4><canvas id="c-e3-loss"></canvas></div>
+      <div class="chart-card"><h4>Val sys IoU — vs enhanced2</h4><canvas id="c-e3-iou"></canvas></div>
+      <div class="chart-card"><h4>Val stave L1 — vs enhanced2</h4><canvas id="c-e3-l1"></canvas></div>
+    </div>
+    <div class="result-box negative">Better val loss (0.217→0.205) and sys IoU (0.919→0.922) but <em>worse</em> stave L1 (0.00282→0.00351). Relative cy reverted for enhanced2-staffer-small and all subsequent models.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ enhanced2-staffer-small -->
+  <div class="session">
+    <div class="session-header">
+      <h2><span class="tag">enhanced2-staffer-small</span></h2>
+      <span class="session-meta">2026-05-24 · tag: <code>train/enhanced2-staffer-small</code> · 11 epochs · D=128 H=4</span>
+    </div>
+    <p>Ablation: shrink model capacity (D=256→128, H=8→4) to test whether the smaller size still achieves competitive accuracy. Architecture otherwise identical to enhanced2 (absolute cy). Also serves as the D=128 baseline before the flat pool refactor.</p>
+    <h3>Changes from enhanced2</h3>
+    <div class="changes">
+      <div class="change-item"><span class="change-sym mod">~</span> <code>embed_dim</code>: 256 → 128</div>
+      <div class="change-item"><span class="change-sym mod">~</span> <code>num_heads</code>: 8 → 4</div>
+      <div class="change-item"><span class="change-sym mod">~</span> Stave cy: back to absolute (reverts enhanced3)</div>
+    </div>
+    <h3>Training curves</h3>
+    <div class="charts">
+      <div class="chart-card"><h4>Val loss — vs enhanced2</h4><canvas id="c-small-loss"></canvas></div>
+      <div class="chart-card"><h4>Val sys IoU — vs enhanced2</h4><canvas id="c-small-iou"></canvas></div>
+      <div class="chart-card"><h4>Val stave L1 — vs enhanced2</h4><canvas id="c-small-l1"></canvas></div>
+    </div>
+    <div class="result-box neutral">Acceptable: sys IoU 0.900 vs 0.919. ~5% penalty for 4× fewer parameters. Confirms the architecture scales down reasonably — motivates the flat pool experiment at D=128.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ enhanced2-vflip -->
   <div class="session">
     <div class="session-header">
       <h2><span class="tag">enhanced2-vflip</span></h2>
-      <span class="session-meta">2026-05-28 · tag: <code>train/enhanced2-vflip</code> · 12 epochs</span>
+      <span class="session-meta">2026-05-28 · tag: <code>train/enhanced2-vflip</code> · 12 epochs · D=256 H=8</span>
     </div>
-    <p>Hypothesis: the top→bottom cy drift in enhanced2 is caused by a training distribution bias (top staves appear more often). Adding vertical flip augmentation (p=0.5) should force the model to generalise symmetrically.</p>
-
+    <p>Hypothesis: the top→bottom cy drift (0.9→16 px) is caused by a training distribution bias — top staves dominate because most pages have more staves near the top. Vertical flip augmentation (p=0.5) should force symmetric generalisation.</p>
     <h3>Changes from enhanced2</h3>
     <div class="changes">
       <div class="change-item"><span class="change-sym add">+</span> Vertical flip augmentation — p=0.5 (image + GT box mirroring)</div>
     </div>
-
-    <h3>Architecture</h3>
-    <p style="color:var(--muted);font-size:0.9rem">Identical to enhanced2 — same N=16/M=16 queries, same group attention.</p>
-
     <h3>Training curves</h3>
     <div class="charts">
       <div class="chart-card"><h4>Val loss — vs enhanced2</h4><canvas id="c-vf-loss"></canvas></div>
       <div class="chart-card"><h4>Val sys IoU — vs enhanced2</h4><canvas id="c-vf-iou"></canvas></div>
       <div class="chart-card"><h4>Val stave L1 — vs enhanced2</h4><canvas id="c-vf-l1"></canvas></div>
     </div>
-
     <h3>Eval — stave cy error by vertical position (500 samples, H=960 px)</h3>
     <table class="eval-table">
-      <thead>
-        <tr><th>Bin</th><th>Y range (px)</th><th>n</th><th>cy error</th><th>h error</th><th></th></tr>
-      </thead>
+      <thead><tr><th>Bin</th><th>Y range</th><th>n</th><th>cy error</th><th>h error</th><th></th></tr></thead>
       <tbody>
-        <tr><td>0</td><td>0 – 60</td><td>188</td><td>1.9 px</td><td>0.1 px</td><td><span class="eval-bar" style="width:10px;background:#059669"></span></td></tr>
-        <tr><td>1</td><td>60 – 120</td><td>483</td><td>1.9 px</td><td>0.1 px</td><td><span class="eval-bar" style="width:10px;background:#059669"></span></td></tr>
-        <tr><td>2</td><td>120 – 180</td><td>467</td><td>2.4 px</td><td>0.3 px</td><td><span class="eval-bar" style="width:13px;background:#65a30d"></span></td></tr>
-        <tr><td>3</td><td>180 – 240</td><td>427</td><td>3.2 px</td><td>0.2 px</td><td><span class="eval-bar" style="width:17px;background:#84cc16"></span></td></tr>
-        <tr><td>4</td><td>240 – 300</td><td>339</td><td>3.9 px</td><td>1.8 px</td><td><span class="eval-bar" style="width:21px;background:#eab308"></span></td></tr>
-        <tr><td>5</td><td>300 – 360</td><td>267</td><td>4.6 px</td><td>0.2 px</td><td><span class="eval-bar" style="width:24px;background:#f97316"></span></td></tr>
-        <tr><td>6</td><td>360 – 420</td><td>268</td><td>5.6 px</td><td>0.1 px</td><td><span class="eval-bar" style="width:30px;background:#f97316"></span></td></tr>
-        <tr><td>7</td><td>420 – 480</td><td>248</td><td>5.7 px</td><td>1.7 px</td><td><span class="eval-bar" style="width:30px;background:#f97316"></span></td></tr>
-        <tr><td>8</td><td>480 – 540</td><td>222</td><td>6.5 px</td><td>3.2 px</td><td><span class="eval-bar" style="width:35px;background:#ef4444"></span></td></tr>
-        <tr><td>9</td><td>540 – 600</td><td>188</td><td>6.6 px</td><td>1.6 px</td><td><span class="eval-bar" style="width:35px;background:#ef4444"></span></td></tr>
-        <tr><td>10</td><td>600 – 660</td><td>152</td><td>8.3 px</td><td>0.3 px</td><td><span class="eval-bar" style="width:44px;background:#dc2626"></span></td></tr>
-        <tr><td>11</td><td>660 – 720</td><td>142</td><td>7.2 px</td><td>0.1 px</td><td><span class="eval-bar" style="width:38px;background:#dc2626"></span></td></tr>
-        <tr><td>12</td><td>720 – 780</td><td>84</td><td>9.1 px</td><td>0.4 px</td><td><span class="eval-bar" style="width:48px;background:#dc2626"></span></td></tr>
-        <tr><td>13</td><td>780 – 840</td><td>45</td><td>11.1 px</td><td>0.6 px</td><td><span class="eval-bar" style="width:59px;background:#b91c1c"></span></td></tr>
-        <tr><td>14</td><td>840 – 900</td><td>23</td><td>18.5 px</td><td>1.3 px</td><td><span class="eval-bar" style="width:98px;background:#991b1b"></span></td></tr>
-        <tr class="warn"><td>15</td><td>900 – 960</td><td>3</td><td>81.2 px</td><td>0.1 px</td><td><small>(n=3, ignore)</small></td></tr>
+        <tr><td>0</td><td>0–60</td><td>188</td><td>1.9 px</td><td>0.1 px</td><td><span class="eval-bar" style="width:10px;background:#059669"></span></td></tr>
+        <tr><td>1</td><td>60–120</td><td>483</td><td>1.9 px</td><td>0.1 px</td><td><span class="eval-bar" style="width:10px;background:#059669"></span></td></tr>
+        <tr><td>2</td><td>120–180</td><td>467</td><td>2.4 px</td><td>0.3 px</td><td><span class="eval-bar" style="width:13px;background:#65a30d"></span></td></tr>
+        <tr><td>3</td><td>180–240</td><td>427</td><td>3.2 px</td><td>0.2 px</td><td><span class="eval-bar" style="width:17px;background:#84cc16"></span></td></tr>
+        <tr><td>4</td><td>240–300</td><td>339</td><td>3.9 px</td><td>1.8 px</td><td><span class="eval-bar" style="width:21px;background:#eab308"></span></td></tr>
+        <tr><td>5</td><td>300–360</td><td>267</td><td>4.6 px</td><td>0.2 px</td><td><span class="eval-bar" style="width:24px;background:#f97316"></span></td></tr>
+        <tr><td>6</td><td>360–420</td><td>268</td><td>5.6 px</td><td>0.1 px</td><td><span class="eval-bar" style="width:30px;background:#f97316"></span></td></tr>
+        <tr><td>7</td><td>420–480</td><td>248</td><td>5.7 px</td><td>1.7 px</td><td><span class="eval-bar" style="width:30px;background:#f97316"></span></td></tr>
+        <tr><td>8</td><td>480–540</td><td>222</td><td>6.5 px</td><td>3.2 px</td><td><span class="eval-bar" style="width:35px;background:#ef4444"></span></td></tr>
+        <tr><td>9</td><td>540–600</td><td>188</td><td>6.6 px</td><td>1.6 px</td><td><span class="eval-bar" style="width:35px;background:#ef4444"></span></td></tr>
+        <tr><td>10</td><td>600–660</td><td>152</td><td>8.3 px</td><td>0.3 px</td><td><span class="eval-bar" style="width:44px;background:#dc2626"></span></td></tr>
+        <tr><td>11</td><td>660–720</td><td>142</td><td>7.2 px</td><td>0.1 px</td><td><span class="eval-bar" style="width:38px;background:#dc2626"></span></td></tr>
+        <tr><td>12</td><td>720–780</td><td>84</td><td>9.1 px</td><td>0.4 px</td><td><span class="eval-bar" style="width:48px;background:#dc2626"></span></td></tr>
+        <tr><td>13</td><td>780–840</td><td>45</td><td>11.1 px</td><td>0.6 px</td><td><span class="eval-bar" style="width:59px;background:#b91c1c"></span></td></tr>
+        <tr><td>14</td><td>840–900</td><td>23</td><td>18.5 px</td><td>1.3 px</td><td><span class="eval-bar" style="width:98px;background:#991b1b"></span></td></tr>
+        <tr class="warn"><td>15</td><td>900–960</td><td>3</td><td>81.2 px</td><td>0.1 px</td><td><small>n=3, ignore</small></td></tr>
       </tbody>
     </table>
-    <div class="result-box negative">Negative result. Vflip degraded top-of-page accuracy (0.9→1.9 px) without improving bottom-of-page drift (16→18.5 px). The systematic error is structural, not a distribution problem.</div>
+    <div class="result-box negative">Negative result. Vflip degraded top-of-page accuracy (0.9→1.9 px) without improving bottom-of-page drift (16→18.5 px). The systematic top→bottom error is structural, not a distribution problem.</div>
   </div>
 
-  <!-- ══════════════════════════════════════════════════════════ flat -->
+  <!-- ════════════════════════════════════════════ flat -->
   <div class="session">
     <div class="session-header">
       <h2><span class="tag">flat</span></h2>
-      <span class="session-meta">2026-05-28 · tag: <code>train/flat</code> · 12 epochs &nbsp;
+      <span class="session-meta">2026-05-28 · tag: <code>train/flat</code> · 12 epochs · D=128 H=4 &nbsp;
         <span class="in-progress"><span class="dot-pulse"></span> training in progress</span>
       </span>
     </div>
-    <p>New architecture: stave queries become a flat global pool attending directly to image memory, rather than being conditioned on system queries via group attention. Each stave self-assigns to a system through the assign head. System query count reduced from 16 to 10 (covers 99.1% of pages in Staff16).</p>
-
+    <p>New architecture: stave queries become a flat global pool of 16 that attend directly to image memory, rather than being conditioned on system queries via group attention. Each stave self-assigns to a system through the assign head alone. System query count reduced from 16 to 10 (covers 99.1% of pages; max 15 staves/page in Staff16 dataset). Also runs at D=128 (same size as enhanced2-staffer-small), so architectural and capacity effects can be partially separated.</p>
     <h3>Changes from enhanced2</h3>
     <div class="changes">
       <div class="change-item"><span class="change-sym rem">−</span> <code>stave_group_attn</code> (MultiheadAttention) removed from each DecoderLayer</div>
       <div class="change-item"><span class="change-sym rem">−</span> <code>stave_group_norm</code> (LayerNorm) removed from each DecoderLayer</div>
       <div class="change-item"><span class="change-sym mod">~</span> <code>num_system_queries</code>: 16 → 10</div>
+      <div class="change-item"><span class="change-sym mod">~</span> <code>embed_dim</code>: 256 → 128, <code>num_heads</code>: 8 → 4</div>
     </div>
-
     <h3>Architecture</h3>
     <div class="arch">
       <div class="arch-col">
         <div class="arch-label">Backbone</div>
-        <div class="arch-block blue">ViT encoder<br><small>D=128 · 4 layers</small></div>
-        <div class="arch-arrow">↓ memory</div>
+        <div class="arch-block blue">ViT + pos embed<br>+ LayerNorm<br><small>D=128 · H=4</small></div>
       </div>
       <div class="arch-divider"></div>
       <div class="arch-col">
-        <div class="arch-label">System stream <span class="badge badge-amber">N=10</span></div>
+        <div class="arch-label">System <span class="badge badge-amber">N=10</span></div>
         <div class="arch-block slate">Self-Attn</div>
         <div class="arch-arrow">↓</div>
         <div class="arch-block slate">Cross-Attn (img)</div>
         <div class="arch-arrow">↓</div>
         <div class="arch-block slate">FFN</div>
         <div class="arch-arrow">↓</div>
-        <div class="arch-block green">Sys box head<br><small>(cx cy w h)</small></div>
-        <div class="arch-block green">Sys obj head</div>
+        <div class="arch-block green">Sys box</div>
+        <div class="arch-block green">Sys obj</div>
       </div>
       <div class="arch-divider"></div>
       <div class="arch-col">
-        <div class="arch-label">Stave stream (M=16)</div>
+        <div class="arch-label">Stave (M=16 global)</div>
         <div class="arch-block slate">Self-Attn</div>
         <div class="arch-arrow">↓</div>
         <div class="arch-block slate">Cross-Attn (img)</div>
@@ -308,86 +474,145 @@
         <div class="arch-arrow">↓</div>
         <div class="arch-block slate">FFN</div>
         <div class="arch-arrow">↓</div>
-        <div class="arch-block green">Stave yh head<br><small>(cy h)</small></div>
-        <div class="arch-block green">Stave obj head</div>
-        <div class="arch-block green">Assign head<br><small>(→ sys idx)</small></div>
+        <div class="arch-block green">Stave (cy, h)</div>
+        <div class="arch-block green">Stave obj</div>
+        <div class="arch-block green">Assign head</div>
       </div>
     </div>
     <div class="arch-legend">
       <div class="arch-legend-item"><div class="arch-legend-swatch" style="background:var(--slate-bg);border-color:var(--slate-bd)"></div> Unchanged</div>
       <div class="arch-legend-item"><div class="arch-legend-swatch" style="background:#fff1f2;border-color:#e11d48"></div> Removed</div>
       <div class="arch-legend-item"><div class="arch-legend-swatch" style="background:var(--amber-bg);border-color:var(--amber-bd)"></div> Changed</div>
-      <div class="arch-legend-item"><div class="arch-legend-swatch" style="background:var(--green-bg);border-color:var(--green-bd)"></div> Prediction heads</div>
     </div>
-
-    <div class="result-box pending">Training started 2026-05-28 19:11. Results pending — run <code>staffer eval flat</code> when complete.</div>
+    <div class="result-box pending">Training started 2026-05-28 ~19:22. Run <code>staffer eval flat</code> when complete and add results here.</div>
   </div>
 
 </main>
-
 <script>
-const epochs = [0,1,2,3,4,5,6,7,8,9,10,11];
+const ep12 = [0,1,2,3,4,5,6,7,8,9,10,11];
+const ep11 = [1,2,3,4,5,6,7,8,9,10];  // enhanced2-staffer-small started at ep1
+
+const C = {
+  basic:   '#64748b',
+  noeps:   '#0891b2',
+  staffyh: '#7c3aed',
+  e2:      '#2563eb',
+  e3:      '#059669',
+  small:   '#d97706',
+  vflip:   '#dc2626',
+};
+
+const basic = {
+  loss:  [6.167,2.043,1.555,1.335,1.133,1.029,0.926,0.808,0.711,0.661,0.631,0.616],
+  siou:  [0.254,0.686,0.759,0.769,0.820,0.847,0.857,0.878,0.892,0.902,0.909,0.913],
+  tiou:  [0.047,0.612,0.688,0.750,0.766,0.784,0.802,0.829,0.850,0.855,0.859,0.863],
+};
+const noeps = {
+  loss:  [6.035,1.844,1.516,1.023,0.887,0.796,0.688,0.638,0.589,0.536,0.514,0.499],
+  siou:  [0.261,0.728,0.781,0.828,0.868,0.872,0.895,0.905,0.913,0.918,0.922,0.926],
+  tiou:  [0.046,0.593,0.690,0.758,0.779,0.804,0.823,0.833,0.838,0.857,0.860,0.862],
+};
+const staffyh = {
+  loss: [3.763,0.979,0.750,0.507,0.496,0.406,0.324,0.300,0.259,0.230,0.221,0.214],
+  iou:  [0.254,0.671,0.743,0.821,0.810,0.844,0.879,0.887,0.899,0.908,0.912,0.915],
+  l1:   [0.06783,0.01154,0.00795,0.00652,0.00554,0.00514,0.00419,0.00389,0.00348,0.00304,0.00298,0.00286],
+};
 const e2 = {
-  loss:  [3.4648,0.9140,0.6471,0.5157,0.4353,0.3807,0.3237,0.2717,0.2405,0.2527,0.2227,0.2169],
-  iou:   [0.271, 0.706, 0.767, 0.818, 0.844, 0.860, 0.883, 0.898, 0.907, 0.906, 0.916, 0.919],
-  l1:    [0.08697,0.01145,0.00746,0.00561,0.00484,0.00437,0.00392,0.00347,0.00334,0.00309,0.00292,0.00282],
+  loss: [3.465,0.914,0.647,0.516,0.435,0.381,0.324,0.272,0.241,0.253,0.223,0.217],
+  iou:  [0.271,0.706,0.767,0.818,0.844,0.860,0.883,0.898,0.907,0.906,0.916,0.919],
+  l1:   [0.08697,0.01145,0.00746,0.00561,0.00484,0.00437,0.00392,0.00347,0.00334,0.00309,0.00292,0.00282],
 };
-const vf = {
-  loss:  [4.1928,1.2535,0.9048,0.7220,0.6172,0.5249,0.4570,0.4470,0.3901,0.3292,0.3222,0.3087],
-  iou:   [0.187, 0.564, 0.671, 0.736, 0.758, 0.798, 0.815, 0.820, 0.843, 0.864, 0.865, 0.872],
-  l1:    [0.19550,0.01637,0.01180,0.00947,0.00805,0.00776,0.00759,0.00594,0.00515,0.00475,0.00467,0.00438],
+const e3 = {
+  loss: [3.416,0.861,0.669,0.534,0.460,0.370,0.296,0.272,0.249,0.229,0.211,0.205],
+  iou:  [0.275,0.723,0.782,0.819,0.842,0.864,0.890,0.897,0.907,0.912,0.919,0.922],
+  l1:   [0.05442,0.01543,0.01179,0.00914,0.00771,0.00601,0.00568,0.00459,0.00432,0.00390,0.00358,0.00351],
+};
+const small = {
+  loss: [0.690,0.651,0.613,0.410,0.405,0.358,0.287,0.304,0.286,0.254],
+  iou:  [0.768,0.770,0.764,0.844,0.848,0.860,0.887,0.880,0.885,0.900],
+  l1:   [0.00819,0.00744,0.00598,0.00501,0.00474,0.00446,0.00389,0.00380,0.00363,0.00360],
+};
+const vflip = {
+  loss: [4.193,1.254,0.905,0.722,0.617,0.525,0.457,0.447,0.390,0.329,0.322,0.309],
+  iou:  [0.187,0.564,0.671,0.736,0.758,0.798,0.815,0.820,0.843,0.864,0.865,0.872],
+  l1:   [0.19550,0.01637,0.01180,0.00947,0.00805,0.00776,0.00759,0.00594,0.00515,0.00475,0.00467,0.00438],
 };
 
-const colors = {
-  e2:  { line: '#2563eb', fill: 'rgba(37,99,235,0.08)' },
-  vf:  { line: '#d97706', fill: 'rgba(217,119,6,0.08)' },
-};
-
-function makeChart(id, datasets, opts={}) {
+function line(label, data, color, opts={}) {
+  return { label, data, borderColor: color, backgroundColor: color+'18',
+           fill: opts.fill ?? false, borderWidth: opts.dashed ? 1.5 : 2,
+           borderDash: opts.dashed ? [4,3] : [], pointRadius: opts.dashed ? 2 : 3,
+           tension: 0.3 };
+}
+function makeChart(id, labels, datasets, yOpts={}) {
   const ctx = document.getElementById(id);
   if (!ctx) return;
   new Chart(ctx, {
     type: 'line',
-    data: { labels: epochs, datasets },
+    data: { labels, datasets },
     options: {
       responsive: true,
-      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } },
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } },
       scales: {
-        x: { title: { display: true, text: 'Epoch', font: { size: 11 } }, ticks: { font: { size: 10 } } },
-        y: { ...opts.y, ticks: { font: { size: 10 } } },
+        x: { title: { display: true, text: 'Epoch', font: { size: 10 } }, ticks: { font: { size: 9 } } },
+        y: { ...yOpts, ticks: { font: { size: 9 } } },
       },
       elements: { point: { radius: 3 }, line: { tension: 0.3 } },
     }
   });
 }
 
-// enhanced2 solo charts
-makeChart('c-e2-loss', [{
-  label: 'enhanced2', data: e2.loss,
-  borderColor: colors.e2.line, backgroundColor: colors.e2.fill, fill: true, borderWidth: 2,
-}]);
-makeChart('c-e2-iou', [{
-  label: 'enhanced2', data: e2.iou,
-  borderColor: colors.e2.line, backgroundColor: colors.e2.fill, fill: true, borderWidth: 2,
-}], { y: { min: 0, max: 1 } });
-makeChart('c-e2-l1', [{
-  label: 'enhanced2', data: e2.l1,
-  borderColor: colors.e2.line, backgroundColor: colors.e2.fill, fill: true, borderWidth: 2,
-}]);
+// ── Cross-run comparison (staffyh onward)
+makeChart('cmp-loss', ep12,
+  [line('staffyh',e2.loss,C.staffyh,{dashed:true}),
+   line('enhanced2',e2.loss,C.e2,{fill:false}),
+   line('enhanced3',e3.loss,C.e3),
+   line('enhanced2-vflip',vflip.loss,C.vflip)]);
+makeChart('cmp-iou', ep12,
+  [line('staffyh',staffyh.iou,C.staffyh,{dashed:true}),
+   line('enhanced2',e2.iou,C.e2),
+   line('enhanced3',e3.iou,C.e3),
+   line('enhanced2-vflip',vflip.iou,C.vflip)], {min:0,max:1});
+makeChart('cmp-l1', ep12,
+  [line('staffyh',staffyh.l1,C.staffyh,{dashed:true}),
+   line('enhanced2',e2.l1,C.e2),
+   line('enhanced3',e3.l1,C.e3),
+   line('enhanced2-vflip',vflip.l1,C.vflip)]);
 
-// enhanced2-vflip vs enhanced2
-makeChart('c-vf-loss', [
-  { label: 'enhanced2',       data: e2.loss, borderColor: colors.e2.line, borderWidth: 1.5, borderDash: [4,3], pointRadius: 2 },
-  { label: 'enhanced2-vflip', data: vf.loss, borderColor: colors.vf.line, backgroundColor: colors.vf.fill, fill: true, borderWidth: 2 },
-]);
-makeChart('c-vf-iou', [
-  { label: 'enhanced2',       data: e2.iou,  borderColor: colors.e2.line, borderWidth: 1.5, borderDash: [4,3], pointRadius: 2 },
-  { label: 'enhanced2-vflip', data: vf.iou,  borderColor: colors.vf.line, backgroundColor: colors.vf.fill, fill: true, borderWidth: 2 },
-], { y: { min: 0, max: 1 } });
-makeChart('c-vf-l1', [
-  { label: 'enhanced2',       data: e2.l1,   borderColor: colors.e2.line, borderWidth: 1.5, borderDash: [4,3], pointRadius: 2 },
-  { label: 'enhanced2-vflip', data: vf.l1,   borderColor: colors.vf.line, backgroundColor: colors.vf.fill, fill: true, borderWidth: 2 },
-]);
+// ── basic solo
+makeChart('c-basic-loss', ep12, [line('basic',basic.loss,C.basic,{fill:true})]);
+makeChart('c-basic-siou', ep12, [line('basic',basic.siou,C.basic,{fill:true})], {min:0,max:1});
+makeChart('c-basic-tiou', ep12, [line('basic',basic.tiou,C.basic,{fill:true})], {min:0,max:1});
+
+// ── noeps vs basic
+makeChart('c-noeps-loss', ep12, [line('basic',basic.loss,C.basic,{dashed:true}), line('noeps',noeps.loss,C.noeps,{fill:true})]);
+makeChart('c-noeps-siou', ep12, [line('basic',basic.siou,C.basic,{dashed:true}), line('noeps',noeps.siou,C.noeps,{fill:true})], {min:0,max:1});
+makeChart('c-noeps-tiou', ep12, [line('basic',basic.tiou,C.basic,{dashed:true}), line('noeps',noeps.tiou,C.noeps,{fill:true})], {min:0,max:1});
+
+// ── staffyh solo
+makeChart('c-staffyh-loss', ep12, [line('staffyh',staffyh.loss,C.staffyh,{fill:true})]);
+makeChart('c-staffyh-iou',  ep12, [line('staffyh',staffyh.iou,C.staffyh,{fill:true})],  {min:0,max:1});
+makeChart('c-staffyh-l1',   ep12, [line('staffyh',staffyh.l1,C.staffyh,{fill:true})]);
+
+// ── enhanced2 solo
+makeChart('c-e2-loss', ep12, [line('enhanced2',e2.loss,C.e2,{fill:true})]);
+makeChart('c-e2-iou',  ep12, [line('enhanced2',e2.iou, C.e2,{fill:true})], {min:0,max:1});
+makeChart('c-e2-l1',   ep12, [line('enhanced2',e2.l1,  C.e2,{fill:true})]);
+
+// ── enhanced3 vs enhanced2
+makeChart('c-e3-loss', ep12, [line('enhanced2',e2.loss,C.e2,{dashed:true}), line('enhanced3',e3.loss,C.e3,{fill:true})]);
+makeChart('c-e3-iou',  ep12, [line('enhanced2',e2.iou, C.e2,{dashed:true}), line('enhanced3',e3.iou, C.e3,{fill:true})], {min:0,max:1});
+makeChart('c-e3-l1',   ep12, [line('enhanced2',e2.l1,  C.e2,{dashed:true}), line('enhanced3',e3.l1,  C.e3,{fill:true})]);
+
+// ── enhanced2-staffer-small vs enhanced2
+makeChart('c-small-loss', ep11, [line('enhanced2',e2.loss.slice(1),C.e2,{dashed:true}), line('small',small.loss,C.small,{fill:true})]);
+makeChart('c-small-iou',  ep11, [line('enhanced2',e2.iou.slice(1), C.e2,{dashed:true}), line('small',small.iou, C.small,{fill:true})], {min:0,max:1});
+makeChart('c-small-l1',   ep11, [line('enhanced2',e2.l1.slice(1),  C.e2,{dashed:true}), line('small',small.l1,  C.small,{fill:true})]);
+
+// ── enhanced2-vflip vs enhanced2
+makeChart('c-vf-loss', ep12, [line('enhanced2',e2.loss,C.e2,{dashed:true}), line('enhanced2-vflip',vflip.loss,C.vflip,{fill:true})]);
+makeChart('c-vf-iou',  ep12, [line('enhanced2',e2.iou, C.e2,{dashed:true}), line('enhanced2-vflip',vflip.iou, C.vflip,{fill:true})], {min:0,max:1});
+makeChart('c-vf-l1',   ep12, [line('enhanced2',e2.l1,  C.e2,{dashed:true}), line('enhanced2-vflip',vflip.l1,  C.vflip,{fill:true})]);
 </script>
 </body>
 </html>
