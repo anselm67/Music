@@ -2,6 +2,31 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Behavioral Guidelines
+
+### 1. Think Before Coding
+- State your assumptions explicitly before writing code. If uncertain, ask.
+- If multiple interpretations of a task exist, present them—do not pick silently.
+- If a simpler approach exists, suggest it and push back when warranted.
+- Stop and name what is confusing before guessing through it.
+
+### 2. Simplicity First
+- No features beyond what was explicitly asked.
+- No abstractions or "flexibility" for single-use code.
+- No error handling for impossible scenarios.
+- Ask: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+### 3. Surgical Changes
+- Touch only what the user's request requires.
+- Do not "improve," reformat, or refactor adjacent code or comments.
+- Match existing repository style exactly.
+- Remove imports, variables, or functions that YOUR changes made unused; do not touch pre-existing dead code.
+
+### 4. Goal-Driven Execution
+- Transform tasks into verifiable goals (e.g., "Write a test that reproduces the bug, then make it pass").
+- For multi-step tasks, state a brief plan with explicit verification steps before proceeding.
+- Strong success criteria let you loop independently; weak criteria require constant interruption.
+
 ## Goal
 
 End-to-end Optical Music Recognition pipeline:
@@ -32,7 +57,7 @@ uv run ruff check src tests
 uv run ruff format src tests
 
 # Type check
-uv run mypy src
+uv run mypy src tests
 ```
 
 **Package management:** always use `uv add <pkg>` / `uv remove <pkg>` — never `pip install`.
@@ -54,7 +79,7 @@ pdmx query -o System2.csv 'index==index' --score 'pages.0.systems.0.staff_count 
 pdmx --csv subset.csv stats
 
 # Train the staffer layout detector
-staffer --log-file logs/staffer.log train -e 12 --use-sampler <model_name>
+staffer --log-file logs/staffer/<model_name>.log train -e 12 --use-sampler <model_name>
 
 # Run staffer inference on images
 staffer predict <model_name> <img1.png> [img2.png ...]
@@ -75,7 +100,7 @@ kern ...   # Kern file utilities
 
 ## Code review
 
-Before creating any git commit, always spawn the `code-reviewer` agent to review the staged changes first.
+Before creating any git commit, spawn the `code-reviewer` agent to review the staged changes first. Skip for purely cosmetic or documentation-only changes.
 
 ---
 
@@ -133,8 +158,7 @@ noter --log-file logs/noter/<model-name>.log train OPTIONS...
 - Training metrics will be available - eg for staffer - as logs/staffer/<model-name>/metrics.csv
 - Finally you should always update the training log (docs/staffer-training.html or docs/noter-training.html) with eval results and metrics for the run.
 
-**Current checkpoint status:** system IoU >0.95, stave IoU ~0.93 (tagged in Git
-before bar detection work began).
+**Current checkpoint status:** `enhanced2` is the best staffer model — system IoU ~0.92, cy_err 0.9px (top) / 16px (bottom). Subsequent experiments were worse: enhanced3 (cy_delta approach) reverted; enhanced2-staffer-small (3.6M params) worse across the board; enhanced2-vflip negative result. Next planned experiment: chained system-box representation (plan in `docs/staffer-plan.html`).
 
 ---
 
@@ -148,11 +172,13 @@ before bar detection work began).
 
 **Dataset (`NoterDataset`):** built from a PDMX subset (≤2 staves/system). Each sample is a cropped staff image paired with its Kern token sequence for the corresponding bar range. Spine ordering for 2-staff systems: `[1, 0]` (treble=spine 1, bass=spine 0 in tokens file).
 
-**Vocabulary (`Vocab`):** token encoding packs pitch-base into low 16 bits, duration into high 16 bits. Special tokens: PAD=0, UNK=1, SOS=2, EOS=3, SIL=4 (chord padding). Saved as JSON at `build/vocab.json`.
+**Vocabulary (`Vocab`):** flat tokens — each unique token string (`C/4`, `C/8:1`, `clef-G`, `4/4`, etc.) gets its own integer ID. ~6k tokens built from observed `.tokens` files. Special tokens: PAD=0, UNK=1, SOS=2, EOS=3, SIL=4 (chord padding). Bar numbers are stripped before lookup (`=5` → `=`). Saved as JSON at `build/vocab.json`.
 
 **Output format:** tokens derived from Humdrum **Kern** (single-spine canonical form; chord notes sorted; one spine per instrument staff). `kern/tokenizer.py` translates native Kern to simplified token notation.
 
 **Lightning module:** `NoterModule` — cross-entropy loss over (B×T×max_chords, vocab_size), ignoring PAD; reports token accuracy metric.
+
+**Current baseline:** `enhanced3` — 99.58% val accuracy, 98.0% avg edit-distance (converged ~epoch 10 in a 12-epoch run).
 
 ---
 
@@ -203,15 +229,15 @@ Multi-page scores store per-page PNGs; single-page scores use a flat filename.
 
 ## Current focus areas
 
-1. Aligning stave systems to Kern spines in the dataset — mostly done, but bar number mismatches remain when Score/page/system computed bar numbers diverge from Verovio output.
-2. `NoterModel` — simple staff-image → tokens model using scores with ≤2 staves for easy staff↔token matching. `NoterDataset` implements this pairing.
-3. [longer term] Multi-stave processing: `SystemTransformer` + `SharedSpineDecoder` + RoIAlign feature extraction from `staffer` detections.
-4. Single end-to-end model (detection + transcription in one forward pass).
+1. **Staffer — chained system-box representation:** replaces independent `(cx,cy,w,h)` per system with tight boxes + explicit gap prediction, fixing the 16px bottom-drift asymmetry. Plan documented in `docs/staffer-plan.html`.
+2. **NoterModel** — `enhanced3` baseline is solid (99.58% val acc). Next: longer sequences, harder scores, multi-staff generalisation.
+3. **Stave↔spine alignment** — mostly done; bar number mismatches remain when Score/page/system computed bar numbers diverge from Verovio output.
+4. [longer term] Multi-stave processing: `SystemTransformer` + `SharedSpineDecoder` + RoIAlign feature extraction from `staffer` detections.
+5. Single end-to-end model (detection + transcription in one forward pass).
 
 ### Known pending fixes
 
 - Tokenizer should inspect first-bar lengths against the metric to determine where bar number 1 falls.
 - `mxl/14/10/QmWAGX...`: rendering missing first few bars → bar sync off.
 - `mxl/3/6/Qmd7UQ...`: bar count mismatch due to invisible leading bars in SVG.
-- `NoterModel` output: consider predicting pitch and duration separately, or rework `Vocab.encode`.
-- Staffer: stave output should become two y-coordinates only; derive full box from parent system.
+- Staffer: stave output should become two y-coordinates only; derive full box from parent system (superseded by chained-box plan, but still valid).
