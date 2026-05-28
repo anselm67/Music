@@ -123,6 +123,16 @@ cross-entropy assignment, containment, alignment — returns a `LossDict`.
   training with curriculum decay schedule (fixes ~10px systematic bar offset)
 - Hardware: RTX 4060/5060 Ti 16 GB
 
+Here are the steps for running a training:
+- Make sure all tests pass, and that a tag is created with a descrptive name for the new model; If the new model derives from a previous one, it should include its name, eg enhanced2-vflip is the enhanced2 model plus data augmentation vflip
+- The actual training command shouhld look like this:
+```bash
+staffer --log-file logs/staffer/<model-name>.log train OPTIONS...
+noter --log-file logs/noter/<model-name>.log train OPTIONS...
+```
+- Training metrics will be available - eg for staffer - as logs/staffer/<model-name>/metrics.csv
+
+
 **Current checkpoint status:** system IoU >0.95, stave IoU ~0.93 (tagged in Git
 before bar detection work began).
 
