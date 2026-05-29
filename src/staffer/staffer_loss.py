@@ -92,9 +92,9 @@ class StafferLoss(nn.Module):
 
     def _stave_yh_loss(
         self,
-        pred_yh: Tensor,      # (M, 2) — cy, h predictions
+        pred_yh: Tensor,  # (M, 2) — cy, h predictions
         pred_logits: Tensor,  # (M, 1)
-        gt_boxes: Tensor,     # (M, 4) padded
+        gt_boxes: Tensor,  # (M, 4) padded
         num_gt: int,
         num_queries: int,
     ) -> tuple[Tensor, Tensor]:
@@ -123,7 +123,7 @@ class StafferLoss(nn.Module):
         self,
         pred_sys_boxes: Tensor,
         pred_sys_logits: Tensor,
-        pred_stave_yh: Tensor,     # (B, M, 2) — cy, h
+        pred_stave_yh: Tensor,  # (B, M, 2) — cy, h
         pred_stave_logits: Tensor,
         pred_assign: Tensor,
         gt_sys_boxes: Tensor,

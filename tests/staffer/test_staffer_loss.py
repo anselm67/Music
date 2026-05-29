@@ -35,7 +35,9 @@ class TestStafferLoss:
 
     def _make_inputs(
         self, config: StafferConfig, num_sys: int, num_staves: int, B: int = 2
-    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, list[Tensor], list[Tensor], list[Tensor]]:
+    ) -> tuple[
+        Tensor, Tensor, Tensor, Tensor, Tensor, list[Tensor], list[Tensor], list[Tensor]
+    ]:
         N, M = config.num_system_queries, config.num_stave_queries
         pred_sys_boxes = torch.rand(B, N, 4)
         pred_sys_logits = torch.randn(B, N, 1)
@@ -98,10 +100,26 @@ class TestStafferLoss:
         bad_sys = torch.ones(B, N, 4) * 0.9
         bad_stave_yh = torch.ones(B, M, 2) * 0.9
 
-        good_loss = loss(good_sys, logits, good_stave_yh, stave_logits, pred_assign,
-                         [gt_sys], [gt_stave], [gt_assign])
-        bad_loss = loss(bad_sys, logits, bad_stave_yh, stave_logits, pred_assign,
-                        [gt_sys], [gt_stave], [gt_assign])
+        good_loss = loss(
+            good_sys,
+            logits,
+            good_stave_yh,
+            stave_logits,
+            pred_assign,
+            [gt_sys],
+            [gt_stave],
+            [gt_assign],
+        )
+        bad_loss = loss(
+            bad_sys,
+            logits,
+            bad_stave_yh,
+            stave_logits,
+            pred_assign,
+            [gt_sys],
+            [gt_stave],
+            [gt_assign],
+        )
 
         assert good_loss.total() < bad_loss.total()
 
@@ -120,8 +138,16 @@ class TestStafferLoss:
         gt_stave_boxes = [make_boxes(5, M) for _ in range(B)]
         gt_assign = [make_assign(5, 3, M) for _ in range(B)]
 
-        result = loss(pred_sys_boxes, pred_sys_logits, pred_stave_yh, pred_stave_logits,
-                      pred_assign, gt_sys_boxes, gt_stave_boxes, gt_assign)
+        result = loss(
+            pred_sys_boxes,
+            pred_sys_logits,
+            pred_stave_yh,
+            pred_stave_logits,
+            pred_assign,
+            gt_sys_boxes,
+            gt_stave_boxes,
+            gt_assign,
+        )
         result.total().backward()
 
         assert pred_sys_boxes.grad is not None

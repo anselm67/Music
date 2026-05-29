@@ -22,9 +22,7 @@ class StafferModule(L.LightningModule):
         self.loss_fn = StafferLoss(config)
         self.save_hyperparameters(config.asdict())
 
-    def forward(
-        self, x: Tensor
-    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         return self.model(x)
 
     def _step(self, batch: tuple, stage: str) -> Tensor:
@@ -65,7 +63,7 @@ class StafferModule(L.LightningModule):
 
     def _mean_sys_iou(
         self,
-        pred_boxes: Tensor,      # (B, N, 4)
+        pred_boxes: Tensor,  # (B, N, 4)
         gt_boxes: list[Tensor],  # list of (N, 4) padded
         gt_assign: list[Tensor],
     ) -> Tensor:
@@ -80,7 +78,7 @@ class StafferModule(L.LightningModule):
 
     def _mean_stave_l1(
         self,
-        pred_yh: Tensor,         # (B, M, 2) — cy, h
+        pred_yh: Tensor,  # (B, M, 2) — cy, h
         gt_boxes: list[Tensor],  # list of (M, 4) padded
         gt_assign: list[Tensor],
     ) -> Tensor:

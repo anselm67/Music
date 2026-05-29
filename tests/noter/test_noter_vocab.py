@@ -36,7 +36,7 @@ class TestVocab:
 
     def test_encode_bar(self, vocab: Vocab) -> None:
         encoded = vocab.encode("==12")
-        assert encoded == 9 
+        assert encoded == 9
 
     def test_tok2i_normal(self, vocab: Vocab) -> None:
         tokens = ["token1", "token2"]
