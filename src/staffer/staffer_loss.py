@@ -44,15 +44,21 @@ def generalized_iou(pred: Tensor, target: Tensor) -> Tensor:
     inter_x2 = torch.min(pred[:, 2], target[:, 2])
     inter_y2 = torch.min(pred[:, 3], target[:, 3])
     inter = (inter_x2 - inter_x1).clamp(0) * (inter_y2 - inter_y1).clamp(0)
-    area_pred = (pred[:, 2] - pred[:, 0]) * (pred[:, 3] - pred[:, 1])
-    area_tgt = (target[:, 2] - target[:, 0]) * (target[:, 3] - target[:, 1])
+    area_pred = (pred[:, 2] - pred[:, 0]).clamp(min=0) * (
+        pred[:, 3] - pred[:, 1]
+    ).clamp(min=0)
+    area_tgt = (target[:, 2] - target[:, 0]).clamp(min=0) * (
+        target[:, 3] - target[:, 1]
+    ).clamp(min=0)
     union = area_pred + area_tgt - inter
     iou = inter / union.clamp(min=1e-6)
     enclosing_x1 = torch.min(pred[:, 0], target[:, 0])
     enclosing_y1 = torch.min(pred[:, 1], target[:, 1])
     enclosing_x2 = torch.max(pred[:, 2], target[:, 2])
     enclosing_y2 = torch.max(pred[:, 3], target[:, 3])
-    enclosing = (enclosing_x2 - enclosing_x1) * (enclosing_y2 - enclosing_y1)
+    enclosing = (enclosing_x2 - enclosing_x1).clamp(min=0) * (
+        enclosing_y2 - enclosing_y1
+    ).clamp(min=0)
     return iou - (enclosing - union) / enclosing.clamp(min=1e-6)
 
 
