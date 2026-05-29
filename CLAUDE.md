@@ -111,10 +111,11 @@ kern ...   # Kern file utilities
 ```
 src/
   cli/         # Click entry points: kern.py, pdmx.py, staffer.py, noter.py
-  dataset/     # PDMX index, StafferDataset/DataModule, layout types (Score, Box)
+  pdmx/        # PDMX index, layout types (Score, Box), asset builder, stats
+  staffer/     # HierarchicalDETR model, loss, module, dataset, datamodule
+  noter/       # NoterModel/Config, module, dataset, datamodule, vocab
   kern/        # Humdrum Kern parser, tokenizer, kern→MIDI converter
-  models/      # staffer_model.py (HierarchicalDETR), staffer_module.py, staffer_loss.py
-  noter/       # noter_model.py (NoterModel/Config), noter_module.py, noter_dataset.py, noter_vocab.py
+  midi/        # Binary MIDI I/O (input, output, typing)
   utils/       # Walker async pool, json_query, misc helpers
   verovio/     # Verovio wrapper, SVG scraper (LayoutExtractor), binaries
 tests/         # pytest, mirrors src/ structure
