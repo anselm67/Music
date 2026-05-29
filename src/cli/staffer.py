@@ -642,7 +642,10 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
         if errors:
             avg_cy = sum(e[0] for e in errors) / len(errors)
             avg_h = sum(e[1] for e in errors) / len(errors)
-            print(f"  {b:>3}  {y_lo:>5}-{y_hi:<5}  {len(errors):>5}  {avg_cy:>7.1f}px  {avg_h:>7.1f}px")
+            print(
+                f"  {b:>3}  {y_lo:>5}-{y_hi:<5}  {len(errors):>5}"
+                f"  {avg_cy:>7.1f}px  {avg_h:>7.1f}px"
+            )
         else:
             print(f"  {b:>3}  {y_lo:>5}-{y_hi:<5}  {0:>5}  {'—':>8}  {'—':>8}")
 

@@ -9,7 +9,7 @@ from typing import cast
 
 import torch
 from torch import Tensor
-from torch.utils.data import Dataset, WeightedRandomSampler
+from torch.utils.data import Dataset, Subset, WeightedRandomSampler
 from torchvision.io import decode_image
 from torchvision.transforms import v2
 from tqdm import tqdm
@@ -18,7 +18,7 @@ from pdmx import PDMX, Score
 from .staffer_model import StafferConfig
 
 
-class StafferDataset(Dataset):
+class StafferDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]]):
     pdmx: PDMX
     # layout path, png path, page number, part_count, max_sys_bottom
     # The last two items are used when use_sampler is enabled.
@@ -51,17 +51,32 @@ class StafferDataset(Dataset):
             mxl_file = pdmx.home / row["mxl"]
             layout_file = pdmx.get_path(mxl_file, "layout")
             score = Score.from_json(json.loads(layout_file.read_text()))
-            part_count = score.staff_count // score.system_count
+            part_count = max(score.staff_count, 1) // max(score.system_count, 1)
             for page in score.pages:
                 if score.page_count > 1:
                     png_file = pdmx.get_page_path(mxl_file, "png", page.page_number)
                 else:
                     png_file = pdmx.get_path(mxl_file, "png")
-                max_sys_bottom = max(
-                    (s.box.bottom / page.image_height for s in page.systems), default=0.0
+                raw = max(
+                    (s.box.bottom / page.image_height for s in page.systems),
+                    default=0.0,
                 )
+                if raw > 1.0:
+                    logging.warning(
+                        "%s page %d: max_sys_bottom=%.3f > 1.0, clamping",
+                        layout_file,
+                        page.page_number,
+                        raw,
+                    )
+                max_sys_bottom = min(raw, 1.0)
                 self.items.append(
-                    (layout_file, png_file, page.page_number, part_count, max_sys_bottom)
+                    (
+                        layout_file,
+                        png_file,
+                        page.page_number,
+                        part_count,
+                        max_sys_bottom,
+                    )
                 )
             if count >= 0 and len(self.items) >= count:
                 self.items = self.items[:count]
@@ -112,13 +127,16 @@ class StafferDataset(Dataset):
             idx += 1
 
 
-def build_sampler(ds: Dataset, bottom_bias: float = 3.0) -> WeightedRandomSampler:
+def build_sampler(
+    ds: Subset[tuple[Tensor, Tensor, Tensor, Tensor]],
+    bottom_bias: float = 3.0,
+) -> WeightedRandomSampler:
     logging.info("Computing sample weights...")
     part_counts: list[int] = []
     max_sys_bottoms: list[float] = []
     part_histo: Counter[int] = Counter()
-    dataset = cast(StafferDataset, ds.dataset)  # type: ignore
-    for i in ds.indices:  # type: ignore
+    dataset = cast(StafferDataset, ds.dataset)
+    for i in ds.indices:
         _, _, _, part_count, max_sys_bottom = dataset.items[i]
         part_counts.append(part_count)
         max_sys_bottoms.append(max_sys_bottom)
@@ -132,5 +150,5 @@ def build_sampler(ds: Dataset, bottom_bias: float = 3.0) -> WeightedRandomSample
     ]
 
     return WeightedRandomSampler(
-        weights=weights, num_samples=dataset.config.train_len, replacement=True
+        weights=weights, num_samples=len(ds.indices), replacement=True
     )

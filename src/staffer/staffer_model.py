@@ -50,6 +50,7 @@ class StafferConfig:
     weight_decay: float = 1e-4
     warmup_steps: int = 4000
     box_loss_multiplier: int = 2
+    bottom_bias: float = 3.0  # sampler weight multiplier for bottom-of-page systems
 
     def scale_to_patch(self, value: int) -> int:
         ret = value // self.divider
@@ -296,9 +297,7 @@ class StafferModel(nn.Module):
         self.decoder = StafferDecoder(config)
         self.heads = PredictionHeads(config)
 
-    def forward(
-        self, x: Tensor
-    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         memory = self.backbone(x)  # (B, P, D)
         sys_feats, stave_feats = self.decoder(memory)  # (B, N, D), (B, M, D)
         # returns: sys_boxes, sys_logits, stave_yh (cy/h), stave_logits, assign_logits

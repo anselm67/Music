@@ -40,7 +40,7 @@ class StafferDataModule(L.LightningDataModule):
             return DataLoader(
                 self.train_ds,
                 batch_size=self.config.batch_size,
-                sampler=build_sampler(self.train_ds),
+                sampler=build_sampler(self.train_ds, self.config.bottom_bias),
                 num_workers=self.num_workers,
                 pin_memory=True,
             )
