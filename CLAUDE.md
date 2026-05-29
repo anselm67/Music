@@ -98,9 +98,11 @@ kern ...   # Kern file utilities
 
 ---
 
-## Code review
+## Committing
 
-Before creating any git commit, spawn the `code-reviewer` agent to review the staged changes first. Skip for purely cosmetic or documentation-only changes.
+- **Always ask before committing.** Never stage and commit without explicitly prompting the user first.
+- Before committing, run `uv run ruff format src tests` to format, then `uv run ruff check src tests` to verify no lint errors remain.
+- Then spawn the `code-reviewer` agent to review the staged changes. Skip the review for purely cosmetic or documentation-only changes.
 
 ---
 
