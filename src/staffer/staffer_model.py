@@ -62,11 +62,11 @@ class StafferConfig:
             self.scale_to_patch(self.max_width),
         )
         if self.train_len == -1:
-            self.train_len = 12500 * self.batch_size
+            self.train_len = 21875 * self.batch_size
         if self.valid_len == -1:
             self.valid_len = 100 * self.batch_size
-        # Trains for 4 epochs by default.
-        self.max_steps = 4 * (self.train_len // self.batch_size)
+        # Trains for 6 epochs by default.
+        self.max_steps = 6 * (self.train_len // self.batch_size)
 
     def asdict(self) -> dict[str, object]:
         obj = asdict(self)
