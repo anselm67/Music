@@ -171,10 +171,10 @@
         <td><span class="badge badge-amber">negative</span></td>
       </tr>
       <tr>
-        <td><span class="tag">flat</span></td><td>2026-05-28</td><td>128</td><td>10</td>
-        <td>—</td><td>—</td><td>—</td>
+        <td><span class="tag">flat</span></td><td>2026-05-29</td><td>128</td><td>10</td>
+        <td>0.2595</td><td>0.900</td><td>stave L1 0.00373</td>
         <td>Flat stave pool; N 16→10; remove group attention</td>
-        <td><span class="badge badge-blue">in progress</span></td>
+        <td><span class="badge badge-amber">negative</span></td>
       </tr>
     </tbody>
   </table>
@@ -342,7 +342,29 @@
       <div class="chart-card"><h4>Val sys IoU</h4><canvas id="c-e2-iou"></canvas></div>
       <div class="chart-card"><h4>Val stave L1</h4><canvas id="c-e2-l1"></canvas></div>
     </div>
-    <div class="result-box positive">Marginal improvement over staffyh. Establishes the clean reference baseline: sys IoU 0.919, stave L1 0.00282, cy error 0.9→16 px top-to-bottom.</div>
+    <h3>Eval — stave cy error by vertical position (500 samples, H=960 px)</h3>
+    <table class="eval-table">
+      <thead><tr><th>Bin</th><th>Y range</th><th>n</th><th>cy error</th><th>h error</th><th></th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td>0–60</td><td>159</td><td>0.9 px</td><td>0.1 px</td><td><span class="eval-bar" style="width:5px;background:#059669"></span></td></tr>
+        <tr><td>1</td><td>60–120</td><td>475</td><td>1.4 px</td><td>0.1 px</td><td><span class="eval-bar" style="width:7px;background:#059669"></span></td></tr>
+        <tr><td>2</td><td>120–180</td><td>474</td><td>1.8 px</td><td>0.2 px</td><td><span class="eval-bar" style="width:10px;background:#059669"></span></td></tr>
+        <tr><td>3</td><td>180–240</td><td>414</td><td>2.4 px</td><td>0.2 px</td><td><span class="eval-bar" style="width:13px;background:#65a30d"></span></td></tr>
+        <tr><td>4</td><td>240–300</td><td>312</td><td>3.1 px</td><td>1.8 px</td><td><span class="eval-bar" style="width:16px;background:#84cc16"></span></td></tr>
+        <tr><td>5</td><td>300–360</td><td>249</td><td>4.2 px</td><td>0.2 px</td><td><span class="eval-bar" style="width:22px;background:#eab308"></span></td></tr>
+        <tr><td>6</td><td>360–420</td><td>244</td><td>4.9 px</td><td>0.5 px</td><td><span class="eval-bar" style="width:26px;background:#eab308"></span></td></tr>
+        <tr><td>7</td><td>420–480</td><td>233</td><td>5.9 px</td><td>0.7 px</td><td><span class="eval-bar" style="width:31px;background:#f97316"></span></td></tr>
+        <tr><td>8</td><td>480–540</td><td>197</td><td>6.4 px</td><td>1.1 px</td><td><span class="eval-bar" style="width:34px;background:#f97316"></span></td></tr>
+        <tr><td>9</td><td>540–600</td><td>161</td><td>6.8 px</td><td>0.5 px</td><td><span class="eval-bar" style="width:36px;background:#f97316"></span></td></tr>
+        <tr><td>10</td><td>600–660</td><td>147</td><td>8.4 px</td><td>0.3 px</td><td><span class="eval-bar" style="width:44px;background:#ef4444"></span></td></tr>
+        <tr><td>11</td><td>660–720</td><td>125</td><td>10.7 px</td><td>0.2 px</td><td><span class="eval-bar" style="width:57px;background:#dc2626"></span></td></tr>
+        <tr><td>12</td><td>720–780</td><td>86</td><td>12.0 px</td><td>0.2 px</td><td><span class="eval-bar" style="width:64px;background:#dc2626"></span></td></tr>
+        <tr><td>13</td><td>780–840</td><td>53</td><td>14.3 px</td><td>0.2 px</td><td><span class="eval-bar" style="width:76px;background:#b91c1c"></span></td></tr>
+        <tr><td>14</td><td>840–900</td><td>22</td><td>11.6 px</td><td>1.4 px</td><td><span class="eval-bar" style="width:62px;background:#dc2626"></span></td></tr>
+        <tr class="warn"><td>15</td><td>900–960</td><td>2</td><td>17.9 px</td><td>0.3 px</td><td><small>n=2, ignore</small></td></tr>
+      </tbody>
+    </table>
+    <div class="result-box positive">Marginal improvement over staffyh. Establishes the clean reference baseline: sys IoU 0.919, stave L1 0.00282, cy error 0.9→16 px top-to-bottom (bins 0–13; bin 14 dips to 11.6 px, likely sparse sample effect).</div>
   </div>
 
   <!-- ════════════════════════════════════════════ enhanced3 -->
@@ -433,9 +455,7 @@
   <div class="session">
     <div class="session-header">
       <h2><span class="tag">flat</span></h2>
-      <span class="session-meta">2026-05-28 · tag: <code>train/flat</code> · 12 epochs · D=128 H=4 &nbsp;
-        <span class="in-progress"><span class="dot-pulse"></span> training in progress</span>
-      </span>
+      <span class="session-meta">2026-05-28–29 · tag: <code>train/flat</code> · 12 epochs · D=128 H=4</span>
     </div>
     <p>New architecture: stave queries become a flat global pool of 16 that attend directly to image memory, rather than being conditioned on system queries via group attention. Each stave self-assigns to a system through the assign head alone. System query count reduced from 16 to 10 (covers 99.1% of pages; max 15 staves/page in Staff16 dataset). Also runs at D=128 (same size as enhanced2-staffer-small), so architectural and capacity effects can be partially separated.</p>
     <h3>Changes from enhanced2</h3>
@@ -484,7 +504,35 @@
       <div class="arch-legend-item"><div class="arch-legend-swatch" style="background:#fff1f2;border-color:#e11d48"></div> Removed</div>
       <div class="arch-legend-item"><div class="arch-legend-swatch" style="background:var(--amber-bg);border-color:var(--amber-bd)"></div> Changed</div>
     </div>
-    <div class="result-box pending">Training started 2026-05-28 ~19:22. Run <code>staffer eval flat</code> when complete and add results here.</div>
+    <h3>Training curves</h3>
+    <div class="charts">
+      <div class="chart-card"><h4>Val loss — vs enhanced2</h4><canvas id="c-flat-loss"></canvas></div>
+      <div class="chart-card"><h4>Val sys IoU — vs enhanced2</h4><canvas id="c-flat-iou"></canvas></div>
+      <div class="chart-card"><h4>Val stave L1 — vs enhanced2</h4><canvas id="c-flat-l1"></canvas></div>
+    </div>
+    <h3>Eval — stave cy error by vertical position (500 samples, H=960 px)</h3>
+    <table class="eval-table">
+      <thead><tr><th>Bin</th><th>Y range</th><th>n</th><th>cy error</th><th>h error</th><th></th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td>0–60</td><td>194</td><td>2.1 px</td><td>0.1 px</td><td><span class="eval-bar" style="width:11px;background:#65a30d"></span></td></tr>
+        <tr><td>1</td><td>60–120</td><td>480</td><td>2.3 px</td><td>0.1 px</td><td><span class="eval-bar" style="width:12px;background:#65a30d"></span></td></tr>
+        <tr><td>2</td><td>120–180</td><td>467</td><td>2.8 px</td><td>0.2 px</td><td><span class="eval-bar" style="width:15px;background:#84cc16"></span></td></tr>
+        <tr><td>3</td><td>180–240</td><td>417</td><td>3.3 px</td><td>0.1 px</td><td><span class="eval-bar" style="width:17px;background:#84cc16"></span></td></tr>
+        <tr><td>4</td><td>240–300</td><td>335</td><td>4.4 px</td><td>1.7 px</td><td><span class="eval-bar" style="width:23px;background:#eab308"></span></td></tr>
+        <tr><td>5</td><td>300–360</td><td>263</td><td>5.4 px</td><td>0.3 px</td><td><span class="eval-bar" style="width:29px;background:#f97316"></span></td></tr>
+        <tr><td>6</td><td>360–420</td><td>249</td><td>6.6 px</td><td>0.2 px</td><td><span class="eval-bar" style="width:35px;background:#f97316"></span></td></tr>
+        <tr><td>7</td><td>420–480</td><td>251</td><td>7.9 px</td><td>2.3 px</td><td><span class="eval-bar" style="width:42px;background:#ef4444"></span></td></tr>
+        <tr><td>8</td><td>480–540</td><td>214</td><td>7.9 px</td><td>2.8 px</td><td><span class="eval-bar" style="width:42px;background:#ef4444"></span></td></tr>
+        <tr><td>9</td><td>540–600</td><td>176</td><td>8.6 px</td><td>0.9 px</td><td><span class="eval-bar" style="width:46px;background:#ef4444"></span></td></tr>
+        <tr><td>10</td><td>600–660</td><td>124</td><td>8.5 px</td><td>0.2 px</td><td><span class="eval-bar" style="width:45px;background:#ef4444"></span></td></tr>
+        <tr><td>11</td><td>660–720</td><td>109</td><td>9.9 px</td><td>0.1 px</td><td><span class="eval-bar" style="width:53px;background:#dc2626"></span></td></tr>
+        <tr><td>12</td><td>720–780</td><td>67</td><td>10.0 px</td><td>0.9 px</td><td><span class="eval-bar" style="width:53px;background:#dc2626"></span></td></tr>
+        <tr><td>13</td><td>780–840</td><td>31</td><td>11.6 px</td><td>0.2 px</td><td><span class="eval-bar" style="width:62px;background:#dc2626"></span></td></tr>
+        <tr class="warn"><td>14</td><td>840–900</td><td>14</td><td>25.2 px</td><td>0.3 px</td><td><span class="eval-bar" style="width:120px;background:#7f1d1d"></span></td></tr>
+        <tr><td>15</td><td>900–960</td><td>0</td><td>—</td><td>—</td><td></td></tr>
+      </tbody>
+    </table>
+    <div class="result-box negative">Negative result. Flat pool is uniformly worse than enhanced2 across all bins. Top error 2.1 px vs 0.9 px; bottom collapse at bin 14 is worse (25.2 px vs 11.6 px). Removing group attention loses the structural hierarchy the model relied on — staves can no longer reliably assign themselves to parent systems without it.</div>
   </div>
 
 </main>
@@ -500,6 +548,7 @@ const C = {
   e3:      '#059669',
   small:   '#d97706',
   vflip:   '#dc2626',
+  flat:    '#db2777',
 };
 
 const basic = {
@@ -537,6 +586,11 @@ const vflip = {
   iou:  [0.187,0.564,0.671,0.736,0.758,0.798,0.815,0.820,0.843,0.864,0.865,0.872],
   l1:   [0.19550,0.01637,0.01180,0.00947,0.00805,0.00776,0.00759,0.00594,0.00515,0.00475,0.00467,0.00438],
 };
+const flat = {
+  loss: [1.1137,0.6725,0.4681,0.4404,0.3794,0.4398,0.3175,0.3093,0.2900,0.2647,0.2603,0.2595],
+  iou:  [0.6373,0.7629,0.8342,0.8455,0.8605,0.8245,0.8826,0.8811,0.8869,0.9007,0.9003,0.9002],
+  l1:   [0.01394,0.00729,0.00603,0.00535,0.00484,0.00517,0.00435,0.00397,0.00391,0.00376,0.00376,0.00373],
+};
 
 function line(label, data, color, opts={}) {
   return { label, data, borderColor: color, backgroundColor: color+'18',
@@ -564,20 +618,23 @@ function makeChart(id, labels, datasets, yOpts={}) {
 
 // ── Cross-run comparison (staffyh onward)
 makeChart('cmp-loss', ep12,
-  [line('staffyh',e2.loss,C.staffyh,{dashed:true}),
+  [line('staffyh',staffyh.loss,C.staffyh,{dashed:true}),
    line('enhanced2',e2.loss,C.e2,{fill:false}),
    line('enhanced3',e3.loss,C.e3),
-   line('enhanced2-vflip',vflip.loss,C.vflip)]);
+   line('enhanced2-vflip',vflip.loss,C.vflip),
+   line('flat',flat.loss,C.flat)]);
 makeChart('cmp-iou', ep12,
   [line('staffyh',staffyh.iou,C.staffyh,{dashed:true}),
    line('enhanced2',e2.iou,C.e2),
    line('enhanced3',e3.iou,C.e3),
-   line('enhanced2-vflip',vflip.iou,C.vflip)], {min:0,max:1});
+   line('enhanced2-vflip',vflip.iou,C.vflip),
+   line('flat',flat.iou,C.flat)], {min:0,max:1});
 makeChart('cmp-l1', ep12,
   [line('staffyh',staffyh.l1,C.staffyh,{dashed:true}),
    line('enhanced2',e2.l1,C.e2),
    line('enhanced3',e3.l1,C.e3),
-   line('enhanced2-vflip',vflip.l1,C.vflip)]);
+   line('enhanced2-vflip',vflip.l1,C.vflip),
+   line('flat',flat.l1,C.flat)]);
 
 // ── basic solo
 makeChart('c-basic-loss', ep12, [line('basic',basic.loss,C.basic,{fill:true})]);
@@ -613,6 +670,11 @@ makeChart('c-small-l1',   ep11, [line('enhanced2',e2.l1.slice(1),  C.e2,{dashed:
 makeChart('c-vf-loss', ep12, [line('enhanced2',e2.loss,C.e2,{dashed:true}), line('enhanced2-vflip',vflip.loss,C.vflip,{fill:true})]);
 makeChart('c-vf-iou',  ep12, [line('enhanced2',e2.iou, C.e2,{dashed:true}), line('enhanced2-vflip',vflip.iou, C.vflip,{fill:true})], {min:0,max:1});
 makeChart('c-vf-l1',   ep12, [line('enhanced2',e2.l1,  C.e2,{dashed:true}), line('enhanced2-vflip',vflip.l1,  C.vflip,{fill:true})]);
+
+// ── flat vs enhanced2
+makeChart('c-flat-loss', ep12, [line('enhanced2',e2.loss,C.e2,{dashed:true}), line('flat',flat.loss,C.flat,{fill:true})]);
+makeChart('c-flat-iou',  ep12, [line('enhanced2',e2.iou, C.e2,{dashed:true}), line('flat',flat.iou, C.flat,{fill:true})], {min:0,max:1});
+makeChart('c-flat-l1',   ep12, [line('enhanced2',e2.l1,  C.e2,{dashed:true}), line('flat',flat.l1,  C.flat,{fill:true})]);
 </script>
 </body>
 </html>
