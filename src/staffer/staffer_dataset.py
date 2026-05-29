@@ -20,9 +20,9 @@ from .staffer_model import StafferConfig
 
 class StafferDataset(Dataset):
     pdmx: PDMX
-    # layout path, png path, page number, part_count, is_last_page
+    # layout path, png path, page number, part_count, max_sys_bottom
     # The last two items are used when use_sampler is enabled.
-    items: list[tuple[Path, Path, int, int, bool]]
+    items: list[tuple[Path, Path, int, int, float]]
 
     transform: v2.Transform
 
@@ -57,14 +57,11 @@ class StafferDataset(Dataset):
                     png_file = pdmx.get_page_path(mxl_file, "png", page.page_number)
                 else:
                     png_file = pdmx.get_path(mxl_file, "png")
+                max_sys_bottom = max(
+                    (s.box.bottom / page.image_height for s in page.systems), default=0.0
+                )
                 self.items.append(
-                    (
-                        layout_file,
-                        png_file,
-                        page.page_number,
-                        part_count,
-                        (page.page_number == score.page_count - 1),
-                    )
+                    (layout_file, png_file, page.page_number, part_count, max_sys_bottom)
                 )
             if count >= 0 and len(self.items) >= count:
                 self.items = self.items[:count]
@@ -115,23 +112,23 @@ class StafferDataset(Dataset):
             idx += 1
 
 
-def build_sampler(ds: Dataset, last_page_weight: float = 1.5) -> WeightedRandomSampler:
+def build_sampler(ds: Dataset, bottom_bias: float = 3.0) -> WeightedRandomSampler:
     logging.info("Computing sample weights...")
     part_counts: list[int] = []
-    is_last_pages: list[bool] = []
+    max_sys_bottoms: list[float] = []
     part_histo: Counter[int] = Counter()
     dataset = cast(StafferDataset, ds.dataset)  # type: ignore
     for i in ds.indices:  # type: ignore
-        _, _, _, part_count, is_last_page = dataset.items[i]
+        _, _, _, part_count, max_sys_bottom = dataset.items[i]
         part_counts.append(part_count)
-        is_last_pages.append(is_last_page)
+        max_sys_bottoms.append(max_sys_bottom)
         part_histo[part_count] += 1
 
     sqrt_inv: dict[int, float] = {n: 1.0 / math.sqrt(c) for n, c in part_histo.items()}
 
     weights = [
-        sqrt_inv[count] * (last_page_weight if last_page else 1.0)
-        for count, last_page in zip(part_counts, is_last_pages)
+        sqrt_inv[count] * (1.0 + bottom_bias * cy)
+        for count, cy in zip(part_counts, max_sys_bottoms)
     ]
 
     return WeightedRandomSampler(
