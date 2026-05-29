@@ -35,8 +35,8 @@ class StafferConfig:
     # pdmx query -o Stafff16.csv 'index==index' --score 'pages.*.staff_count < 16'
     # pdmx --csv Staff16.csv stats
 
-    num_system_queries: int = 10  # Also known as N; covers 99.1% of pages in Staff16
-    num_stave_queries: int = 16  # Also known as M; global flat pool (max 15 staves/page)
+    num_system_queries: int = 16  # Also known as N
+    num_stave_queries: int = 16  # Also known as M
 
     interpolation: InterpolationMode = InterpolationMode.BILINEAR
     antialias: bool = False
@@ -193,6 +193,11 @@ class DecoderLayer(nn.Module):
             D, H, dropout=config.dropout, batch_first=True
         )
 
+        self.stave_group_norm = nn.LayerNorm(D)
+        self.stave_group_attn = nn.MultiheadAttention(
+            D, H, dropout=config.dropout, batch_first=True
+        )
+
         self.stave_ffn_norm = nn.LayerNorm(D)
         self.stave_ffn = nn.Sequential(
             nn.Linear(D, config.mlp_dim),
@@ -218,6 +223,9 @@ class DecoderLayer(nn.Module):
 
         query = self.stave_cross_attn_norm(stave_q)
         stave_q = stave_q + self.stave_cross_attn(query, memory, memory)[0]
+
+        normed = self.stave_group_norm(stave_q)
+        stave_q = stave_q + self.stave_group_attn(normed, sys_q, sys_q)[0]
         stave_q = stave_q + self.stave_ffn(self.stave_ffn_norm(stave_q))
 
         return sys_q, stave_q
