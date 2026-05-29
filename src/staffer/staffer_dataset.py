@@ -112,12 +112,24 @@ class StafferDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]]):
                 if sys_idx >= self.config.num_system_queries:
                     is_ok = False
                     break
+                W, H = page.image_width, page.image_height
                 sys_boxes[sys_idx] = torch.tensor(
-                    system.box.to_cxcywh(page.image_width, page.image_height)
+                    [
+                        system.box.left / W,
+                        system.box.top / H,
+                        system.box.right / W,
+                        system.box.bottom / H,
+                    ]
                 )
                 for staff in system.staves:
+                    # ltrb; only cols [1,3] (top, bottom) are used in the loss
                     staff_boxes[staff_idx] = torch.tensor(
-                        staff.box.to_cxcywh(page.image_width, page.image_height)
+                        [
+                            staff.box.left / W,
+                            staff.box.top / H,
+                            staff.box.right / W,
+                            staff.box.bottom / H,
+                        ]
                     )
                     assigns[staff_idx] = sys_idx
                     staff_idx += 1

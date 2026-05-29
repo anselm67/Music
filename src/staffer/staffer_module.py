@@ -30,7 +30,7 @@ class StafferModule(L.LightningModule):
         (
             pred_sys_boxes,
             pred_sys_logits,
-            pred_stave_yh,
+            pred_stave_tb,
             pred_stave_logits,
             pred_assign,
         ) = self.model(images)
@@ -38,7 +38,7 @@ class StafferModule(L.LightningModule):
         loss = self.loss_fn.forward(
             pred_sys_boxes,
             pred_sys_logits,
-            pred_stave_yh,
+            pred_stave_tb,
             pred_stave_logits,
             pred_assign,
             gt_sys_boxes,
@@ -48,7 +48,7 @@ class StafferModule(L.LightningModule):
 
         # IoU metrics
         sys_iou = self._mean_sys_iou(pred_sys_boxes, gt_sys_boxes, gt_assign)
-        stave_l1 = self._mean_stave_l1(pred_stave_yh, gt_stave_boxes, gt_assign)
+        stave_l1 = self._mean_stave_l1(pred_stave_tb, gt_stave_boxes, gt_assign)
 
         self.log(f"{stage}/loss", loss.total(), prog_bar=True)
         self.log(f"{stage}/sys_iou", sys_iou)
@@ -78,15 +78,15 @@ class StafferModule(L.LightningModule):
 
     def _mean_stave_l1(
         self,
-        pred_yh: Tensor,  # (B, M, 2) — cy, h
+        pred_tb: Tensor,  # (B, M, 2) — top, bottom
         gt_boxes: list[Tensor],  # list of (M, 4) padded
         gt_assign: list[Tensor],
     ) -> Tensor:
-        """Mean L1 error on (cy, h) across GT staves."""
+        """Mean L1 error on (top, bottom) across GT staves."""
         errors = []
-        for i in range(pred_yh.shape[0]):
+        for i in range(pred_tb.shape[0]):
             num_gt = int((gt_assign[i] != -1).sum().item())
-            matched = pred_yh[i][:num_gt]
+            matched = pred_tb[i][:num_gt]
             gt = gt_boxes[i][:num_gt, [1, 3]]
             errors.append(torch.abs(matched - gt).mean())
         return torch.stack(errors).mean()

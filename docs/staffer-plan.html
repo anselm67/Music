@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Staffer: Chained System-Box Plan</title>
+<title>Staffer: Direct LTRB System-Box Plan</title>
 <style>
   body { font-family: sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; color: #222; line-height: 1.6; }
   h1 { border-bottom: 2px solid #333; padding-bottom: 8px; }
@@ -11,282 +11,153 @@
   code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 0.92em; }
   pre { background: #f4f4f4; padding: 14px 18px; border-radius: 5px; overflow-x: auto; font-size: 0.9em; }
   .note { background: #fffbe6; border-left: 4px solid #f0b429; padding: 10px 16px; margin: 1em 0; border-radius: 0 4px 4px 0; }
+  .bad  { background: #fdecea; border-left: 4px solid #c62828; padding: 10px 16px; margin: 1em 0; border-radius: 0 4px 4px 0; }
   table { border-collapse: collapse; width: 100%; margin: 1em 0; }
   th, td { border: 1px solid #ccc; padding: 7px 12px; text-align: left; }
   th { background: #f0f0f0; }
-  .diagram-section { text-align: center; margin: 2em 0; }
-  svg text { font-family: monospace; }
 </style>
 </head>
 <body>
 
-<h1>Staffer: Chained System-Box Representation</h1>
+<h1>Staffer: Direct LTRB System-Box Representation</h1>
 
-<h2>Motivation</h2>
+<h2>Problem</h2>
 <p>
-  System boxes are currently predicted as independent <code>(cx, cy, w, h)</code> per query.
-  Two problems:
+  System boxes are currently predicted as <code>(cx, cy, w, h)</code> per query.
+  The top and bottom edges are both derived quantities:
 </p>
-<ol>
-  <li>
-    <strong>Asymmetry:</strong> both top and bottom derive from two predicted values
-    (<code>cy ± h/2</code>). In practice the model learns <code>cy</code> more
-    accurately than <code>h</code>, so bottom-edge quality is gated on <code>h</code>
-    accuracy.
-  </li>
-  <li>
-    <strong>No structural coupling:</strong> the model must independently discover that
-    <code>bottom[i] ≈ top[i+1]</code>. Nothing enforces this.
-  </li>
-</ol>
+<pre>top    = cy − h/2
+bottom = cy + h/2</pre>
 <p>
-  <strong>Fix:</strong> keep tight system boxes (top = top of first stave, bottom = bottom of last stave)
-  but replace independent <code>(cx, cy, w, h)</code> per system with a chained representation that
-  explicitly predicts the inter-system gap.
-  For N systems this requires <strong>3N + 1</strong> numbers instead of 4N, saving N−1 values.
-  Every directly-predicted edge gets its own gradient signal.
+  If the model biases <code>cy</code> toward the top stave group (plausible — treble is
+  visually dominant) and underestimates <code>h</code>, the errors partially cancel for
+  <code>top</code> but compound for <code>bottom</code>.
+  This matches what we observe: <strong>cy_err 0.9 px (top) vs 16 px (bottom)</strong>.
+  The bottom edge has no independent gradient path.
 </p>
 
-<h2>The 7-number layout (N = 2 systems)</h2>
-
-<div class="diagram-section">
-<svg width="680" height="560" viewBox="0 0 680 560" xmlns="http://www.w3.org/2000/svg">
-
-  <!-- Page background -->
-  <rect x="150" y="20" width="300" height="520" fill="#fafafa" stroke="#999" stroke-width="1.5"/>
-
-  <!-- Page top/bottom labels -->
-  <text x="85" y="24" fill="#aaa" font-size="11" text-anchor="middle">page top</text>
-  <line x1="150" y1="20" x2="115" y2="20" stroke="#ccc" stroke-width="1" stroke-dasharray="3,3"/>
-  <text x="85" y="544" fill="#aaa" font-size="11" text-anchor="middle">page bottom</text>
-  <line x1="150" y1="540" x2="115" y2="540" stroke="#ccc" stroke-width="1" stroke-dasharray="3,3"/>
-
-  <!-- ── margin above system 0 (page top to t0) ── -->
-  <rect x="150" y="20" width="300" height="60" fill="#f5f5f5"/>
-  <text x="300" y="55" fill="#bbb" font-size="11" text-anchor="middle" font-style="italic">margin</text>
-
-  <!-- ── System 0 tight box ── -->
-  <rect x="150" y="80" width="300" height="145" fill="#d4eaf7" stroke="#1565C0" stroke-width="2"/>
-
-  <!-- System 0 stave lines (2 groups = treble + bass) -->
-  <line x1="175" y1="105" x2="425" y2="105" stroke="#444" stroke-width="1.2"/>
-  <line x1="175" y1="113" x2="425" y2="113" stroke="#444" stroke-width="1.2"/>
-  <line x1="175" y1="121" x2="425" y2="121" stroke="#444" stroke-width="1.2"/>
-  <line x1="175" y1="129" x2="425" y2="129" stroke="#444" stroke-width="1.2"/>
-  <line x1="175" y1="137" x2="425" y2="137" stroke="#444" stroke-width="1.2"/>
-
-  <line x1="175" y1="165" x2="425" y2="165" stroke="#444" stroke-width="1.2"/>
-  <line x1="175" y1="173" x2="425" y2="173" stroke="#444" stroke-width="1.2"/>
-  <line x1="175" y1="181" x2="425" y2="181" stroke="#444" stroke-width="1.2"/>
-  <line x1="175" y1="189" x2="425" y2="189" stroke="#444" stroke-width="1.2"/>
-  <line x1="175" y1="197" x2="425" y2="197" stroke="#444" stroke-width="1.2"/>
-
-  <!-- ── Gap region between systems ── -->
-  <rect x="150" y="225" width="300" height="45" fill="#fff9e6" stroke="none"/>
-  <!-- gap brace on right -->
-  <line x1="470" y1="225" x2="470" y2="270" stroke="#e65100" stroke-width="2"/>
-  <line x1="466" y1="225" x2="474" y2="225" stroke="#e65100" stroke-width="2"/>
-  <line x1="466" y1="270" x2="474" y2="270" stroke="#e65100" stroke-width="2"/>
-  <text x="490" y="244" fill="#e65100" font-size="13" font-weight="bold">④ gap₀</text>
-  <text x="490" y="259" fill="#e65100" font-size="10">(predicted)</text>
-
-  <!-- ── System 1 tight box ── -->
-  <rect x="150" y="270" width="300" height="145" fill="#d4f0d4" stroke="#2E7D32" stroke-width="2"/>
-
-  <!-- System 1 stave lines -->
-  <line x1="175" y1="295" x2="425" y2="295" stroke="#444" stroke-width="1.2"/>
-  <line x1="175" y1="303" x2="425" y2="303" stroke="#444" stroke-width="1.2"/>
-  <line x1="175" y1="311" x2="425" y2="311" stroke="#444" stroke-width="1.2"/>
-  <line x1="175" y1="319" x2="425" y2="319" stroke="#444" stroke-width="1.2"/>
-  <line x1="175" y1="327" x2="425" y2="327" stroke="#444" stroke-width="1.2"/>
-
-  <line x1="175" y1="357" x2="425" y2="357" stroke="#444" stroke-width="1.2"/>
-  <line x1="175" y1="365" x2="425" y2="365" stroke="#444" stroke-width="1.2"/>
-  <line x1="175" y1="373" x2="425" y2="373" stroke="#444" stroke-width="1.2"/>
-  <line x1="175" y1="381" x2="425" y2="381" stroke="#444" stroke-width="1.2"/>
-  <line x1="175" y1="389" x2="425" y2="389" stroke="#444" stroke-width="1.2"/>
-
-  <!-- ── margin below system 1 (b1 to page bottom) ── -->
-  <rect x="150" y="415" width="300" height="125" fill="#f5f5f5"/>
-  <text x="300" y="483" fill="#bbb" font-size="11" text-anchor="middle" font-style="italic">margin</text>
-
-  <!-- ══ b₀ dashed line (derived, not predicted) ══ -->
-  <line x1="130" y1="225" x2="465" y2="225" stroke="#1565C0" stroke-width="1.5" stroke-dasharray="6,4"/>
-  <!-- b₀ label -->
-  <text x="60" y="221" fill="#1565C0" font-size="11" text-anchor="middle">b₀</text>
-  <text x="60" y="233" fill="#1565C0" font-size="9" text-anchor="middle">(derived</text>
-  <text x="60" y="243" fill="#1565C0" font-size="9" text-anchor="middle">from staves)</text>
-
-  <!-- ══ t₁ dashed line (derived, not predicted) ══ -->
-  <line x1="130" y1="270" x2="465" y2="270" stroke="#2E7D32" stroke-width="1.5" stroke-dasharray="6,4"/>
-  <!-- t₁ label -->
-  <text x="60" y="266" fill="#2E7D32" font-size="11" text-anchor="middle">t₁</text>
-  <text x="60" y="278" fill="#2E7D32" font-size="9" text-anchor="middle">(= b₀+gap₀)</text>
-
-  <!-- ══ PREDICTED BOUNDARY LINES ══ -->
-  <!-- t₀ — solid blue -->
-  <line x1="150" y1="80" x2="465" y2="80" stroke="#1565C0" stroke-width="1.5"/>
-  <!-- b₁ — solid green -->
-  <line x1="150" y1="415" x2="465" y2="415" stroke="#2E7D32" stroke-width="1.5"/>
-
-  <!-- ══ LEFT / RIGHT BRACKETS ══ -->
-  <!-- left₀ -->
-  <line x1="150" y1="100" x2="175" y2="100" stroke="#1565C0" stroke-width="1.5"/>
-  <line x1="150" y1="96" x2="150" y2="104" stroke="#1565C0" stroke-width="1.5"/>
-  <line x1="175" y1="96" x2="175" y2="104" stroke="#1565C0" stroke-width="1.5"/>
-  <text x="162" y="93" fill="#1565C0" font-size="12" text-anchor="middle" font-weight="bold">① left₀</text>
-
-  <!-- right₀ -->
-  <line x1="425" y1="100" x2="450" y2="100" stroke="#1565C0" stroke-width="1.5"/>
-  <line x1="425" y1="96" x2="425" y2="104" stroke="#1565C0" stroke-width="1.5"/>
-  <line x1="450" y1="96" x2="450" y2="104" stroke="#1565C0" stroke-width="1.5"/>
-  <text x="437" y="93" fill="#1565C0" font-size="12" text-anchor="middle" font-weight="bold">② right₀</text>
-
-  <!-- left₁ -->
-  <line x1="150" y1="290" x2="175" y2="290" stroke="#2E7D32" stroke-width="1.5"/>
-  <line x1="150" y1="286" x2="150" y2="294" stroke="#2E7D32" stroke-width="1.5"/>
-  <line x1="175" y1="286" x2="175" y2="294" stroke="#2E7D32" stroke-width="1.5"/>
-  <text x="162" y="283" fill="#2E7D32" font-size="12" text-anchor="middle" font-weight="bold">⑤ left₁</text>
-
-  <!-- right₁ -->
-  <line x1="425" y1="290" x2="450" y2="290" stroke="#2E7D32" stroke-width="1.5"/>
-  <line x1="425" y1="286" x2="425" y2="294" stroke="#2E7D32" stroke-width="1.5"/>
-  <line x1="450" y1="286" x2="450" y2="294" stroke="#2E7D32" stroke-width="1.5"/>
-  <text x="437" y="283" fill="#2E7D32" font-size="12" text-anchor="middle" font-weight="bold">⑥ right₁</text>
-
-  <!-- ══ VERTICAL ANNOTATIONS (right side) ══ -->
-
-  <!-- t₀ brace: page-top to sys0-top -->
-  <line x1="535" y1="80" x2="600" y2="80" stroke="#1565C0" stroke-width="1"/>
-  <text x="540" y="75" fill="#1565C0" font-size="13" font-weight="bold">③ top₀</text>
-  <text x="540" y="89" fill="#1565C0" font-size="10">(predicted)</text>
-
-  <!-- b₁: sys1-bottom label -->
-  <line x1="535" y1="415" x2="600" y2="415" stroke="#2E7D32" stroke-width="1"/>
-  <text x="540" y="410" fill="#2E7D32" font-size="13" font-weight="bold">⑦ bottom₁</text>
-  <text x="540" y="424" fill="#2E7D32" font-size="10">(predicted)</text>
-
-  <!-- system labels -->
-  <text x="300" y="157" fill="#0d47a1" font-size="13" text-anchor="middle" font-style="italic" opacity="0.8">System 0 (tight box)</text>
-  <text x="300" y="347" fill="#1b5e20" font-size="13" text-anchor="middle" font-style="italic" opacity="0.8">System 1 (tight box)</text>
-  <text x="300" y="250" fill="#bf360c" font-size="12" text-anchor="middle" font-style="italic">gap</text>
-
-  <!-- ══ LEGEND ══ -->
-  <rect x="535" y="170" width="130" height="210" rx="6" fill="#fff" stroke="#ccc" stroke-width="1"/>
-  <text x="600" y="190" font-size="12" text-anchor="middle" font-weight="bold" fill="#333">7 predicted</text>
-  <text x="549" y="210" font-size="11" fill="#1565C0">① left₀</text>
-  <text x="549" y="227" font-size="11" fill="#1565C0">② right₀</text>
-  <text x="549" y="244" font-size="11" fill="#1565C0">③ top₀</text>
-  <text x="549" y="261" font-size="11" fill="#e65100">④ gap₀</text>
-  <text x="549" y="278" font-size="11" fill="#2E7D32">⑤ left₁</text>
-  <text x="549" y="295" font-size="11" fill="#2E7D32">⑥ right₁</text>
-  <text x="549" y="312" font-size="11" fill="#2E7D32">⑦ bottom₁</text>
-  <line x1="540" y1="320" x2="660" y2="320" stroke="#eee" stroke-width="1"/>
-  <text x="549" y="338" font-size="10" fill="#888">derived:</text>
-  <text x="549" y="352" font-size="10" fill="#1565C0" font-style="italic">b₀ (from staves)</text>
-  <text x="549" y="366" font-size="10" fill="#2E7D32" font-style="italic">t₁ = b₀ + gap₀</text>
-
-</svg>
-<p style="color:#666; font-size:0.9em; margin-top:4px">
-  Solid borders = predicted. &nbsp; Dashed lines = derived (not direct model outputs). &nbsp; Orange brace = explicit gap prediction.
+<h2>Fix</h2>
+<p>
+  Predict system boxes as <code>(left, top, right, bottom)</code> — each edge
+  directly, normalized to [0, 1]. No chaining, no derived values, no new heads.
+  The model architecture is otherwise unchanged; only the interpretation of the
+  4-dimensional <code>sys_box_head</code> output changes.
 </p>
-</div>
 
 <div class="note">
-  <strong>Key insight:</strong> system boxes are <em>tight</em> (top = top of first stave, bottom = bottom of last stave).
-  The <em>gap</em> between systems is predicted explicitly (number ④ for system 0).
-  The tight bottom <code>b₀</code> is derived from the stave head; <code>t₁ = b₀ + gap₀</code> follows from that.
-  One number is saved per additional system vs. independent cxcywh boxes.
-  For N systems: <strong>3N + 1</strong> numbers total.
+  <strong>Why not chaining?</strong>
+  The previous plan tried to also save one predicted value per system pair by
+  chaining <code>top[i+1] = bottom[i]</code>. For N=2 systems that saves 1 number
+  out of 8 — not worth the added complexity or the error-propagation risk.
+  The model can learn structural coupling from the data.
 </div>
 
-<h2>Coordinate semantics</h2>
-<p>New per-system encoding, all values normalized to [0, 1]:</p>
+<h2>New coordinate semantics</h2>
+<p>
+  All values normalized to [0, 1] by image width/height.
+  Tensor shape <code>(B, N, 4)</code> is preserved — the indices just change meaning:
+</p>
 <table>
-  <tr><th>System</th><th>Predicted numbers</th><th>Derived</th></tr>
-  <tr><td>First (i = 0)</td><td><code>left, right, top, gap_below</code></td><td><code>bottom</code> from stave head</td></tr>
-  <tr><td>Middle (0 &lt; i &lt; N−1)</td><td><code>left, right, gap_below</code></td><td><code>top = bottom_{i-1} + gap_{i-1}</code>, <code>bottom</code> from stave head</td></tr>
-  <tr><td>Last (i = N−1)</td><td><code>left, right, bottom</code></td><td><code>top = bottom_{i-1} + gap_{i-1}</code></td></tr>
+  <tr><th>Index</th><th>Old (cxcywh)</th><th>New (ltrb)</th></tr>
+  <tr><td>0</td><td><code>cx</code></td><td><code>left</code></td></tr>
+  <tr><td>1</td><td><code>cy</code></td><td><code>top</code></td></tr>
+  <tr><td>2</td><td><code>w</code></td><td><code>right</code></td></tr>
+  <tr><td>3</td><td><code>h</code></td><td><code>bottom</code></td></tr>
 </table>
+
+<h2>Changes required</h2>
+
+<h3>1. StafferDataset (<code>staffer_dataset.py</code>)</h3>
+<p>Replace <code>to_cxcywh</code> with direct tight-box coordinates:</p>
+<pre>- sys_boxes[sys_idx] = torch.tensor(
+-     system.box.to_cxcywh(page.image_width, page.image_height)
+- )
++ W, H = page.image_width, page.image_height
++ sys_boxes[sys_idx] = torch.tensor([
++     system.box.left   / W,
++     system.box.top    / H,
++     system.box.right  / W,
++     system.box.bottom / H,
++ ])</pre>
 <p>
-  <code>gap_below</code> = distance (in normalized y) from the system's tight bottom to the next system's tight top.
-  Stave positions come from the <code>(cy, h)</code> stave head predictions — unchanged.
+  <code>system.box</code> is a tight bounding box (top of first stave, bottom of last stave).
+  No chaining formula needed.
 </p>
 
-<h2>Model changes</h2>
-
-<h3>PredictionHeads (<code>staffer_model.py</code>)</h3>
+<h3>2. StafferLoss (<code>staffer_loss.py</code>)</h3>
 <p>
-  <code>sys_box_head</code> output changes from 4 → 3 per query: predicts <code>(left, right, bottom)</code>.<br>
-  New <code>sys_top_head = nn.Linear(D, 1)</code> applied only to query 0: predicts <code>top₀</code>.<br>
-  The forward pass reconstructs full <code>(B, N, 4)</code> boxes by chaining:
+  Delete <code>box_cxcywh_to_xyxy</code> entirely. The new format is already xyxy,
+  so <code>generalized_iou</code> can use the boxes directly:
 </p>
-<pre>top_0  = sys_top_head(sys_feats[:, 0:1, :]).sigmoid()   # (B, 1, 1)
-lrb    = sys_box_head(sys_feats).sigmoid()               # (B, N, 3)
-tops   = torch.cat([top_0, lrb[:, :-1, 2:3]], dim=1)   # (B, N, 1)
-sys_boxes = torch.cat([lrb[:, :, :2], tops, lrb[:, :, 2:]], dim=-1)
-# sys_boxes: (B, N, 4) = (left, right, top, bottom)</pre>
-<p>
-  Output tensor shape <code>(B, N, 4)</code> is preserved — downstream code sees the same shape.
-</p>
+<pre>- def box_cxcywh_to_xyxy(boxes: Tensor) -> Tensor:
+-     cx, cy, w, h = boxes.unbind(-1)
+-     return torch.stack([cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2], dim=-1)
 
-<h2>Dataset changes</h2>
-
-<h3>StafferDataset (<code>staffer_dataset.py</code>)</h3>
+  def generalized_iou(pred: Tensor, target: Tensor) -> Tensor:
+-     pred   = box_cxcywh_to_xyxy(pred)
+-     target = box_cxcywh_to_xyxy(target)
+      ...</pre>
 <p>
-  <code>sys_boxes</code> tensor keeps shape <code>(num_system_queries, 4)</code>, semantics change:
-</p>
-<pre>systems = page.systems
-W, H = page.image_width, page.image_height
-
-for sys_idx, system in enumerate(systems):
-    top    = system.box.top / H
-    bottom = systems[sys_idx + 1].box.top / H if sys_idx &lt; len(systems) - 1 else 1.0
-    sys_boxes[sys_idx] = torch.tensor([
-        system.box.left  / W,
-        system.box.right / W,
-        top,
-        bottom,
-    ])</pre>
-<p>
-  Chaining holds exactly: <code>top[i+1] = systems[i+1].box.top / H = bottom[i]</code>.
+  The L1 loss in <code>_box_loss</code> operates element-wise — no change needed there.
 </p>
 
-<h2>Loss changes</h2>
+<h3>3. PredictionHeads (<code>staffer_model.py</code>)</h3>
+<p>
+  <code>sys_box_head</code> already outputs 4 values with <code>sigmoid()</code>.
+  No structural change. Add a comment to make the new semantics clear:
+</p>
+<pre>- sys_boxes = self.sys_box_head(sys_feats).sigmoid()  # (B, N, 4)
++ sys_boxes = self.sys_box_head(sys_feats).sigmoid()  # (B, N, 4) — (left, top, right, bottom)</pre>
 
-<h3>StafferLoss (<code>staffer_loss.py</code>)</h3>
-<ul>
-  <li>Replace <code>box_cxcywh_to_xyxy</code> with <code>box_lrtb_to_xyxy</code>: reorder columns <code>(l,r,t,b) → (l,t,r,b)</code>.</li>
-  <li><code>generalized_iou</code>: call new conversion function.</li>
-  <li><code>_box_loss</code>: L1 loss on <code>(left, right, top, bottom)</code> directly — formula unchanged.</li>
-</ul>
-<pre>def box_lrtb_to_xyxy(boxes: Tensor) -> Tensor:
-    l, r, t, b = boxes.unbind(-1)
-    return torch.stack([l, t, r, b], dim=-1)</pre>
-
-<h2>CLI changes (<code>cli/staffer.py</code>)</h2>
-<ul>
-  <li><code>show</code>: unpack <code>(left, right, top, bottom)</code>; construct <code>Box</code> directly from pixel coords.</li>
-  <li><code>predict</code>: derive stave cx/w from <code>(left + right) / 2</code> and <code>right - left</code>.</li>
-  <li><code>unbox</code> helper: update for new 4-element semantics.</li>
-</ul>
+<h3>4. CLI (<code>cli/staffer.py</code>)</h3>
+<p>Update <code>unbox</code> and all unpacking sites:</p>
+<pre>- def unbox(size: tuple[int, int], t: Tensor) -> Box:
+-     cx, cy, w, h = value
+-     return Box.from_cxcywh(size, cx, cy, w, h)
++ def unbox(size: tuple[int, int], t: Tensor) -> Box:
++     l, top, r, b = t.tolist()
++     W, H = size
++     return Box((l, top), (r, b)).scale(W, H)</pre>
+<p>In <code>show</code>, update the system-box unpack:</p>
+<pre>- cx, cy, w, h = tuple(map(lambda x: x.item(), sys[sys_index]))
+- box = Box.from_cxcywh(width_height, cx, cy, w, h)
++ box = unbox(width_height, sys[sys_index])</pre>
+<p>
+  In <code>predict</code>, the stave box needs <code>cx</code> and <code>w</code>
+  from the parent system (inherited x-coords). Derive them from ltrb:
+</p>
+<pre>- cx, _, w, _ = pred_sys_boxes[sys_idx]
+- stave_box_4d = torch.stack([cx, cy, w, h])
++ l, _, r, _ = pred_sys_boxes[sys_idx]
++ cx = (l + r) / 2
++ w  = r - l
+  stave_box_4d = torch.stack([cx, cy, w, h])   # stave still uses cxcywh internally</pre>
 
 <h2>What does NOT change</h2>
 <ul>
   <li>Stave predictions: <code>(cy, h)</code> unchanged.</li>
+  <li><code>sys_box_head</code> architecture: still 4-output MLP + sigmoid.</li>
   <li><code>gt_stave_boxes</code>, <code>gt_assign</code>, assignment loss — all unchanged.</li>
   <li>Tensor shape <code>(B, N, 4)</code> for <code>sys_boxes</code> through the whole pipeline.</li>
   <li><code>StafferConfig</code> — no new fields.</li>
 </ul>
 
-<h2>Verification</h2>
+<h2>Verification checklist</h2>
 <ol>
-  <li><code>uv run pytest tests/staffer/test_staffer_loss.py</code> — all loss tests pass.</li>
+  <li><code>uv run pytest tests/staffer/test_staffer_loss.py</code> — update fixtures to ltrb; all loss tests pass.</li>
   <li><code>staffer check</code> — forward pass produces correct shapes.</li>
-  <li><code>staffer show</code> — GT boxes render correctly on sample pages.</li>
-  <li><code>uv run mypy src</code> — no new type errors.</li>
-  <li>Retrain required (architecture changed — existing checkpoints incompatible).</li>
+  <li><code>staffer show</code> — GT boxes render correctly on sample pages (tight around staves).</li>
+  <li><code>uv run mypy src tests</code> — no new type errors.</li>
+  <li>Retrain required — existing cxcywh checkpoints are incompatible.</li>
 </ol>
+
+<h2>Expected outcome</h2>
+<p>
+  With direct LTRB targets, the model gets an independent gradient signal for each
+  of the four edges. The bottom edge is no longer gated on the accuracy of both
+  <code>cy</code> and <code>h</code>. We expect the 16 px bottom drift to reduce
+  significantly, converging closer to the 0.9 px top accuracy.
+</p>
 
 </body>
 </html>

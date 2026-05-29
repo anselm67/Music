@@ -29,23 +29,16 @@ class LossDict:
         )
 
 
-def box_cxcywh_to_xyxy(boxes: Tensor) -> Tensor:
-    cx, cy, w, h = boxes.unbind(-1)
-    return torch.stack([cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2], dim=-1)
-
-
 def generalized_iou(pred: Tensor, target: Tensor) -> Tensor:
     """Generalized Inter over Union distance between two sets of boxes.
 
     Args:
-        pred (Tensor): Predicted boxes (P, 4)
-        target (Tensor): Ground truth (G, 4)
+        pred (Tensor): Predicted boxes (P, 4) in (left, top, right, bottom) format
+        target (Tensor): Ground truth (G, 4) in (left, top, right, bottom) format
 
     Returns:
         Tensor: Loss.
     """
-    pred = box_cxcywh_to_xyxy(pred)
-    target = box_cxcywh_to_xyxy(target)
     inter_x1 = torch.max(pred[:, 0], target[:, 0])
     inter_y1 = torch.max(pred[:, 1], target[:, 1])
     inter_x2 = torch.min(pred[:, 2], target[:, 2])
@@ -90,23 +83,23 @@ class StafferLoss(nn.Module):
 
         return box_loss, giou_loss, obj_loss
 
-    def _stave_yh_loss(
+    def _stave_tb_loss(
         self,
-        pred_yh: Tensor,  # (M, 2) — cy, h predictions
+        pred_tb: Tensor,  # (M, 2) — top, bottom predictions
         pred_logits: Tensor,  # (M, 1)
-        gt_boxes: Tensor,  # (M, 4) padded
+        gt_boxes: Tensor,  # (M, 4) ltrb padded
         num_gt: int,
         num_queries: int,
     ) -> tuple[Tensor, Tensor]:
-        yh_loss = F.l1_loss(pred_yh[:num_gt], gt_boxes[:num_gt, [1, 3]])
+        tb_loss = F.l1_loss(pred_tb[:num_gt], gt_boxes[:num_gt, [1, 3]])
 
-        obj_target = torch.zeros(num_queries, device=pred_yh.device)
+        obj_target = torch.zeros(num_queries, device=pred_tb.device)
         obj_target[:num_gt] = 1.0
         obj_loss = F.binary_cross_entropy_with_logits(
             pred_logits.squeeze(-1), obj_target
         )
 
-        return yh_loss, obj_loss
+        return tb_loss, obj_loss
 
     def _assignment_loss(
         self,
@@ -123,7 +116,7 @@ class StafferLoss(nn.Module):
         self,
         pred_sys_boxes: Tensor,
         pred_sys_logits: Tensor,
-        pred_stave_yh: Tensor,  # (B, M, 2) — cy, h
+        pred_stave_tb: Tensor,  # (B, M, 2) — top, bottom
         pred_stave_logits: Tensor,
         pred_assign: Tensor,
         gt_sys_boxes: Tensor,
@@ -154,8 +147,8 @@ class StafferLoss(nn.Module):
             sys_giou = sys_giou + g
             sys_obj = sys_obj + o
 
-            b, o = self._stave_yh_loss(
-                pred_stave_yh[i],
+            b, o = self._stave_tb_loss(
+                pred_stave_tb[i],
                 pred_stave_logits[i],
                 gt_stave_boxes[i],
                 num_gt_staves,

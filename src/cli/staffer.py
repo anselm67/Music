@@ -136,11 +136,11 @@ def check() -> None:
     print(f"input:          {x.shape}")
 
     with torch.no_grad():
-        sys_boxes, sys_logits, stave_yh, stave_logits, assign_logits = model(x)
+        sys_boxes, sys_logits, stave_tb, stave_logits, assign_logits = model(x)
 
     print(f"sys_boxes:      {sys_boxes.shape}")  # (B, 16, 4)
     print(f"sys_logits:     {sys_logits.shape}")  # (B, 16, 1)
-    print(f"stave_yh:       {stave_yh.shape}")  # (B, 16, 2) — cy, h
+    print(f"stave_tb:       {stave_tb.shape}")  # (B, 16, 2) — top, bottom
     print(f"stave_logits:   {stave_logits.shape}")  # (B, 16, 1)
     print(f"assign_logits:  {assign_logits.shape}")  # (B, 16, 16)
 
@@ -159,14 +159,12 @@ def show(ctx: ClickContext) -> None:
         width_height = img.shape[1], img.shape[0]
         # Try to make sense of the ground truth data.
         for sys_index in range(sys.shape[0]):
-            cx, cy, w, h = tuple(map(lambda x: x.item(), sys[sys_index]))
-            box = Box.from_cxcywh(width_height, cx, cy, w, h)
+            box = unbox(width_height, sys[sys_index])
             cv2.rectangle(img, box.top_left, box.bot_right, (255, 0, 0), 2)
         for staff_index in range(assign.shape[0]):
             if assign[staff_index] < 0:
                 break
-            cx, cy, w, h = tuple(map(lambda x: x.item(), staff[staff_index]))
-            box = Box.from_cxcywh(width_height, cx, cy, w, h)
+            box = unbox(width_height, staff[staff_index])
             cv2.rectangle(img, box.top_left, box.bot_right, (0, 0, 255), 1)
         print(f"Image size: {img.shape}")
         print(f"    Assign: {assign}")
@@ -504,10 +502,9 @@ def config_from_checkpoint(checkpoint_path: Path) -> StafferConfig:
 
 
 def unbox(size: tuple[int, int], t: Tensor) -> Box:
-    value = tuple(map(lambda x: x.item(), t))
-    assert len(value) == 4, f"Box tensor expect shape [4], but got {t.shape}"
-    cx, cy, w, h = value
-    return Box.from_cxcywh(size, cx, cy, w, h)
+    left, top, right, bot = t.tolist()
+    W, H = size
+    return Box((int(left * W), int(top * H)), (int(right * W), int(bot * H)))
 
 
 @click.command()
@@ -547,7 +544,7 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
             (
                 pred_sys_boxes,
                 pred_sys_logits,
-                pred_stave_yh,
+                pred_stave_tb,
                 pred_stave_logits,
                 pred_assign,
             ) = tuple(map(lambda t: t.squeeze(0), model.forward(img.unsqueeze(0))))
@@ -569,10 +566,9 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
                 f"system: {sys_idx}"
             )
             if pred_stave_logits[staff_index].item() > 0.0:
-                cy, h = pred_stave_yh[staff_index]
-                cx, _, w, _ = pred_sys_boxes[sys_idx]
-                stave_box_4d = torch.stack([cx, cy, w, h])
-                box = unbox(width_height, stave_box_4d)
+                top, bot = pred_stave_tb[staff_index]
+                left, _, right, _ = pred_sys_boxes[sys_idx]
+                box = unbox(width_height, torch.stack([left, top, right, bot]))
                 cv2.rectangle(img, box.top_left, box.bot_right, (0, 255, 0), 1)
         cv2.imshow("Page", img)
 
@@ -592,7 +588,7 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
 )
 @click.pass_obj
 def run_eval(ctx: ClickContext, name: str, size: int) -> None:
-    """Evaluates stave cy/h accuracy bucketed by vertical position.
+    """Evaluates stave top/bottom accuracy bucketed by vertical position.
 
     NAME: The model version to evaluate.
     """
@@ -608,7 +604,7 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
     )
     model.eval()
 
-    # bins[b] = list of (cy_err_px, h_err_px)
+    # bins[b] = list of (top_err_px, bot_err_px)
     bins: list[list[tuple[float, float]]] = [[] for _ in range(NUM_BINS)]
 
     n = min(size, len(dataset))
@@ -617,34 +613,34 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
     with torch.no_grad():
         for idx in tqdm(indices, desc="Evaluating"):
             img_tensor, _gt_sys, gt_staff, gt_assign = dataset[idx]
-            _, _, pred_stave_yh, _, _ = model.forward(
+            _, _, pred_stave_tb, _, _ = model.forward(
                 img_tensor.unsqueeze(0).to(device)
             )
-            pred_stave_yh = pred_stave_yh.squeeze(0)  # (num_stave_queries, 2)
+            pred_stave_tb = pred_stave_tb.squeeze(0)  # (num_stave_queries, 2)
 
             for i in range(gt_assign.shape[0]):
                 if gt_assign[i].item() < 0:
                     break
-                gt_cy = gt_staff[i, 1].item() * H
-                gt_h = gt_staff[i, 3].item() * H
-                pred_cy = pred_stave_yh[i, 0].item() * H
-                pred_h = pred_stave_yh[i, 1].item() * H
-                cy_err = abs(pred_cy - gt_cy)
-                h_err = abs(pred_h - gt_h)
-                bin_idx = min(int(gt_cy / bin_size), NUM_BINS - 1)
-                bins[bin_idx].append((cy_err, h_err))
+                gt_top = gt_staff[i, 1].item() * H
+                gt_bot = gt_staff[i, 3].item() * H
+                pred_top = pred_stave_tb[i, 0].item() * H
+                pred_bot = pred_stave_tb[i, 1].item() * H
+                top_err = abs(pred_top - gt_top)
+                bot_err = abs(pred_bot - gt_bot)
+                bin_idx = min(int(gt_top / bin_size), NUM_BINS - 1)
+                bins[bin_idx].append((top_err, bot_err))
 
     print(f"\nStave coordinate error by vertical position ({n} samples, H={H}px):")
-    print(f"  {'bin':>3}  {'y range':>11}  {'n':>5}  {'cy_err':>8}  {'h_err':>8}")
+    print(f"  {'bin':>3}  {'y range':>11}  {'n':>5}  {'top_err':>8}  {'bot_err':>8}")
     for b, errors in enumerate(bins):
         y_lo = int(b * bin_size)
         y_hi = int((b + 1) * bin_size)
         if errors:
-            avg_cy = sum(e[0] for e in errors) / len(errors)
-            avg_h = sum(e[1] for e in errors) / len(errors)
+            avg_top = sum(e[0] for e in errors) / len(errors)
+            avg_bot = sum(e[1] for e in errors) / len(errors)
             print(
                 f"  {b:>3}  {y_lo:>5}-{y_hi:<5}  {len(errors):>5}"
-                f"  {avg_cy:>7.1f}px  {avg_h:>7.1f}px"
+                f"  {avg_top:>7.1f}px  {avg_bot:>7.1f}px"
             )
         else:
             print(f"  {b:>3}  {y_lo:>5}-{y_hi:<5}  {0:>5}  {'—':>8}  {'—':>8}")

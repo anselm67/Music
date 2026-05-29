@@ -265,7 +265,7 @@ class PredictionHeads(nn.Module):
         self.stave_box_head = nn.Sequential(
             nn.Linear(D, D),
             nn.GELU(),
-            nn.Linear(D, 2),  # predict only cy, h — x inherited from parent system
+            nn.Linear(D, 2),  # predict top, bottom — x inherited from parent system
         )
         self.stave_obj_head = nn.Linear(D, 1)
         self.assign_head = nn.Linear(D, config.num_system_queries)
@@ -275,15 +275,15 @@ class PredictionHeads(nn.Module):
         sys_feats: Tensor,  # (B, N, D)
         stave_feats: Tensor,  # (B, M, D)
     ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
-        sys_boxes = self.sys_box_head(sys_feats).sigmoid()  # (B, N, 4)
+        sys_boxes = self.sys_box_head(sys_feats).sigmoid()  # (B, N, 4) ltrb
         sys_logits = self.sys_obj_head(sys_feats)  # (B, N, 1)
-        stave_yh = self.stave_box_head(stave_feats).sigmoid()  # (B, M, 2) — cy, h
+        stave_tb = self.stave_box_head(stave_feats).sigmoid()  # (B, M, 2) — top, bottom
         stave_logits = self.stave_obj_head(stave_feats)  # (B, M, 1)
         assign_logits = self.assign_head(stave_feats)  # (B, M, N)
         return (
             sys_boxes,
             sys_logits,
-            stave_yh,
+            stave_tb,
             stave_logits,
             assign_logits,
         )
@@ -300,7 +300,7 @@ class StafferModel(nn.Module):
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         memory = self.backbone(x)  # (B, P, D)
         sys_feats, stave_feats = self.decoder(memory)  # (B, N, D), (B, M, D)
-        # returns: sys_boxes, sys_logits, stave_yh (cy/h), stave_logits, assign_logits
+        # returns: sys_boxes, sys_logits, stave_tb, stave_logits, assign_logits
         return self.heads(sys_feats, stave_feats)
 
 

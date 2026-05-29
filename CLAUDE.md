@@ -21,6 +21,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Do not "improve," reformat, or refactor adjacent code or comments.
 - Match existing repository style exactly.
 - Remove imports, variables, or functions that YOUR changes made unused; do not touch pre-existing dead code.
+- When you change the semantics of a variable, function, or field, rename it to match the new meaning. Stale names that contradict what something now represents are bugs waiting to happen.
 
 ### 4. Goal-Driven Execution
 - Transform tasks into verifiable goals (e.g., "Write a test that reproduces the bug, then make it pass").
@@ -138,11 +139,11 @@ Hierarchical detector: **systems → staves**.
 **Key architectural insight:** staves only need to predict y-coordinates (x inherited from parent system). Right now, stave queries generate a full Box.
 
 **Loss (`HierarchicalLoss` / `staffer_loss.py`):** L1 + GIoU box loss, BCE objectness,
-cross-entropy assignment, containment, alignment — returns a `LossDict`.
+cross-entropy assignment — returns a `LossDict`.
 
 **Matching:** index-based positional matching (top-to-bottom sort), not Hungarian.
 
-**Box format:** normalised cxcywh.
+**Box format:** normalised cxcywh (system boxes; pending migration to ltrb — see plan).
 
 **Training:**
 - AdamW + warmup + cosine schedule
@@ -161,7 +162,7 @@ noter --log-file logs/noter/<model-name>.log train OPTIONS...
 - Training metrics will be available - eg for staffer - as logs/staffer/<model-name>/metrics.csv
 - Finally you should always update the training log (docs/staffer-training.html or docs/noter-training.html) with eval results and metrics for the run.
 
-**Current checkpoint status:** `enhanced2` is the best staffer model — system IoU ~0.92, cy_err 0.9px (top) / 16px (bottom). Subsequent experiments were worse: enhanced3 (cy_delta approach) reverted; enhanced2-staffer-small (3.6M params) worse across the board; enhanced2-vflip negative result; enhanced2-sampler (bottom-bias WeightedRandomSampler + 4× data) negative — drift is structural not distributional. Next planned experiment: chained system-box representation (plan in `docs/staffer-plan.html`).
+**Current checkpoint status:** `enhanced2` is the best staffer model — system IoU ~0.92, cy_err 0.9px (top) / 16px (bottom). Subsequent experiments were worse: enhanced3 (cy_delta approach) reverted; enhanced2-staffer-small (3.6M params) worse across the board; enhanced2-vflip negative result; enhanced2-sampler (bottom-bias WeightedRandomSampler + 4× data) negative — drift is structural not distributional. Next planned experiment: direct LTRB system-box representation (plan in `docs/staffer-plan.html`).
 
 ---
 
@@ -232,7 +233,7 @@ Multi-page scores store per-page PNGs; single-page scores use a flat filename.
 
 ## Current focus areas
 
-1. **Staffer — chained system-box representation:** replaces independent `(cx,cy,w,h)` per system with tight boxes + explicit gap prediction, fixing the 16px bottom-drift asymmetry. Plan documented in `docs/staffer-plan.html`.
+1. **Staffer — direct LTRB system boxes:** replaces `(cx,cy,w,h)` with direct `(left,top,right,bottom)` prediction so each edge has its own gradient signal, fixing the 16px bottom-drift asymmetry. Plan documented in `docs/staffer-plan.html`.
 2. **NoterModel** — `enhanced3` baseline is solid (99.58% val acc). Next: longer sequences, harder scores, multi-staff generalisation.
 3. **Stave↔spine alignment** — mostly done; bar number mismatches remain when Score/page/system computed bar numbers diverge from Verovio output.
 4. [longer term] Multi-stave processing: `SystemTransformer` + `SharedSpineDecoder` + RoIAlign feature extraction from `staffer` detections.

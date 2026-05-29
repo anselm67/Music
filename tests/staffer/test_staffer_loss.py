@@ -6,11 +6,14 @@ from staffer import StafferConfig, StafferLoss, LossDict
 
 
 def make_boxes(n: int, padded: int) -> Tensor:
-    """Make n random normalised boxes sorted by cy, padded to padded size."""
+    """Make n random valid normalised ltrb boxes sorted by top, padded."""
     boxes = torch.zeros(padded, 4)
     if n > 0:
-        raw = torch.rand(n, 4).clamp(0.01, 0.99)
-        raw = raw[raw[:, 1].argsort()]  # sort by cy
+        coords = torch.rand(n, 4).clamp(0.01, 0.99)
+        x = coords[:, [0, 2]].sort(dim=1).values
+        y = coords[:, [1, 3]].sort(dim=1).values
+        raw = torch.stack([x[:, 0], y[:, 0], x[:, 1], y[:, 1]], dim=1)
+        raw = raw[raw[:, 1].argsort()]  # sort by top
         boxes[:n] = raw
     return boxes
 
@@ -39,9 +42,9 @@ class TestStafferLoss:
         Tensor, Tensor, Tensor, Tensor, Tensor, list[Tensor], list[Tensor], list[Tensor]
     ]:
         N, M = config.num_system_queries, config.num_stave_queries
-        pred_sys_boxes = torch.rand(B, N, 4)
+        pred_sys_boxes = torch.stack([make_boxes(N, N) for _ in range(B)])
         pred_sys_logits = torch.randn(B, N, 1)
-        pred_stave_yh = torch.rand(B, M, 2)
+        pred_stave_tb = torch.rand(B, M, 2)
         pred_stave_logits = torch.randn(B, M, 1)
         pred_assign = torch.randn(B, M, N)
         gt_sys_boxes = [make_boxes(num_sys, N) for _ in range(B)]
@@ -50,7 +53,7 @@ class TestStafferLoss:
         return (
             pred_sys_boxes,
             pred_sys_logits,
-            pred_stave_yh,
+            pred_stave_tb,
             pred_stave_logits,
             pred_assign,
             gt_sys_boxes,
@@ -94,16 +97,16 @@ class TestStafferLoss:
 
         good_sys = torch.ones(B, N, 4)
         good_sys[0, :3] = gt_sys[:3]
-        good_stave_yh = torch.ones(B, M, 2)
-        good_stave_yh[0, :5] = gt_stave[:5, [1, 3]]
+        good_stave_tb = torch.ones(B, M, 2)
+        good_stave_tb[0, :5] = gt_stave[:5, [1, 3]]
 
         bad_sys = torch.ones(B, N, 4) * 0.9
-        bad_stave_yh = torch.ones(B, M, 2) * 0.9
+        bad_stave_tb = torch.ones(B, M, 2) * 0.9
 
         good_loss = loss(
             good_sys,
             logits,
-            good_stave_yh,
+            good_stave_tb,
             stave_logits,
             pred_assign,
             [gt_sys],
@@ -113,7 +116,7 @@ class TestStafferLoss:
         bad_loss = loss(
             bad_sys,
             logits,
-            bad_stave_yh,
+            bad_stave_tb,
             stave_logits,
             pred_assign,
             [gt_sys],
@@ -128,9 +131,11 @@ class TestStafferLoss:
         B = 2
         N, M = config.num_system_queries, config.num_stave_queries
 
-        pred_sys_boxes = torch.rand(B, N, 4, requires_grad=True)
+        pred_sys_boxes = torch.stack(
+            [make_boxes(3, N) for _ in range(B)]
+        ).requires_grad_(True)
         pred_sys_logits = torch.randn(B, N, 1, requires_grad=True)
-        pred_stave_yh = torch.rand(B, M, 2, requires_grad=True)
+        pred_stave_tb = torch.rand(B, M, 2, requires_grad=True)
         pred_stave_logits = torch.randn(B, M, 1, requires_grad=True)
         pred_assign = torch.randn(B, M, N, requires_grad=True)
 
@@ -141,7 +146,7 @@ class TestStafferLoss:
         result = loss(
             pred_sys_boxes,
             pred_sys_logits,
-            pred_stave_yh,
+            pred_stave_tb,
             pred_stave_logits,
             pred_assign,
             gt_sys_boxes,
@@ -151,5 +156,5 @@ class TestStafferLoss:
         result.total().backward()
 
         assert pred_sys_boxes.grad is not None
-        assert pred_stave_yh.grad is not None
+        assert pred_stave_tb.grad is not None
         assert pred_assign.grad is not None
