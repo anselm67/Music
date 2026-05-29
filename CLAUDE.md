@@ -236,10 +236,3 @@ Multi-page scores store per-page PNGs; single-page scores use a flat filename.
 3. **Stave↔spine alignment** — mostly done; bar number mismatches remain when Score/page/system computed bar numbers diverge from Verovio output.
 4. [longer term] Multi-stave processing: `SystemTransformer` + `SharedSpineDecoder` + RoIAlign feature extraction from `staffer` detections.
 5. Single end-to-end model (detection + transcription in one forward pass).
-
-### Known pending fixes
-
-- Tokenizer should inspect first-bar lengths against the metric to determine where bar number 1 falls.
-- `mxl/14/10/QmWAGX...`: rendering missing first few bars → bar sync off.
-- `mxl/3/6/Qmd7UQ...`: bar count mismatch due to invisible leading bars in SVG.
-- Staffer: stave output should become two y-coordinates only; derive full box from parent system (superseded by chained-box plan, but still valid).
