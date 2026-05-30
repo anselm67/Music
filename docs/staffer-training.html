@@ -111,6 +111,21 @@
     .config-key { color: var(--muted); }
     .config-val { font-weight: 600; font-family: monospace; }
     .config-val.changed { color: var(--amber-tx); }
+
+    /* Click-to-zoom chart modal */
+    .chart-card { cursor: zoom-in; }
+    .chart-modal { position: fixed; inset: 0; background: rgba(15,23,42,0.65);
+                   display: none; align-items: center; justify-content: center; z-index: 1000; padding: 2rem; }
+    .chart-modal.open { display: flex; }
+    .chart-modal-inner { background: var(--surface); border-radius: 12px;
+                         padding: 1.25rem 1.5rem 1.5rem; width: min(900px, 92vw); position: relative;
+                         box-shadow: 0 20px 60px rgba(0,0,0,0.35); }
+    .chart-modal-inner h3 { margin: 0 1.5rem 0.75rem 0; font-size: 0.9rem; color: var(--muted);
+                            text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; }
+    .chart-modal-canvas-wrap { height: min(65vh, 520px); }
+    .chart-modal-close { position: absolute; top: 0.5rem; right: 0.8rem; background: none; border: none;
+                         font-size: 1.7rem; line-height: 1; color: var(--muted); cursor: pointer; padding: 0; }
+    .chart-modal-close:hover { color: var(--text); }
   </style>
 </head>
 <body>
@@ -193,6 +208,12 @@
         <td>0.219</td><td>0.914</td><td>stave L1 0.00490†</td>
         <td>Learnable vertical query anchors (DAB-style reference points)</td>
         <td><span class="badge badge-green">best ltrb</span></td>
+      </tr>
+      <tr>
+        <td><span class="tag">enhanced2-ltrb-anchor-iter</span></td><td>2026-05-30</td><td>256</td><td>16</td>
+        <td>—</td><td>—</td><td>—</td>
+        <td>Iterative box refinement (count-conditional anchoring) + deep supervision</td>
+        <td><span class="badge badge-blue">training</span></td>
       </tr>
     </tbody>
   </table>
@@ -689,7 +710,123 @@
     <div class="result-box neutral">But the bottom-of-page error growth is <em>not</em> solved: bins 12–14 still sit at ~12–13 px, comparable to enhanced2-ltrb and enhanced2. The n-weighted mean error (bins 0–13) is essentially tied with plain ltrb (4.4 px). This validates the marginal-anchor limitation: a single per-slot scalar can only encode the count-averaged position of slot <em>i</em>, but the i-th system's true vertical position depends on how many systems are on the page (slot 1 ranges ~0.06→0.50 depending on count). The image-conditioned head must still absorb that count-dependent variance, and does so least well for the rarely-active high slots. The genuine fix for the bottom is count-conditional anchoring (anchor at <code>(i+0.5)/num_gt</code> via a two-stage decoder) or a vertical containment loss — next experiments.</div>
   </div>
 
+  <!-- ════════════════════════════════════════════ enhanced2-ltrb-anchor-iter -->
+  <div class="session">
+    <div class="session-header">
+      <h2><span class="tag">enhanced2-ltrb-anchor-iter</span></h2>
+      <span class="session-meta">2026-05-30 · tag: <code>train/enhanced2-ltrb-anchor-iter</code> · 7 epochs · D=256 H=8</span>
+      <span class="in-progress"><span class="dot-pulse"></span>training</span>
+    </div>
+    <p>Directly attacks the marginal-anchor limitation left open by <span class="tag">enhanced2-ltrb-anchor</span>: a single per-slot scalar can only encode the <em>count-averaged</em> vertical position of slot <em>i</em>, so the image-conditioned head must absorb all count-dependent variance and does so worst for the rarely-active high slots (the bottom-of-page ~12 px error). The fix turns the static anchor into a <strong>count-conditional</strong> one via <strong>iterative box refinement</strong> across the four decoder layers, supervised at every layer (<strong>deep supervision</strong>).</p>
+    <p>Each layer's box head predicts a logit-space <em>residual</em> Δ added to a running vertical reference; the output box is <code>σ(Δ + ref)</code>. The detached, re-linearised output <code>ref ← logit(box.detach())</code> becomes the next layer's reference. Because the reference is now derived from the previous layer's <em>content-dependent</em> box (not a frozen per-slot constant), it adapts to how many systems are actually on the page. Only the vertical edges (system top/bottom, stave top/bottom) are refined; left/right stay unanchored and are predicted per layer. The learnable even-spacing anchor from the parent model seeds the first layer's reference.</p>
+    <h3>Changes from enhanced2-ltrb-anchor</h3>
+    <div class="changes">
+      <div class="change-item"><span class="change-sym add">+</span> Iterative refinement: every decoder layer predicts a residual Δ to the running reference; <code>ref ← logit(σ(Δ+ref).detach())</code> feeds the next layer</div>
+      <div class="change-item"><span class="change-sym add">+</span> Deep supervision: sys L1 + GIoU and stave L1 computed at <strong>all 4 layers</strong> (averaged); obj + assign stay on the final layer</div>
+      <div class="change-item"><span class="change-sym mod">~</span> Anchor role: static per-slot constant → <strong>seed</strong> for layer-0 reference (now count-conditional via refinement)</div>
+      <div class="change-item"><span class="change-sym slate">·</span> All else identical (350k data, <code>max_sys_bottom</code> sampler, 7 epochs)</div>
+    </div>
+    <h3>Architecture</h3>
+    <div class="arch">
+      <div class="arch-col">
+        <div class="arch-label">Backbone</div>
+        <div class="arch-block amber">ViT + pos embed<br>+ LayerNorm<br><small>D=256 · H=8</small></div>
+      </div>
+      <div class="arch-divider"></div>
+      <div class="arch-col">
+        <div class="arch-label">System (N=16) ×4</div>
+        <div class="arch-block slate">Self-Attn</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block slate">Cross-Attn (img)</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block slate">FFN</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block violet">Sys box head<br><small>Δ ltrb → refine ↻</small></div>
+        <div class="arch-block green">Sys obj <small>(final)</small></div>
+      </div>
+      <div class="arch-divider"></div>
+      <div class="arch-col">
+        <div class="arch-label">Stave (M=16) ×4</div>
+        <div class="arch-block slate">Self-Attn</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block slate">Cross-Attn (img)</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block violet">Group-Attn (sys)</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block slate">FFN</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block violet">Stave tb head<br><small>Δ top,bot → refine ↻</small></div>
+        <div class="arch-block green">Stave obj <small>(final)</small></div>
+        <div class="arch-block green">Assign head <small>(final)</small></div>
+      </div>
+      <div class="arch-divider"></div>
+      <div class="arch-col">
+        <div class="arch-label">Loss terms</div>
+        <div class="arch-block violet">Sys L1 + GIoU<br><small>all 4 layers</small></div>
+        <div class="arch-block violet">Stave L1<br><small>all 4 layers</small></div>
+        <div class="arch-block slate">Sys obj BCE</div>
+        <div class="arch-block slate">Stave obj BCE</div>
+        <div class="arch-block slate">Assignment CE</div>
+      </div>
+    </div>
+    <h3>Iterative vertical refinement <small style="font-weight:400;color:var(--muted)">(per query slot, vertical edges only)</small></h3>
+    <div class="arch">
+      <div class="arch-col">
+        <div class="arch-label">Seed</div>
+        <div class="arch-block violet">anchor ref₀<br><small>logit (i+½)/N</small></div>
+      </div>
+      <div class="arch-col" style="justify-content:center"><div class="arch-arrow">→</div></div>
+      <div class="arch-col">
+        <div class="arch-label">Layer 1</div>
+        <div class="arch-block green">box₁ = σ(Δ₁+ref₀)</div>
+        <div class="arch-arrow">↓ sup</div>
+        <div class="arch-block amber">L1 + GIoU</div>
+        <div class="arch-arrow" title="ref₁ = logit(box₁.detach())">↻ ref₁</div>
+      </div>
+      <div class="arch-col" style="justify-content:center"><div class="arch-arrow">→</div></div>
+      <div class="arch-col">
+        <div class="arch-label">Layer 2</div>
+        <div class="arch-block green">box₂ = σ(Δ₂+ref₁)</div>
+        <div class="arch-arrow">↓ sup</div>
+        <div class="arch-block amber">L1 + GIoU</div>
+        <div class="arch-arrow">↻ ref₂</div>
+      </div>
+      <div class="arch-col" style="justify-content:center"><div class="arch-arrow">→</div></div>
+      <div class="arch-col">
+        <div class="arch-label">Layer 3</div>
+        <div class="arch-block green">box₃ = σ(Δ₃+ref₂)</div>
+        <div class="arch-arrow">↓ sup</div>
+        <div class="arch-block amber">L1 + GIoU</div>
+        <div class="arch-arrow">↻ ref₃</div>
+      </div>
+      <div class="arch-col" style="justify-content:center"><div class="arch-arrow">→</div></div>
+      <div class="arch-col">
+        <div class="arch-label">Layer 4</div>
+        <div class="arch-block green">box₄ = σ(Δ₄+ref₃)<br><small>final prediction</small></div>
+        <div class="arch-arrow">↓ sup</div>
+        <div class="arch-block amber">L1 + GIoU</div>
+      </div>
+    </div>
+    <p style="font-size:0.82rem;color:var(--muted)">The <code>↻</code> feedback re-linearises the detached box (<code>refₖ = logit(boxₖ.detach())</code>) so each layer must emit a valid box on its own — that is what makes the reference count-conditional rather than a frozen constant.</p>
+    <h3>Training curves</h3>
+    <div class="charts">
+      <div class="chart-card"><h4>Val loss — vs anchor</h4><canvas id="c-iter-loss"></canvas></div>
+      <div class="chart-card"><h4>Val sys IoU — vs anchor</h4><canvas id="c-iter-iou"></canvas></div>
+      <div class="chart-card"><h4>Val stave L1 — vs anchor</h4><canvas id="c-iter-l1"></canvas></div>
+    </div>
+    <div class="result-box pending"><span class="in-progress"><span class="dot-pulse"></span></span> Training in progress (7 epochs, started 2026-05-30 17:18). Eval table and final metrics to follow. Open question: does count-conditional refinement finally bend down the bottom-of-page error (bins 12–14, ~12–13 px in the parent) without sacrificing the aggregate sys IoU (0.914) recovered by the static anchor?</div>
+  </div>
+
 </main>
+
+<div id="chart-modal" class="chart-modal" role="dialog" aria-modal="true">
+  <div class="chart-modal-inner">
+    <button class="chart-modal-close" aria-label="Close">&times;</button>
+    <h3 id="chart-modal-title"></h3>
+    <div class="chart-modal-canvas-wrap"><canvas id="chart-modal-canvas"></canvas></div>
+  </div>
+</div>
+
 <script>
 const ep12 = [0,1,2,3,4,5,6,7,8,9,10,11];
 const ep11 = [1,2,3,4,5,6,7,8,9,10];  // enhanced2-staffer-small started at ep1
@@ -764,6 +901,12 @@ const anchor = {
   iou:  [0.7713,0.8452,0.8785,0.8853,0.8984,0.9125,0.9140],
   l1:   [0.01273,0.00811,0.00652,0.00642,0.00532,0.00493,0.00490],
 };
+// enhanced2-ltrb-anchor-iter — training in progress; fill per-epoch val metrics here.
+const iter = {
+  loss: [],
+  iou:  [],
+  l1:   [],
+};
 
 function line(label, data, color, opts={}) {
   return { label, data, borderColor: color, backgroundColor: color+'18',
@@ -771,6 +914,7 @@ function line(label, data, color, opts={}) {
            borderDash: opts.dashed ? [4,3] : [], pointRadius: opts.dashed ? 2 : 3,
            tension: 0.3 };
 }
+const chartRegistry = {};
 function makeChart(id, labels, datasets, yOpts={}) {
   const ctx = document.getElementById(id);
   if (!ctx) return;
@@ -787,6 +931,39 @@ function makeChart(id, labels, datasets, yOpts={}) {
       elements: { point: { radius: 3 }, line: { tension: 0.3 } },
     }
   });
+  chartRegistry[id] = { labels, datasets, yOpts };
+  const card = ctx.closest('.chart-card');
+  if (card) card.addEventListener('click', () => openChartModal(id, card));
+}
+
+// ── Click-to-zoom: re-render the clicked chart enlarged in a modal.
+let modalChart = null;
+function openChartModal(id, card) {
+  const reg = chartRegistry[id];
+  if (!reg) return;
+  const h4 = card.querySelector('h4');
+  document.getElementById('chart-modal-title').textContent = h4 ? h4.textContent : '';
+  document.getElementById('chart-modal').classList.add('open');
+  if (modalChart) modalChart.destroy();
+  // Deep-clone datasets so the modal chart doesn't share Chart.js per-dataset state.
+  const datasets = JSON.parse(JSON.stringify(reg.datasets));
+  modalChart = new Chart(document.getElementById('chart-modal-canvas'), {
+    type: 'line',
+    data: { labels: reg.labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 14, font: { size: 13 } } } },
+      scales: {
+        x: { title: { display: true, text: 'Epoch', font: { size: 13 } }, ticks: { font: { size: 12 } } },
+        y: { ...reg.yOpts, ticks: { font: { size: 12 } } },
+      },
+      elements: { point: { radius: 4 }, line: { tension: 0.3 } },
+    }
+  });
+}
+function closeChartModal() {
+  document.getElementById('chart-modal').classList.remove('open');
+  if (modalChart) { modalChart.destroy(); modalChart = null; }
 }
 
 // ── Cross-run comparison (staffyh onward)
@@ -872,6 +1049,18 @@ makeChart('c-ltrb-l1',   ep7, [line('enhanced2',e2.l1.slice(0,7),  C.e2,{dashed:
 makeChart('c-anchor-loss', ep7, [line('enhanced2-ltrb',ltrb.loss,C.ltrb,{dashed:true}), line('enhanced2-ltrb-anchor',anchor.loss,C.anchor,{fill:true})]);
 makeChart('c-anchor-iou',  ep7, [line('enhanced2-ltrb',ltrb.iou, C.ltrb,{dashed:true}), line('enhanced2-ltrb-anchor',anchor.iou, C.anchor,{fill:true})], {min:0,max:1});
 makeChart('c-anchor-l1',   ep7, [line('enhanced2-ltrb',ltrb.l1,  C.ltrb,{dashed:true}), line('enhanced2-ltrb-anchor',anchor.l1,  C.anchor,{fill:true})]);
+
+// ── enhanced2-ltrb-anchor-iter vs enhanced2-ltrb-anchor (iter data filled when training completes)
+makeChart('c-iter-loss', ep7.slice(0,iter.loss.length || ep7.length), [line('enhanced2-ltrb-anchor',anchor.loss,C.anchor,{dashed:true}), line('enhanced2-ltrb-anchor-iter',iter.loss,C.sampler,{fill:true})]);
+makeChart('c-iter-iou',  ep7.slice(0,iter.iou.length  || ep7.length), [line('enhanced2-ltrb-anchor',anchor.iou, C.anchor,{dashed:true}), line('enhanced2-ltrb-anchor-iter',iter.iou, C.sampler,{fill:true})], {min:0,max:1});
+makeChart('c-iter-l1',   ep7.slice(0,iter.l1.length   || ep7.length), [line('enhanced2-ltrb-anchor',anchor.l1,  C.anchor,{dashed:true}), line('enhanced2-ltrb-anchor-iter',iter.l1,  C.sampler,{fill:true})]);
+
+// ── Modal close wiring: backdrop click, close button, Esc.
+document.querySelector('.chart-modal-close').addEventListener('click', closeChartModal);
+document.getElementById('chart-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'chart-modal') closeChartModal();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeChartModal(); });
 </script>
 </body>
 </html>

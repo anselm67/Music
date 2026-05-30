@@ -82,6 +82,21 @@
     .result-box.positive { background: var(--green-bg); border-left: 3px solid var(--green-bd); color: var(--green-tx); }
     .result-box.negative { background: var(--rose-bg);  border-left: 3px solid var(--rose-bd);  color: var(--rose-tx); }
     .result-box.neutral  { background: var(--slate-bg); border-left: 3px solid var(--slate-bd); color: var(--slate-tx); }
+
+    /* Click-to-zoom chart modal */
+    .chart-card { cursor: zoom-in; }
+    .chart-modal { position: fixed; inset: 0; background: rgba(15,23,42,0.65);
+                   display: none; align-items: center; justify-content: center; z-index: 1000; padding: 2rem; }
+    .chart-modal.open { display: flex; }
+    .chart-modal-inner { background: var(--surface); border-radius: 12px;
+                         padding: 1.25rem 1.5rem 1.5rem; width: min(900px, 92vw); position: relative;
+                         box-shadow: 0 20px 60px rgba(0,0,0,0.35); }
+    .chart-modal-inner h3 { margin: 0 1.5rem 0.75rem 0; font-size: 0.9rem; color: var(--muted);
+                            text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; }
+    .chart-modal-canvas-wrap { height: min(65vh, 520px); }
+    .chart-modal-close { position: absolute; top: 0.5rem; right: 0.8rem; background: none; border: none;
+                         font-size: 1.7rem; line-height: 1; color: var(--muted); cursor: pointer; padding: 0; }
+    .chart-modal-close:hover { color: var(--text); }
   </style>
 </head>
 <body>
@@ -280,6 +295,15 @@
   </div>
 
 </main>
+
+<div id="chart-modal" class="chart-modal" role="dialog" aria-modal="true">
+  <div class="chart-modal-inner">
+    <button class="chart-modal-close" aria-label="Close">&times;</button>
+    <h3 id="chart-modal-title"></h3>
+    <div class="chart-modal-canvas-wrap"><canvas id="chart-modal-canvas"></canvas></div>
+  </div>
+</div>
+
 <script>
 const ep12 = [0,1,2,3,4,5,6,7,8,9,10,11];
 const C = { basic: '#64748b', enh: '#7c3aed', e2: '#2563eb', e3: '#059669' };
@@ -307,6 +331,7 @@ function line(label, data, color, opts={}) {
            borderDash: opts.dashed ? [4,3] : [], pointRadius: opts.dashed ? 2 : 3,
            tension: 0.3 };
 }
+const chartRegistry = {};
 function makeChart(id, datasets, yOpts={}) {
   const ctx = document.getElementById(id);
   if (!ctx) return;
@@ -322,6 +347,38 @@ function makeChart(id, datasets, yOpts={}) {
       },
     }
   });
+  chartRegistry[id] = { datasets, yOpts };
+  const card = ctx.closest('.chart-card');
+  if (card) card.addEventListener('click', () => openChartModal(id, card));
+}
+
+// ── Click-to-zoom: re-render the clicked chart enlarged in a modal.
+let modalChart = null;
+function openChartModal(id, card) {
+  const reg = chartRegistry[id];
+  if (!reg) return;
+  const h4 = card.querySelector('h4');
+  document.getElementById('chart-modal-title').textContent = h4 ? h4.textContent : '';
+  document.getElementById('chart-modal').classList.add('open');
+  if (modalChart) modalChart.destroy();
+  // Deep-clone datasets so the modal chart doesn't share Chart.js per-dataset state.
+  const datasets = JSON.parse(JSON.stringify(reg.datasets));
+  modalChart = new Chart(document.getElementById('chart-modal-canvas'), {
+    type: 'line',
+    data: { labels: ep12, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 14, font: { size: 13 } } } },
+      scales: {
+        x: { title: { display: true, text: 'Epoch', font: { size: 13 } }, ticks: { font: { size: 12 } } },
+        y: { ...reg.yOpts, ticks: { font: { size: 12 } } },
+      },
+    }
+  });
+}
+function closeChartModal() {
+  document.getElementById('chart-modal').classList.remove('open');
+  if (modalChart) { modalChart.destroy(); modalChart = null; }
 }
 
 // Cross-run comparison
@@ -348,6 +405,13 @@ makeChart('c-e2-loss', [line('enhanced',enh.loss,C.enh,{dashed:true}), line('enh
 // enhanced3 vs enhanced2
 makeChart('c-e3-acc',  [line('enhanced2',e2.acc, C.e2,{dashed:true}), line('enhanced3',e3.acc, C.e3,{fill:true})], {min:0,max:1});
 makeChart('c-e3-loss', [line('enhanced2',e2.loss,C.e2,{dashed:true}), line('enhanced3',e3.loss,C.e3,{fill:true})]);
+
+// ── Modal close wiring: backdrop click, close button, Esc.
+document.querySelector('.chart-modal-close').addEventListener('click', closeChartModal);
+document.getElementById('chart-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'chart-modal') closeChartModal();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeChartModal(); });
 </script>
 </body>
 </html>
