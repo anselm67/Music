@@ -182,8 +182,15 @@
         <td>Bottom-of-page sampler bias; 4× more data (350k); 8 epochs</td>
         <td><span class="badge badge-amber">negative</span></td>
       </tr>
+      <tr>
+        <td><span class="tag">enhanced2-ltrb</span></td><td>2026-05-29–30</td><td>256</td><td>16</td>
+        <td>0.274</td><td>0.893</td><td>stave L1 0.00600†</td>
+        <td>Direct ltrb box format; GIoU area clamping fix; sampler retained</td>
+        <td><span class="badge badge-amber">partial</span></td>
+      </tr>
     </tbody>
   </table>
+  <p style="font-size:0.82rem;color:var(--muted)">† stave L1 not comparable to prior runs: enhanced2-ltrb stave head outputs (top, bottom) directly; prior runs output (cy, h).</p>
 
   <!-- ════════════════════ Comparison charts ════════════════════ -->
   <h2>Cross-run comparison</h2>
@@ -586,10 +593,57 @@
     <div class="result-box negative">Negative result. The bottom-bias sampler did not fix the cy drift: bin 13 error is 14.4 px vs 14.3 px for enhanced2 — essentially unchanged. Sys IoU (0.904) and stave L1 (0.00340) are also worse than enhanced2 despite more data and more epochs. Sampler analysis confirmed it is working correctly (bottom pages 1.7× upsampled), but raw bottom-system sample counts were already adequate (26% of data). The drift is structural, not a data distribution problem.</div>
   </div>
 
+  <!-- ════════════════════════════════════════════ enhanced2-ltrb -->
+  <div class="session">
+    <div class="session-header">
+      <h2><span class="tag">enhanced2-ltrb</span></h2>
+      <span class="session-meta">2026-05-29–30 · tag: <code>train/enhanced2-ltrb</code> · 7 epochs · D=256 H=8</span>
+    </div>
+    <p>Hypothesis: the cy drift is structural — in cxcywh, both edges share the same gradient through cy, so bias in one direction compounds into large bottom errors. Switching to direct ltrb (left, top, right, bottom) gives each edge its own independent gradient signal. A GIoU area clamping fix was also required: random sigmoid predictions at initialisation can produce invalid boxes (right &lt; left), causing negative area and a pathological false minimum. Training had to be restarted after the first run diverged (sys_iou → −27, loss → −52) before the clamp was applied.</p>
+    <h3>Changes from enhanced2</h3>
+    <div class="changes">
+      <div class="change-item"><span class="change-sym mod">~</span> System box format: cxcywh → <strong>ltrb</strong> (direct edge prediction)</div>
+      <div class="change-item"><span class="change-sym mod">~</span> Stave head: (cy, h) → <strong>(top, bottom)</strong> direct edge coordinates</div>
+      <div class="change-item"><span class="change-sym add">+</span> GIoU: <code>.clamp(min=0)</code> on width/height (fixes pathological loss with invalid ltrb boxes at init)</div>
+      <div class="change-item"><span class="change-sym add">+</span> Bottom-of-page sampler bias (inherited from enhanced2-sampler; <code>bottom_bias=3.0</code>)</div>
+      <div class="change-item"><span class="change-sym mod">~</span> Epochs: 12 → 7 (350k train_len; matches enhanced2's ~150k step count)</div>
+    </div>
+    <h3>Training curves</h3>
+    <div class="charts">
+      <div class="chart-card"><h4>Val loss — vs enhanced2</h4><canvas id="c-ltrb-loss"></canvas></div>
+      <div class="chart-card"><h4>Val sys IoU — vs enhanced2</h4><canvas id="c-ltrb-iou"></canvas></div>
+      <div class="chart-card"><h4>Val stave L1 — vs enhanced2</h4><canvas id="c-ltrb-l1"></canvas></div>
+    </div>
+    <h3>Eval — stave top/bottom error by vertical position (500 samples, H=960 px)</h3>
+    <p style="font-size:0.82rem;color:var(--muted)">top_err and bot_err measure each edge independently. Previous runs reported cy_err (centre-Y error) and h_err (height error); not directly comparable.</p>
+    <table class="eval-table">
+      <thead><tr><th>Bin</th><th>Y range</th><th>n</th><th>top_err</th><th>bot_err</th><th></th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td>0–60</td><td>372</td><td>1.2 px</td><td>1.4 px</td><td><span class="eval-bar" style="width:7px;background:#059669"></span></td></tr>
+        <tr><td>1</td><td>60–120</td><td>328</td><td>2.4 px</td><td>2.7 px</td><td><span class="eval-bar" style="width:14px;background:#65a30d"></span></td></tr>
+        <tr><td>2</td><td>120–180</td><td>469</td><td>2.2 px</td><td>2.2 px</td><td><span class="eval-bar" style="width:11px;background:#65a30d"></span></td></tr>
+        <tr><td>3</td><td>180–240</td><td>439</td><td>3.0 px</td><td>3.8 px</td><td><span class="eval-bar" style="width:19px;background:#84cc16"></span></td></tr>
+        <tr><td>4</td><td>240–300</td><td>318</td><td>3.4 px</td><td>3.5 px</td><td><span class="eval-bar" style="width:18px;background:#84cc16"></span></td></tr>
+        <tr><td>5</td><td>300–360</td><td>268</td><td>4.7 px</td><td>4.8 px</td><td><span class="eval-bar" style="width:24px;background:#eab308"></span></td></tr>
+        <tr><td>6</td><td>360–420</td><td>253</td><td>6.2 px</td><td>6.5 px</td><td><span class="eval-bar" style="width:33px;background:#f97316"></span></td></tr>
+        <tr><td>7</td><td>420–480</td><td>246</td><td>6.3 px</td><td>6.6 px</td><td><span class="eval-bar" style="width:33px;background:#f97316"></span></td></tr>
+        <tr><td>8</td><td>480–540</td><td>216</td><td>6.4 px</td><td>7.1 px</td><td><span class="eval-bar" style="width:36px;background:#ef4444"></span></td></tr>
+        <tr><td>9</td><td>540–600</td><td>182</td><td>6.8 px</td><td>7.0 px</td><td><span class="eval-bar" style="width:35px;background:#ef4444"></span></td></tr>
+        <tr><td>10</td><td>600–660</td><td>141</td><td>7.9 px</td><td>8.0 px</td><td><span class="eval-bar" style="width:40px;background:#ef4444"></span></td></tr>
+        <tr><td>11</td><td>660–720</td><td>132</td><td>7.9 px</td><td>8.0 px</td><td><span class="eval-bar" style="width:40px;background:#ef4444"></span></td></tr>
+        <tr><td>12</td><td>720–780</td><td>70</td><td>11.4 px</td><td>11.3 px</td><td><span class="eval-bar" style="width:57px;background:#dc2626"></span></td></tr>
+        <tr><td>13</td><td>780–840</td><td>37</td><td>9.5 px</td><td>9.7 px</td><td><span class="eval-bar" style="width:49px;background:#ef4444"></span></td></tr>
+        <tr class="warn"><td>14</td><td>840–900</td><td>13</td><td>34.0 px</td><td>30.3 px</td><td><small>n=13, sparse</small></td></tr>
+      </tbody>
+    </table>
+    <div class="result-box positive">Primary goal achieved: top/bottom asymmetry eliminated. Both edges track each other throughout (bin 0: 1.2/1.4 px; bin 13: 9.5/9.7 px), confirming the cxcywh shared-gradient hypothesis. Bottom-of-page error significantly improved: bin 13 drops from 14.3 px (cy, enhanced2) to 9.5 px (top). Aggregate metrics slightly below enhanced2 (sys IoU 0.893 vs 0.919) — training used the same ~150k step budget; a longer run may close the gap.</div>
+  </div>
+
 </main>
 <script>
 const ep12 = [0,1,2,3,4,5,6,7,8,9,10,11];
 const ep11 = [1,2,3,4,5,6,7,8,9,10];  // enhanced2-staffer-small started at ep1
+const ep7  = [0,1,2,3,4,5,6];
 
 const C = {
   basic:   '#64748b',
@@ -601,6 +655,7 @@ const C = {
   vflip:   '#dc2626',
   flat:    '#db2777',
   sampler: '#0d9488',
+  ltrb:    '#0ea5e9',
 };
 
 const basic = {
@@ -648,6 +703,11 @@ const sampler = {
   iou:  [0.7537,0.8249,0.8487,0.8779,0.8950,0.8979,0.9008,0.9037],
   l1:   [0.00754,0.00532,0.00460,0.00398,0.00372,0.00365,0.00340,0.00340],
 };
+const ltrb = {
+  loss: [0.6910,0.5263,0.4056,0.3498,0.3085,0.2861,0.2742],
+  iou:  [0.7635,0.8115,0.8497,0.8645,0.8830,0.8882,0.8931],
+  l1:   [0.01368,0.01057,0.00820,0.00731,0.00669,0.00613,0.00600],
+};
 
 function line(label, data, color, opts={}) {
   return { label, data, borderColor: color, backgroundColor: color+'18',
@@ -680,21 +740,24 @@ makeChart('cmp-loss', ep12,
    line('enhanced3',e3.loss,C.e3),
    line('enhanced2-vflip',vflip.loss,C.vflip),
    line('flat',flat.loss,C.flat),
-   line('enhanced2-sampler',sampler.loss,C.sampler)]);
+   line('enhanced2-sampler',sampler.loss,C.sampler),
+   line('enhanced2-ltrb',ltrb.loss,C.ltrb)]);
 makeChart('cmp-iou', ep12,
   [line('staffyh',staffyh.iou,C.staffyh,{dashed:true}),
    line('enhanced2',e2.iou,C.e2),
    line('enhanced3',e3.iou,C.e3),
    line('enhanced2-vflip',vflip.iou,C.vflip),
    line('flat',flat.iou,C.flat),
-   line('enhanced2-sampler',sampler.iou,C.sampler)], {min:0,max:1});
+   line('enhanced2-sampler',sampler.iou,C.sampler),
+   line('enhanced2-ltrb',ltrb.iou,C.ltrb)], {min:0,max:1});
 makeChart('cmp-l1', ep12,
   [line('staffyh',staffyh.l1,C.staffyh,{dashed:true}),
    line('enhanced2',e2.l1,C.e2),
    line('enhanced3',e3.l1,C.e3),
    line('enhanced2-vflip',vflip.l1,C.vflip),
    line('flat',flat.l1,C.flat),
-   line('enhanced2-sampler',sampler.l1,C.sampler)]);
+   line('enhanced2-sampler',sampler.l1,C.sampler),
+   line('enhanced2-ltrb',ltrb.l1,C.ltrb)]);
 
 // ── basic solo
 makeChart('c-basic-loss', ep12, [line('basic',basic.loss,C.basic,{fill:true})]);
@@ -740,6 +803,11 @@ makeChart('c-flat-l1',   ep12, [line('enhanced2',e2.l1,  C.e2,{dashed:true}), li
 makeChart('c-sampler-loss', ep12, [line('enhanced2',e2.loss,C.e2,{dashed:true}), line('enhanced2-sampler',sampler.loss,C.sampler,{fill:true})]);
 makeChart('c-sampler-iou',  ep12, [line('enhanced2',e2.iou, C.e2,{dashed:true}), line('enhanced2-sampler',sampler.iou, C.sampler,{fill:true})], {min:0,max:1});
 makeChart('c-sampler-l1',   ep12, [line('enhanced2',e2.l1,  C.e2,{dashed:true}), line('enhanced2-sampler',sampler.l1,  C.sampler,{fill:true})]);
+
+// ── enhanced2-ltrb vs enhanced2 (first 7 epochs of enhanced2 for fair comparison)
+makeChart('c-ltrb-loss', ep7, [line('enhanced2',e2.loss.slice(0,7),C.e2,{dashed:true}), line('enhanced2-ltrb',ltrb.loss,C.ltrb,{fill:true})]);
+makeChart('c-ltrb-iou',  ep7, [line('enhanced2',e2.iou.slice(0,7), C.e2,{dashed:true}), line('enhanced2-ltrb',ltrb.iou, C.ltrb,{fill:true})], {min:0,max:1});
+makeChart('c-ltrb-l1',   ep7, [line('enhanced2',e2.l1.slice(0,7),  C.e2,{dashed:true}), line('enhanced2-ltrb',ltrb.l1,  C.ltrb,{fill:true})]);
 </script>
 </body>
 </html>

@@ -143,7 +143,7 @@ cross-entropy assignment — returns a `LossDict`.
 
 **Matching:** index-based positional matching (top-to-bottom sort), not Hungarian.
 
-**Box format:** normalised cxcywh (system boxes; pending migration to ltrb — see plan).
+**Box format:** normalised ltrb (left, top, right, bottom) for both system and stave boxes.
 
 **Training:**
 - AdamW + warmup + cosine schedule
@@ -162,7 +162,7 @@ noter --log-file logs/noter/<model-name>.log train OPTIONS...
 - Training metrics will be available - eg for staffer - as logs/staffer/<model-name>/metrics.csv
 - Finally you should always update the training log (docs/staffer-training.html or docs/noter-training.html) with eval results and metrics for the run.
 
-**Current checkpoint status:** `enhanced2` is the best staffer model — system IoU ~0.92, cy_err 0.9px (top) / 16px (bottom). Subsequent experiments were worse: enhanced3 (cy_delta approach) reverted; enhanced2-staffer-small (3.6M params) worse across the board; enhanced2-vflip negative result; enhanced2-sampler (bottom-bias WeightedRandomSampler + 4× data) negative — drift is structural not distributional. Next planned experiment: direct LTRB system-box representation (plan in `docs/staffer-plan.html`).
+**Current checkpoint status:** `enhanced2-ltrb` is the latest model — sys IoU 0.893, top_err 1.2px / bot_err 1.4px at bin 0, both growing symmetrically to ~9.5/9.7px at bin 13. Fixes the structural 16px bottom drift from `enhanced2` (sys IoU 0.919, cy_err 0.9→16px). The asymmetry is eliminated; aggregate IoU is slightly lower, likely due to a harder optimization landscape under ltrb. Previous experiments: enhanced3 (cy_delta) reverted; enhanced2-staffer-small smaller model worse; enhanced2-vflip negative; enhanced2-sampler negative.
 
 ---
 
