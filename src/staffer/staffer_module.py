@@ -44,6 +44,8 @@ class StafferModule(L.LightningModule):
             gt_sys_boxes,
             gt_stave_boxes,
             gt_assign,
+            aux_sys_boxes=self.model.aux_sys_boxes,
+            aux_stave_tb=self.model.aux_stave_tb,
         )
 
         # IoU metrics

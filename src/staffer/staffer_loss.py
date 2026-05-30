@@ -67,45 +67,35 @@ class StafferLoss(nn.Module):
         super().__init__()
         self.config = config
 
-    def _box_loss(
+    def _box_giou(
         self,
         pred_boxes: Tensor,  # (N, 4)
-        pred_logits: Tensor,  # (N, 1)
         gt_boxes: Tensor,  # (N, 4) padded
         num_gt: int,
-        num_queries: int,
-    ) -> tuple[Tensor, Tensor, Tensor]:
+    ) -> tuple[Tensor, Tensor]:
         matched = pred_boxes[:num_gt]
         gt = gt_boxes[:num_gt]
-
         box_loss = F.l1_loss(matched, gt)
         giou_loss = (1 - generalized_iou(matched, gt)).mean()
+        return box_loss, giou_loss
 
-        obj_target = torch.zeros(num_queries, device=pred_boxes.device)
-        obj_target[:num_gt] = 1.0
-        obj_loss = F.binary_cross_entropy_with_logits(
-            pred_logits.squeeze(-1), obj_target
-        )
-
-        return box_loss, giou_loss, obj_loss
-
-    def _stave_tb_loss(
+    def _obj_loss(
         self,
-        pred_tb: Tensor,  # (M, 2) — top, bottom predictions
-        pred_logits: Tensor,  # (M, 1)
-        gt_boxes: Tensor,  # (M, 4) ltrb padded
+        pred_logits: Tensor,  # (N, 1)
         num_gt: int,
         num_queries: int,
-    ) -> tuple[Tensor, Tensor]:
-        tb_loss = F.l1_loss(pred_tb[:num_gt], gt_boxes[:num_gt, [1, 3]])
-
-        obj_target = torch.zeros(num_queries, device=pred_tb.device)
+    ) -> Tensor:
+        obj_target = torch.zeros(num_queries, device=pred_logits.device)
         obj_target[:num_gt] = 1.0
-        obj_loss = F.binary_cross_entropy_with_logits(
-            pred_logits.squeeze(-1), obj_target
-        )
+        return F.binary_cross_entropy_with_logits(pred_logits.squeeze(-1), obj_target)
 
-        return tb_loss, obj_loss
+    def _tb_l1(
+        self,
+        pred_tb: Tensor,  # (M, 2) — top, bottom predictions
+        gt_boxes: Tensor,  # (M, 4) ltrb padded
+        num_gt: int,
+    ) -> Tensor:
+        return F.l1_loss(pred_tb[:num_gt], gt_boxes[:num_gt, [1, 3]])
 
     def _assignment_loss(
         self,
@@ -128,8 +118,21 @@ class StafferLoss(nn.Module):
         gt_sys_boxes: Tensor,
         gt_stave_boxes: Tensor,
         gt_assign: Tensor,
+        aux_sys_boxes: Tensor | None = None,  # (L, B, N, 4)
+        aux_stave_tb: Tensor | None = None,  # (L, B, M, 2)
     ) -> LossDict:
         B = pred_sys_boxes.shape[0]
+
+        # Box/giou/l1 are supervised at every decoder layer (deep supervision);
+        # objectness and assignment use the final layer only. Without aux stacks
+        # this reduces to single-layer supervision (the final prediction).
+        sys_box_layers = (
+            aux_sys_boxes if aux_sys_boxes is not None else pred_sys_boxes.unsqueeze(0)
+        )
+        stave_tb_layers = (
+            aux_stave_tb if aux_stave_tb is not None else pred_stave_tb.unsqueeze(0)
+        )
+        num_layers = sys_box_layers.shape[0]
 
         sys_box = torch.tensor(0.0, device=pred_sys_boxes.device)
         sys_giou = torch.tensor(0.0, device=pred_sys_boxes.device)
@@ -142,38 +145,34 @@ class StafferLoss(nn.Module):
             num_gt_staves = int((gt_assign[i] != -1).sum().item())
             num_gt_sys = int(gt_assign[i][gt_assign[i] != -1].max().item()) + 1
 
-            b, g, o = self._box_loss(
-                pred_sys_boxes[i],
-                pred_sys_logits[i],
-                gt_sys_boxes[i],
-                num_gt_sys,
-                self.config.num_system_queries,
-            )
-            sys_box = sys_box + b
-            sys_giou = sys_giou + g
-            sys_obj = sys_obj + o
+            for layer in range(num_layers):
+                b, g = self._box_giou(
+                    sys_box_layers[layer, i], gt_sys_boxes[i], num_gt_sys
+                )
+                sys_box = sys_box + b
+                sys_giou = sys_giou + g
+                stave_l1 = stave_l1 + self._tb_l1(
+                    stave_tb_layers[layer, i], gt_stave_boxes[i], num_gt_staves
+                )
 
-            b, o = self._stave_tb_loss(
-                pred_stave_tb[i],
-                pred_stave_logits[i],
-                gt_stave_boxes[i],
-                num_gt_staves,
-                self.config.num_stave_queries,
+            sys_obj = sys_obj + self._obj_loss(
+                pred_sys_logits[i], num_gt_sys, self.config.num_system_queries
             )
-            stave_l1 = stave_l1 + b
-            stave_obj = stave_obj + o
-
+            stave_obj = stave_obj + self._obj_loss(
+                pred_stave_logits[i], num_gt_staves, self.config.num_stave_queries
+            )
             assign = assign + self._assignment_loss(
                 pred_assign[i],
                 gt_assign[i],
                 num_gt_staves,
             )
 
+        box_norm = B * num_layers
         return LossDict(
-            sys_box=self.config.box_loss_multiplier * (sys_box / B),
-            sys_giou=self.config.box_loss_multiplier * (sys_giou / B),
+            sys_box=self.config.box_loss_multiplier * (sys_box / box_norm),
+            sys_giou=self.config.box_loss_multiplier * (sys_giou / box_norm),
             sys_obj=sys_obj / B,
-            stave_l1=self.config.box_loss_multiplier * (stave_l1 / B),
+            stave_l1=self.config.box_loss_multiplier * (stave_l1 / box_norm),
             stave_obj=stave_obj / B,
             assign=assign / B,
         )

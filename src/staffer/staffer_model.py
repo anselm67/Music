@@ -246,9 +246,13 @@ class StafferDecoder(nn.Module):
         B = memory.shape[0]
         sys_q = self.sys_queries.weight.unsqueeze(0).expand(B, -1, -1)
         stave_q = self.stave_queries.weight.unsqueeze(0).expand(B, -1, -1)
+        sys_layers, stave_layers = [], []
         for layer in self.layers:
             sys_q, stave_q = layer(sys_q, stave_q, memory)
-        return sys_q, stave_q  # (B, N, D), (B, M, D)
+            sys_layers.append(sys_q)
+            stave_layers.append(stave_q)
+        # (L, B, N, D), (L, B, M, D)
+        return torch.stack(sys_layers), torch.stack(stave_layers)
 
 
 def _even_anchor_logits(num_queries: int) -> Tensor:
@@ -292,37 +296,54 @@ class PredictionHeads(nn.Module):
 
     def forward(
         self,
-        sys_feats: Tensor,  # (B, N, D)
-        stave_feats: Tensor,  # (B, M, D)
-    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
-        sys_delta = self.sys_box_head(sys_feats)  # (B, N, 4) ltrb deltas
-        sys_boxes = torch.stack(
-            [
-                sys_delta[..., 0].sigmoid(),  # left (unanchored)
-                (sys_delta[..., 1] + self.sys_top_ref).sigmoid(),  # top
-                sys_delta[..., 2].sigmoid(),  # right (unanchored)
-                (sys_delta[..., 3] + self.sys_bottom_ref).sigmoid(),  # bottom
-            ],
-            dim=-1,
-        )  # (B, N, 4) ltrb
-        sys_logits = self.sys_obj_head(sys_feats)  # (B, N, 1)
+        sys_layers: Tensor,  # (L, B, N, D)
+        stave_layers: Tensor,  # (L, B, M, D)
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+        # Iterative box refinement: each decoder layer predicts a logit-space
+        # residual to the running vertical reference; the detached sigmoid output
+        # (re-linearised via logit, clamped) becomes the next layer's reference.
+        # Detaching means every layer must emit a valid box (trained via deep
+        # supervision), making the anchor content/count-conditional rather than a
+        # static per-slot constant. left/right stay unanchored, predicted per layer.
+        sys_ref_top: Tensor = self.sys_top_ref
+        sys_ref_bot: Tensor = self.sys_bottom_ref
+        sys_boxes_per_layer = []
+        for sys_feats in sys_layers:
+            d = self.sys_box_head(sys_feats)  # (B, N, 4) ltrb deltas
+            top = (d[..., 1] + sys_ref_top).sigmoid()
+            bot = (d[..., 3] + sys_ref_bot).sigmoid()
+            sys_boxes_per_layer.append(
+                torch.stack(
+                    [d[..., 0].sigmoid(), top, d[..., 2].sigmoid(), bot], dim=-1
+                )
+            )
+            sys_ref_top = torch.logit(top.detach(), eps=1e-6)
+            sys_ref_bot = torch.logit(bot.detach(), eps=1e-6)
+        sys_boxes_all = torch.stack(sys_boxes_per_layer)  # (L, B, N, 4)
 
-        stave_delta = self.stave_box_head(stave_feats)  # (B, M, 2)
-        stave_tb = torch.stack(
-            [
-                (stave_delta[..., 0] + self.stave_top_ref).sigmoid(),  # top
-                (stave_delta[..., 1] + self.stave_bottom_ref).sigmoid(),  # bottom
-            ],
-            dim=-1,
-        )  # (B, M, 2)
-        stave_logits = self.stave_obj_head(stave_feats)  # (B, M, 1)
-        assign_logits = self.assign_head(stave_feats)  # (B, M, N)
+        stave_ref_top: Tensor = self.stave_top_ref
+        stave_ref_bot: Tensor = self.stave_bottom_ref
+        stave_tb_per_layer = []
+        for stave_feats in stave_layers:
+            d = self.stave_box_head(stave_feats)  # (B, M, 2)
+            top = (d[..., 0] + stave_ref_top).sigmoid()
+            bot = (d[..., 1] + stave_ref_bot).sigmoid()
+            stave_tb_per_layer.append(torch.stack([top, bot], dim=-1))
+            stave_ref_top = torch.logit(top.detach(), eps=1e-6)
+            stave_ref_bot = torch.logit(bot.detach(), eps=1e-6)
+        stave_tb_all = torch.stack(stave_tb_per_layer)  # (L, B, M, 2)
+
+        sys_logits = self.sys_obj_head(sys_layers[-1])  # (B, N, 1)
+        stave_logits = self.stave_obj_head(stave_layers[-1])  # (B, M, 1)
+        assign_logits = self.assign_head(stave_layers[-1])  # (B, M, N)
         return (
-            sys_boxes,
+            sys_boxes_all[-1],
             sys_logits,
-            stave_tb,
+            stave_tb_all[-1],
             stave_logits,
             assign_logits,
+            sys_boxes_all,
+            stave_tb_all,
         )
 
 
@@ -336,9 +357,20 @@ class StafferModel(nn.Module):
 
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         memory = self.backbone(x)  # (B, P, D)
-        sys_feats, stave_feats = self.decoder(memory)  # (B, N, D), (B, M, D)
-        # returns: sys_boxes, sys_logits, stave_tb, stave_logits, assign_logits
-        return self.heads(sys_feats, stave_feats)
+        sys_layers, stave_layers = self.decoder(memory)  # (L, B, N, D), (L, B, M, D)
+        (
+            sys_boxes,
+            sys_logits,
+            stave_tb,
+            stave_logits,
+            assign_logits,
+            aux_sys_boxes,
+            aux_stave_tb,
+        ) = self.heads(sys_layers, stave_layers)
+        # Per-layer boxes for deep supervision; read by the module during training.
+        self.aux_sys_boxes = aux_sys_boxes
+        self.aux_stave_tb = aux_stave_tb
+        return sys_boxes, sys_logits, stave_tb, stave_logits, assign_logits
 
 
 # vscode - End of file.
