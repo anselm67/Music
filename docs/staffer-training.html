@@ -188,6 +188,12 @@
         <td>Direct ltrb box format; GIoU area clamping fix; sampler retained</td>
         <td><span class="badge badge-amber">partial</span></td>
       </tr>
+      <tr>
+        <td><span class="tag">enhanced2-ltrb-anchor</span></td><td>2026-05-30</td><td>256</td><td>16</td>
+        <td>0.219</td><td>0.914</td><td>stave L1 0.00490†</td>
+        <td>Learnable vertical query anchors (DAB-style reference points)</td>
+        <td><span class="badge badge-green">best ltrb</span></td>
+      </tr>
     </tbody>
   </table>
   <p style="font-size:0.82rem;color:var(--muted)">† stave L1 not comparable to prior runs: enhanced2-ltrb stave head outputs (top, bottom) directly; prior runs output (cy, h).</p>
@@ -639,6 +645,50 @@
     <div class="result-box positive">Primary goal achieved: top/bottom asymmetry eliminated. Both edges track each other throughout (bin 0: 1.2/1.4 px; bin 13: 9.5/9.7 px), confirming the cxcywh shared-gradient hypothesis. Bottom-of-page error significantly improved: bin 13 drops from 14.3 px (cy, enhanced2) to 9.5 px (top). Aggregate metrics slightly below enhanced2 (sys IoU 0.893 vs 0.919) — training used the same ~150k step budget; a longer run may close the gap.</div>
   </div>
 
+  <!-- ════════════════════════════════════════════ enhanced2-ltrb-anchor -->
+  <div class="session">
+    <div class="session-header">
+      <h2><span class="tag">enhanced2-ltrb-anchor</span></h2>
+      <span class="session-meta">2026-05-30 · tag: <code>train/enhanced2-ltrb-anchor</code> · 7 epochs · D=256 H=8</span>
+    </div>
+    <p>Hypothesis: the residual top→bottom error growth in enhanced2-ltrb comes from under-trained high query slots. Matching is index-based top-to-bottom (slot <em>i</em> → <em>i</em>-th system/stave from the page top), so the high slots only ever see rare bottom-of-page content and learn their position poorly. Fix (DAB-DETR style): give each query a learnable logit-space anchor initialised evenly down the page at <code>(i+0.5)/N</code>; the box head predicts a residual added to the anchor before the sigmoid, so slot <em>i</em> starts near its vertical position instead of collapsing to 0.5. Only the vertical edges are anchored (system top/bottom, stave top/bottom); left/right stay unanchored. Change is internal to <code>PredictionHeads</code> — output semantics unchanged.</p>
+    <h3>Changes from enhanced2-ltrb</h3>
+    <div class="changes">
+      <div class="change-item"><span class="change-sym add">+</span> Learnable vertical anchors on system (top, bottom) and stave (top, bottom) queries</div>
+      <div class="change-item"><span class="change-sym add">+</span> Box heads predict logit-space residual: <code>(delta + inverse_sigmoid(anchor)).sigmoid()</code></div>
+      <div class="change-item"><span class="change-sym slate">·</span> All else identical to enhanced2-ltrb (350k data, <code>max_sys_bottom</code> sampler, 7 epochs)</div>
+    </div>
+    <h3>Training curves</h3>
+    <div class="charts">
+      <div class="chart-card"><h4>Val loss — vs enhanced2-ltrb</h4><canvas id="c-anchor-loss"></canvas></div>
+      <div class="chart-card"><h4>Val sys IoU — vs enhanced2-ltrb</h4><canvas id="c-anchor-iou"></canvas></div>
+      <div class="chart-card"><h4>Val stave L1 — vs enhanced2-ltrb</h4><canvas id="c-anchor-l1"></canvas></div>
+    </div>
+    <h3>Eval — stave top/bottom error by vertical position (500 samples, H=960 px)</h3>
+    <table class="eval-table">
+      <thead><tr><th>Bin</th><th>Y range</th><th>n</th><th>top_err</th><th>bot_err</th><th></th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td>0–60</td><td>350</td><td>0.9 px</td><td>0.9 px</td><td><span class="eval-bar" style="width:5px;background:#059669"></span></td></tr>
+        <tr><td>1</td><td>60–120</td><td>333</td><td>1.9 px</td><td>2.0 px</td><td><span class="eval-bar" style="width:10px;background:#059669"></span></td></tr>
+        <tr><td>2</td><td>120–180</td><td>464</td><td>2.1 px</td><td>2.2 px</td><td><span class="eval-bar" style="width:11px;background:#65a30d"></span></td></tr>
+        <tr><td>3</td><td>180–240</td><td>429</td><td>3.0 px</td><td>3.7 px</td><td><span class="eval-bar" style="width:19px;background:#84cc16"></span></td></tr>
+        <tr><td>4</td><td>240–300</td><td>317</td><td>3.9 px</td><td>3.7 px</td><td><span class="eval-bar" style="width:20px;background:#84cc16"></span></td></tr>
+        <tr><td>5</td><td>300–360</td><td>264</td><td>4.9 px</td><td>5.0 px</td><td><span class="eval-bar" style="width:26px;background:#eab308"></span></td></tr>
+        <tr><td>6</td><td>360–420</td><td>244</td><td>5.3 px</td><td>5.5 px</td><td><span class="eval-bar" style="width:29px;background:#f97316"></span></td></tr>
+        <tr><td>7</td><td>420–480</td><td>239</td><td>7.0 px</td><td>7.3 px</td><td><span class="eval-bar" style="width:38px;background:#ef4444"></span></td></tr>
+        <tr><td>8</td><td>480–540</td><td>201</td><td>7.1 px</td><td>7.6 px</td><td><span class="eval-bar" style="width:39px;background:#ef4444"></span></td></tr>
+        <tr><td>9</td><td>540–600</td><td>176</td><td>6.2 px</td><td>6.2 px</td><td><span class="eval-bar" style="width:33px;background:#f97316"></span></td></tr>
+        <tr><td>10</td><td>600–660</td><td>159</td><td>9.2 px</td><td>9.4 px</td><td><span class="eval-bar" style="width:49px;background:#ef4444"></span></td></tr>
+        <tr><td>11</td><td>660–720</td><td>134</td><td>7.0 px</td><td>7.2 px</td><td><span class="eval-bar" style="width:38px;background:#ef4444"></span></td></tr>
+        <tr><td>12</td><td>720–780</td><td>81</td><td>12.0 px</td><td>12.7 px</td><td><span class="eval-bar" style="width:66px;background:#dc2626"></span></td></tr>
+        <tr><td>13</td><td>780–840</td><td>39</td><td>12.9 px</td><td>13.6 px</td><td><span class="eval-bar" style="width:71px;background:#b91c1c"></span></td></tr>
+        <tr class="warn"><td>14</td><td>840–900</td><td>16</td><td>13.1 px</td><td>12.9 px</td><td><small>n=16, sparse</small></td></tr>
+      </tbody>
+    </table>
+    <div class="result-box positive">Best ltrb model. Aggregate sys IoU recovered to 0.914 (vs 0.893 for enhanced2-ltrb) — nearly matching enhanced2's 0.919 while keeping ltrb's symmetric edges. Top-of-page precision restored to enhanced2 levels (bin 0: 0.9 px, vs 1.2 px for plain ltrb). Beat the parent at every epoch on loss, sys IoU and stave L1, and the cold-start stave L1 was ~4× lower (anchors place queries before training). Sparse bottom bin no longer collapses (bin 14: 13 px vs 34 px for ltrb).</div>
+    <div class="result-box neutral">But the bottom-of-page error growth is <em>not</em> solved: bins 12–14 still sit at ~12–13 px, comparable to enhanced2-ltrb and enhanced2. The n-weighted mean error (bins 0–13) is essentially tied with plain ltrb (4.4 px). This validates the marginal-anchor limitation: a single per-slot scalar can only encode the count-averaged position of slot <em>i</em>, but the i-th system's true vertical position depends on how many systems are on the page (slot 1 ranges ~0.06→0.50 depending on count). The image-conditioned head must still absorb that count-dependent variance, and does so least well for the rarely-active high slots. The genuine fix for the bottom is count-conditional anchoring (anchor at <code>(i+0.5)/num_gt</code> via a two-stage decoder) or a vertical containment loss — next experiments.</div>
+  </div>
+
 </main>
 <script>
 const ep12 = [0,1,2,3,4,5,6,7,8,9,10,11];
@@ -656,6 +706,7 @@ const C = {
   flat:    '#db2777',
   sampler: '#0d9488',
   ltrb:    '#0ea5e9',
+  anchor:  '#7c3aed',
 };
 
 const basic = {
@@ -708,6 +759,11 @@ const ltrb = {
   iou:  [0.7635,0.8115,0.8497,0.8645,0.8830,0.8882,0.8931],
   l1:   [0.01368,0.01057,0.00820,0.00731,0.00669,0.00613,0.00600],
 };
+const anchor = {
+  loss: [0.6646,0.4358,0.3214,0.2914,0.2598,0.2223,0.2187],
+  iou:  [0.7713,0.8452,0.8785,0.8853,0.8984,0.9125,0.9140],
+  l1:   [0.01273,0.00811,0.00652,0.00642,0.00532,0.00493,0.00490],
+};
 
 function line(label, data, color, opts={}) {
   return { label, data, borderColor: color, backgroundColor: color+'18',
@@ -741,7 +797,8 @@ makeChart('cmp-loss', ep12,
    line('enhanced2-vflip',vflip.loss,C.vflip),
    line('flat',flat.loss,C.flat),
    line('enhanced2-sampler',sampler.loss,C.sampler),
-   line('enhanced2-ltrb',ltrb.loss,C.ltrb)]);
+   line('enhanced2-ltrb',ltrb.loss,C.ltrb),
+   line('enhanced2-ltrb-anchor',anchor.loss,C.anchor)]);
 makeChart('cmp-iou', ep12,
   [line('staffyh',staffyh.iou,C.staffyh,{dashed:true}),
    line('enhanced2',e2.iou,C.e2),
@@ -749,7 +806,8 @@ makeChart('cmp-iou', ep12,
    line('enhanced2-vflip',vflip.iou,C.vflip),
    line('flat',flat.iou,C.flat),
    line('enhanced2-sampler',sampler.iou,C.sampler),
-   line('enhanced2-ltrb',ltrb.iou,C.ltrb)], {min:0,max:1});
+   line('enhanced2-ltrb',ltrb.iou,C.ltrb),
+   line('enhanced2-ltrb-anchor',anchor.iou,C.anchor)], {min:0,max:1});
 makeChart('cmp-l1', ep12,
   [line('staffyh',staffyh.l1,C.staffyh,{dashed:true}),
    line('enhanced2',e2.l1,C.e2),
@@ -757,7 +815,8 @@ makeChart('cmp-l1', ep12,
    line('enhanced2-vflip',vflip.l1,C.vflip),
    line('flat',flat.l1,C.flat),
    line('enhanced2-sampler',sampler.l1,C.sampler),
-   line('enhanced2-ltrb',ltrb.l1,C.ltrb)]);
+   line('enhanced2-ltrb',ltrb.l1,C.ltrb),
+   line('enhanced2-ltrb-anchor',anchor.l1,C.anchor)]);
 
 // ── basic solo
 makeChart('c-basic-loss', ep12, [line('basic',basic.loss,C.basic,{fill:true})]);
@@ -808,6 +867,11 @@ makeChart('c-sampler-l1',   ep12, [line('enhanced2',e2.l1,  C.e2,{dashed:true}),
 makeChart('c-ltrb-loss', ep7, [line('enhanced2',e2.loss.slice(0,7),C.e2,{dashed:true}), line('enhanced2-ltrb',ltrb.loss,C.ltrb,{fill:true})]);
 makeChart('c-ltrb-iou',  ep7, [line('enhanced2',e2.iou.slice(0,7), C.e2,{dashed:true}), line('enhanced2-ltrb',ltrb.iou, C.ltrb,{fill:true})], {min:0,max:1});
 makeChart('c-ltrb-l1',   ep7, [line('enhanced2',e2.l1.slice(0,7),  C.e2,{dashed:true}), line('enhanced2-ltrb',ltrb.l1,  C.ltrb,{fill:true})]);
+
+// ── enhanced2-ltrb-anchor vs enhanced2-ltrb
+makeChart('c-anchor-loss', ep7, [line('enhanced2-ltrb',ltrb.loss,C.ltrb,{dashed:true}), line('enhanced2-ltrb-anchor',anchor.loss,C.anchor,{fill:true})]);
+makeChart('c-anchor-iou',  ep7, [line('enhanced2-ltrb',ltrb.iou, C.ltrb,{dashed:true}), line('enhanced2-ltrb-anchor',anchor.iou, C.anchor,{fill:true})], {min:0,max:1});
+makeChart('c-anchor-l1',   ep7, [line('enhanced2-ltrb',ltrb.l1,  C.ltrb,{dashed:true}), line('enhanced2-ltrb-anchor',anchor.l1,  C.anchor,{fill:true})]);
 </script>
 </body>
 </html>
