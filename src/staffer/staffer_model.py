@@ -2,8 +2,9 @@
 
 from dataclasses import asdict, dataclass, field
 
+import torch
 import torch.nn.functional as F
-from torch import Tensor, nn, randn
+from torch import Tensor, arange, log, nn, randn
 from torchvision.transforms import InterpolationMode
 
 from utils import current_commit
@@ -250,6 +251,16 @@ class StafferDecoder(nn.Module):
         return sys_q, stave_q  # (B, N, D), (B, M, D)
 
 
+def _even_anchor_logits(num_queries: int) -> Tensor:
+    """Logit-space references for evenly-spaced vertical anchors.
+
+    Query i anchors at (i + 0.5) / num_queries in [0, 1], returned as the
+    inverse-sigmoid (logit) so it can be added to a head delta before sigmoid.
+    """
+    anchors = (arange(num_queries) + 0.5) / num_queries
+    return log(anchors) - log(1.0 - anchors)
+
+
 class PredictionHeads(nn.Module):
     def __init__(self, config: StafferConfig):
         super().__init__()
@@ -261,6 +272,11 @@ class PredictionHeads(nn.Module):
             nn.Linear(D, 4),
         )
         self.sys_obj_head = nn.Linear(D, 1)
+        # Learnable logit-space anchors for the vertical edges (top, bottom),
+        # initialised evenly spaced down the page. left/right are unanchored.
+        sys_anchor = _even_anchor_logits(config.num_system_queries)
+        self.sys_top_ref = nn.Parameter(sys_anchor.clone())
+        self.sys_bottom_ref = nn.Parameter(sys_anchor.clone())
 
         self.stave_box_head = nn.Sequential(
             nn.Linear(D, D),
@@ -268,6 +284,10 @@ class PredictionHeads(nn.Module):
             nn.Linear(D, 2),  # predict top, bottom — x inherited from parent system
         )
         self.stave_obj_head = nn.Linear(D, 1)
+        stave_anchor = _even_anchor_logits(config.num_stave_queries)
+        self.stave_top_ref = nn.Parameter(stave_anchor.clone())
+        self.stave_bottom_ref = nn.Parameter(stave_anchor.clone())
+
         self.assign_head = nn.Linear(D, config.num_system_queries)
 
     def forward(
@@ -275,9 +295,26 @@ class PredictionHeads(nn.Module):
         sys_feats: Tensor,  # (B, N, D)
         stave_feats: Tensor,  # (B, M, D)
     ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
-        sys_boxes = self.sys_box_head(sys_feats).sigmoid()  # (B, N, 4) ltrb
+        sys_delta = self.sys_box_head(sys_feats)  # (B, N, 4) ltrb deltas
+        sys_boxes = torch.stack(
+            [
+                sys_delta[..., 0].sigmoid(),  # left (unanchored)
+                (sys_delta[..., 1] + self.sys_top_ref).sigmoid(),  # top
+                sys_delta[..., 2].sigmoid(),  # right (unanchored)
+                (sys_delta[..., 3] + self.sys_bottom_ref).sigmoid(),  # bottom
+            ],
+            dim=-1,
+        )  # (B, N, 4) ltrb
         sys_logits = self.sys_obj_head(sys_feats)  # (B, N, 1)
-        stave_tb = self.stave_box_head(stave_feats).sigmoid()  # (B, M, 2) — top, bottom
+
+        stave_delta = self.stave_box_head(stave_feats)  # (B, M, 2)
+        stave_tb = torch.stack(
+            [
+                (stave_delta[..., 0] + self.stave_top_ref).sigmoid(),  # top
+                (stave_delta[..., 1] + self.stave_bottom_ref).sigmoid(),  # bottom
+            ],
+            dim=-1,
+        )  # (B, M, 2)
         stave_logits = self.stave_obj_head(stave_feats)  # (B, M, 1)
         assign_logits = self.assign_head(stave_feats)  # (B, M, N)
         return (
