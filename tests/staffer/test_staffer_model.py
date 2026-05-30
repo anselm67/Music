@@ -25,3 +25,13 @@ def test_forward_shapes_and_backward() -> None:
     assert sys_lr.min() >= 0.0 and sys_lr.max() <= 1.0
 
     stave_tb.sum().backward()
+
+
+def test_stave_anchors_have_positive_initial_height() -> None:
+    # Bottom anchor must sit below the top anchor at init for every slot, so the
+    # derived system hull is non-degenerate before any training.
+    config = StafferConfig()
+    model = StafferModel(config)
+    top = model.heads.stave_top_ref.sigmoid()
+    bot = model.heads.stave_bottom_ref.sigmoid()
+    assert (bot > top).all()

@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass, field
 
 import torch
 import torch.nn.functional as F
-from torch import Tensor, arange, log, nn, randn
+from torch import Tensor, nn, randn
 from torchvision.transforms import InterpolationMode
 
 from utils import current_commit
@@ -245,16 +245,6 @@ class StafferDecoder(nn.Module):
         return sys_q, stave_q
 
 
-def _even_anchor_logits(num_queries: int) -> Tensor:
-    """Logit-space references for evenly-spaced vertical anchors.
-
-    Query i anchors at (i + 0.5) / num_queries in [0, 1], returned as the
-    inverse-sigmoid (logit) so it can be added to a head delta before sigmoid.
-    """
-    anchors = (arange(num_queries) + 0.5) / num_queries
-    return log(anchors) - log(1.0 - anchors)
-
-
 class PredictionHeads(nn.Module):
     def __init__(self, config: StafferConfig):
         super().__init__()
@@ -279,9 +269,19 @@ class PredictionHeads(nn.Module):
             nn.Linear(D, 2),  # predict top, bottom — x inherited from parent system
         )
         self.stave_obj_head = nn.Linear(D, 1)
-        stave_anchor = _even_anchor_logits(config.num_stave_queries)
-        self.stave_top_ref = nn.Parameter(stave_anchor.clone())
-        self.stave_bottom_ref = nn.Parameter(stave_anchor.clone())
+        # Each slot i is centred at (i + 0.5) / M with a small initial height, so a
+        # query starts as a thin box at its band rather than a zero-height line
+        # (top == bottom would make the derived system hull degenerate at init).
+        # The box head learns a logit-space residual from these anchors.
+        M = config.num_stave_queries
+        centers = (torch.arange(M) + 0.5) / M
+        half_height = 0.25 / M  # a quarter of the per-slot pitch
+        self.stave_top_ref = nn.Parameter(
+            torch.logit((centers - half_height).clamp(1e-4, 1 - 1e-4))
+        )
+        self.stave_bottom_ref = nn.Parameter(
+            torch.logit((centers + half_height).clamp(1e-4, 1 - 1e-4))
+        )
 
         # Boundary flag: 1 when a stave starts a new system. cumsum recovers the
         # stave->system grouping (contiguous by construction).
