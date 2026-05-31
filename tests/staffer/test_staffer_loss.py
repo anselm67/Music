@@ -2,7 +2,25 @@ import pytest
 import torch
 from torch import Tensor
 
-from staffer import StafferConfig, StafferLoss, LossDict
+from staffer import StafferConfig, StafferLoss, LossDict, assign_staves
+
+
+def anchor_centers(config: StafferConfig) -> Tensor:
+    """The frozen uniform anchor grid the model routes GT staves into."""
+    M = config.num_stave_queries
+    return (torch.arange(M) + 0.5) / M
+
+
+def make_assign_q(
+    config: StafferConfig,
+    gt_stave_boxes: list[Tensor],
+    gt_assign: list[Tensor],
+) -> list[Tensor]:
+    centers = anchor_centers(config)
+    return [
+        assign_staves(centers, gt_stave_boxes[i], int((gt_assign[i] != -1).sum()))
+        for i in range(len(gt_assign))
+    ]
 
 
 def make_boxes(n: int, padded: int) -> Tensor:
@@ -39,7 +57,15 @@ class TestStafferLoss:
     def _make_inputs(
         self, config: StafferConfig, num_sys: int, num_staves: int, B: int = 2
     ) -> tuple[
-        Tensor, Tensor, Tensor, Tensor, Tensor, list[Tensor], list[Tensor], list[Tensor]
+        Tensor,
+        Tensor,
+        Tensor,
+        Tensor,
+        Tensor,
+        list[Tensor],
+        list[Tensor],
+        list[Tensor],
+        list[Tensor],
     ]:
         N, M = config.num_system_queries, config.num_stave_queries
         pred_stave_tb = torch.rand(B, M, 2)
@@ -50,6 +76,7 @@ class TestStafferLoss:
         gt_sys_boxes = [make_boxes(num_sys, N) for _ in range(B)]
         gt_stave_boxes = [make_boxes(num_staves, M) for _ in range(B)]
         gt_assign = [make_assign(num_staves, num_sys, M) for _ in range(B)]
+        assign_q = make_assign_q(config, gt_stave_boxes, gt_assign)
         return (
             pred_stave_tb,
             pred_stave_logits,
@@ -59,6 +86,7 @@ class TestStafferLoss:
             gt_sys_boxes,
             gt_stave_boxes,
             gt_assign,
+            assign_q,
         )
 
     def test_loss_is_scalar(self, loss: StafferLoss, config: StafferConfig) -> None:
@@ -90,13 +118,15 @@ class TestStafferLoss:
         gt_sys = make_boxes(3, N)
         gt_stave = make_boxes(5, M)
         gt_assign = make_assign(5, 3, M)
+        assign_q = make_assign_q(config, [gt_stave], [gt_assign])
+        q = assign_q[0]
 
         stave_logits = torch.zeros(B, M, 1)
         boundary_logits = torch.zeros(B, M, 1)
         sys_logits = torch.zeros(B, N, 1)
 
         good_stave_tb = torch.ones(B, M, 2)
-        good_stave_tb[0, :5] = gt_stave[:5, [1, 3]]
+        good_stave_tb[0, q] = gt_stave[:5, [1, 3]]
         good_sys_lr = torch.ones(B, N, 2)
         good_sys_lr[0, :3] = gt_sys[:3][:, [0, 2]]
 
@@ -112,6 +142,7 @@ class TestStafferLoss:
             [gt_sys],
             [gt_stave],
             [gt_assign],
+            assign_q,
         )
         bad_loss = loss(
             bad_stave_tb,
@@ -122,6 +153,7 @@ class TestStafferLoss:
             [gt_sys],
             [gt_stave],
             [gt_assign],
+            assign_q,
         )
 
         assert good_loss.total() < bad_loss.total()
@@ -140,6 +172,7 @@ class TestStafferLoss:
         gt_sys_boxes = [make_boxes(3, N) for _ in range(B)]
         gt_stave_boxes = [make_boxes(5, M) for _ in range(B)]
         gt_assign = [make_assign(5, 3, M) for _ in range(B)]
+        assign_q = make_assign_q(config, gt_stave_boxes, gt_assign)
 
         result = loss(
             pred_stave_tb,
@@ -150,6 +183,7 @@ class TestStafferLoss:
             gt_sys_boxes,
             gt_stave_boxes,
             gt_assign,
+            assign_q,
         )
         result.total().backward()
 
@@ -188,9 +222,11 @@ class TestStafferLoss:
         gt_sys[0] = sys_box
         gt_assign = torch.full((M,), -1, dtype=torch.long)
         gt_assign[:3] = 0
+        assign_q = make_assign_q(config, [gt_stave], [gt_assign])
+        q = assign_q[0]
 
         pred_stave_tb = torch.zeros(1, M, 2)
-        pred_stave_tb[0, :3] = staves[:, [1, 3]]
+        pred_stave_tb[0, q] = staves[:, [1, 3]]
         pred_sys_lr = torch.zeros(1, N, 2)
         pred_sys_lr[0, 0] = torch.tensor([0.1, 0.9])
 
@@ -203,5 +239,6 @@ class TestStafferLoss:
             [gt_sys],
             [gt_stave],
             [gt_assign],
+            assign_q,
         )
         assert result.sys_giou.abs() < 1e-4

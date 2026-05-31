@@ -33,6 +33,7 @@ from staffer import (
     StafferDataModule,
     StafferDataset,
     StafferModule,
+    assign_staves,
 )
 
 HOME = Path("/home/anselm/datasets/PDMX")
@@ -552,10 +553,20 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
         img = img.squeeze(0).cpu().numpy()
         img = np.stack([img] * 3, axis=-1) * 255
         width_height = img.shape[1], img.shape[0]
-        # Stave -> system grouping: cumsum of the boundary flag (1 = new system).
+        # Stave -> system grouping. Active queries are non-contiguous, so the
+        # boundary cumsum must run over only the active staves, ordered top-to-
+        # bottom, then scatter the resulting group id back onto their slots.
         stave_logit = pred_stave_logits.squeeze(-1)
-        boundary = (pred_boundary_logits.squeeze(-1) > 0.0).long()
-        group = (boundary.cumsum(0) - 1).clamp(0, pred_sys_lr.shape[0] - 1)
+        active = (stave_logit > 0.0).nonzero(as_tuple=True)[0]
+        active = active[pred_stave_tb[active, 0].argsort()]  # top-to-bottom
+        active_boundary = (pred_boundary_logits.squeeze(-1)[active] > 0.0).long()
+        active_group = (active_boundary.cumsum(0) - 1).clamp(
+            0, pred_sys_lr.shape[0] - 1
+        )
+        group = torch.full(
+            (pred_stave_tb.shape[0],), -1, dtype=torch.long, device=pred_stave_tb.device
+        )
+        group[active] = active_group
         # System boxes are derived as the hull of each system's active staves.
         for sys_index in range(pred_sys_logits.shape[0]):
             print(f"\tsystem[{sys_index}]: {pred_sys_logits[sys_index].item():.2f}")
@@ -610,6 +621,7 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
         ckpt_path, config=config, weights_only=False, map_location=device
     )
     model.eval()
+    anchor_c = model.model.heads.anchor_centers().cpu()
 
     # bins[b] = list of (top_err_px, bot_err_px)
     bins: list[list[tuple[float, float]]] = [[] for _ in range(NUM_BINS)]
@@ -625,13 +637,15 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
             )
             pred_stave_tb = pred_stave_tb.squeeze(0)  # (num_stave_queries, 2)
 
-            for i in range(gt_assign.shape[0]):
-                if gt_assign[i].item() < 0:
-                    break
+            # GT stave i is owned by query q[i], not slot i (free assignment).
+            num_gt = int((gt_assign != -1).sum())
+            q = assign_staves(anchor_c, gt_staff, num_gt)
+            for i in range(num_gt):
+                qi = int(q[i])
                 gt_top = gt_staff[i, 1].item() * H
                 gt_bot = gt_staff[i, 3].item() * H
-                pred_top = pred_stave_tb[i, 0].item() * H
-                pred_bot = pred_stave_tb[i, 1].item() * H
+                pred_top = pred_stave_tb[qi, 0].item() * H
+                pred_bot = pred_stave_tb[qi, 1].item() * H
                 top_err = abs(pred_top - gt_top)
                 bot_err = abs(pred_bot - gt_bot)
                 bin_idx = min(int(gt_top / bin_size), NUM_BINS - 1)

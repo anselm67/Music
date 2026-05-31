@@ -10,7 +10,7 @@ from torch import Tensor
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
 
-from .staffer_loss import StafferLoss, generalized_iou
+from .staffer_loss import StafferLoss, assign_staves, generalized_iou
 from .staffer_model import StafferConfig, StafferModel
 
 
@@ -35,6 +35,14 @@ class StafferModule(L.LightningModule):
             pred_sys_logits,
         ) = self.model(images)
 
+        # Route each GT stave to the query whose fixed anchor sits nearest it. The
+        # same assignment drives both the loss and the IoU/L1 metrics.
+        anchor_c = self.model.heads.anchor_centers()
+        assign_q = [
+            assign_staves(anchor_c, gt_stave_boxes[i], int((gt_assign[i] != -1).sum()))
+            for i in range(len(gt_assign))
+        ]
+
         loss = self.loss_fn.forward(
             pred_stave_tb,
             pred_stave_logits,
@@ -44,13 +52,14 @@ class StafferModule(L.LightningModule):
             gt_sys_boxes,
             gt_stave_boxes,
             gt_assign,
+            assign_q,
         )
 
         # IoU metrics — the system box is derived from its staves' hull.
         sys_iou = self._mean_sys_iou(
-            pred_stave_tb, pred_sys_lr, gt_sys_boxes, gt_assign
+            pred_stave_tb, pred_sys_lr, gt_sys_boxes, gt_assign, assign_q
         )
-        stave_l1 = self._mean_stave_l1(pred_stave_tb, gt_stave_boxes, gt_assign)
+        stave_l1 = self._mean_stave_l1(pred_stave_tb, gt_stave_boxes, assign_q)
 
         self.log(f"{stage}/loss", loss.total(), prog_bar=True)
         self.log(f"{stage}/sys_iou", sys_iou)
@@ -69,15 +78,17 @@ class StafferModule(L.LightningModule):
         pred_sys_lr: Tensor,  # (B, N, 2) — left, right
         gt_boxes: list[Tensor],  # list of (N, 4) padded
         gt_assign: list[Tensor],
+        assign_q: list[Tensor],  # list of (G,) query slot owning each GT stave
     ) -> Tensor:
         """IoU of the derived system boxes (hull of each system's staves)."""
         ious = []
         for i in range(pred_stave_tb.shape[0]):
             assign = gt_assign[i]
-            num_gt_staves = int((assign != -1).sum().item())
+            q = assign_q[i]
+            num_gt_staves = q.shape[0]
             num_gt_sys = int(assign[assign != -1].max().item()) + 1
             a = assign[:num_gt_staves]
-            tb = pred_stave_tb[i][:num_gt_staves]
+            tb = pred_stave_tb[i][q]
             derived = []
             for j in range(num_gt_sys):
                 mask = a == j
@@ -96,14 +107,14 @@ class StafferModule(L.LightningModule):
         self,
         pred_tb: Tensor,  # (B, M, 2) — top, bottom
         gt_boxes: list[Tensor],  # list of (M, 4) padded
-        gt_assign: list[Tensor],
+        assign_q: list[Tensor],  # list of (G,) query slot owning each GT stave
     ) -> Tensor:
         """Mean L1 error on (top, bottom) across GT staves."""
         errors = []
         for i in range(pred_tb.shape[0]):
-            num_gt = int((gt_assign[i] != -1).sum().item())
-            matched = pred_tb[i][:num_gt]
-            gt = gt_boxes[i][:num_gt, [1, 3]]
+            q = assign_q[i]
+            matched = pred_tb[i][q]
+            gt = gt_boxes[i][: q.shape[0], [1, 3]]
             errors.append(torch.abs(matched - gt).mean())
         return torch.stack(errors).mean()
 

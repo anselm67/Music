@@ -260,44 +260,51 @@ class PredictionHeads(nn.Module):
         )
         self.sys_obj_head = nn.Linear(D, 1)
 
-        # Stave stream is primary: predict (top, bottom) as a residual to static
-        # learnable per-slot vertical anchors (staves march at ~constant pitch, so
-        # slot i carries a strong top-position prior).
+        # Stave stream is primary: predict (top, bottom) as a residual to a FIXED
+        # per-slot vertical anchor grid. The anchors are frozen (requires_grad=False)
+        # so each slot's y position is enforced; GT staves are routed to the
+        # nearest-anchor query at train time (see assign_staves), making the
+        # slot->stave mapping free and non-contiguous rather than positional.
         self.stave_box_head = nn.Sequential(
             nn.Linear(D, D),
             nn.GELU(),
             nn.Linear(D, 2),  # predict top, bottom — x inherited from parent system
         )
         self.stave_obj_head = nn.Linear(D, 1)
-        # Each slot i is centred at (i + 0.5) / M with a small initial height, so a
-        # query starts as a thin box at its band rather than a zero-height line
-        # (top == bottom would make the derived system hull degenerate at init).
-        # The box head learns a logit-space residual from these anchors.
+        # Slot i is centred at (i + 0.5) / M with a small initial height, so a query
+        # starts as a thin box at its band rather than a zero-height line (top ==
+        # bottom would make the derived system hull degenerate at init). The box head
+        # learns a logit-space residual from these frozen anchors.
         M = config.num_stave_queries
         centers = (torch.arange(M) + 0.5) / M
         half_height = 0.25 / M  # a quarter of the per-slot pitch
         self.stave_top_ref = nn.Parameter(
-            torch.logit((centers - half_height).clamp(1e-4, 1 - 1e-4))
+            torch.logit((centers - half_height).clamp(1e-4, 1 - 1e-4)),
+            requires_grad=False,
         )
         self.stave_bottom_ref = nn.Parameter(
-            torch.logit((centers + half_height).clamp(1e-4, 1 - 1e-4))
+            torch.logit((centers + half_height).clamp(1e-4, 1 - 1e-4)),
+            requires_grad=False,
         )
 
         # Boundary flag: 1 when a stave starts a new system. cumsum recovers the
         # stave->system grouping (contiguous by construction).
         self.boundary_head = nn.Linear(D, 1)
 
+    def anchor_centers(self) -> Tensor:
+        """Fixed per-slot vertical centers (M,) used to route GT staves to queries."""
+        return (self.stave_top_ref.sigmoid() + self.stave_bottom_ref.sigmoid()) / 2
+
     def forward(
         self,
         sys_feats: Tensor,  # (B, N, D)
         stave_feats: Tensor,  # (B, M, D)
     ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
-        # Stave vertical edges: predict a residual to the static learnable per-slot
-        # anchor. Staves march at ~constant pitch, so the anchor already carries a
-        # strong top-position prior.
-        d = self.stave_box_head(stave_feats)  # (B, M, 2)
-        top = (d[..., 0] + self.stave_top_ref).sigmoid()
-        bot = (d[..., 1] + self.stave_bottom_ref).sigmoid()
+        # Stave vertical edges: predict a residual to the frozen per-slot anchor
+        # grid. The anchor fixes the slot's y band; the residual places the box.
+        residual = self.stave_box_head(stave_feats)  # (B, M, 2)
+        top = (residual[..., 0] + self.stave_top_ref).sigmoid()
+        bot = (residual[..., 1] + self.stave_bottom_ref).sigmoid()
         stave_tb = torch.stack([top, bot], dim=-1)  # (B, M, 2)
 
         # System horizontal extent, unanchored.

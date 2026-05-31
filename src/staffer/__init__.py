@@ -1,4 +1,4 @@
-from .staffer_loss import LossDict, StafferLoss
+from .staffer_loss import LossDict, StafferLoss, assign_staves
 from .staffer_model import StafferConfig, StafferModel
 from .staffer_module import StafferModule
 from .staffer_dataset import StafferDataset
@@ -9,6 +9,7 @@ __all__ = [
     "StafferModel",
     "StafferLoss",
     "LossDict",
+    "assign_staves",
     "StafferModule",
     "StafferDataset",
     "StafferDataModule",
