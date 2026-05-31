@@ -221,10 +221,16 @@
         <td>Staves lead; systems derived as stave hull; boundary-flag grouping; static anchors (no iter)</td>
         <td><span class="badge badge-green">new best</span></td>
       </tr>
+      <tr>
+        <td><span class="tag">stave-primary-grid</span></td><td>2026-05-31</td><td>128</td><td>16</td>
+        <td>—</td><td>—</td><td>—</td>
+        <td>Frozen uniform anchor grid + free non-contiguous stave→query assignment</td>
+        <td><span class="badge badge-blue">training</span></td>
+      </tr>
     </tbody>
   </table>
   <p style="font-size:0.82rem;color:var(--muted)">† stave L1 not comparable to prior runs: enhanced2-ltrb stave head outputs (top, bottom) directly; prior runs output (cy, h). ‡ <span class="tag">stave-primary</span>'s <code>val/stave_l1</code> is not a clean metric (logging-key collision, see its card), so its stave column reports the eval table's bottom-of-page error instead — directly comparable to the anchor's bins 12–14 (~12–13 px).</p>
-  <div class="result-box neutral" style="font-size:0.84rem"><strong>Model size note.</strong> <span class="tag">basic</span>–<span class="tag">enhanced2-vflip</span> ran at <strong>D=256 · H=8 · mlp=1024</strong>. From <span class="tag">enhanced2-sampler</span> onward the <code>StafferConfig</code> default had silently shrunk to <strong>D=128 · H=4 · mlp=512</strong> (the small-model config, never restored; <code>train</code> has no override flag) — so <span class="tag">enhanced2-sampler</span>, <span class="tag">enhanced2-ltrb</span>, <span class="tag">enhanced2-ltrb-anchor</span>, <span class="tag">enhanced2-ltrb-anchor-iter</span> and <span class="tag">stave-primary</span> are all <strong>half-size</strong>. The D column above is corrected to reflect the saved <code>hparams.yaml</code>. <em>Consequence:</em> the sys-IoU gap of the ltrb line vs <span class="tag">enhanced2</span> (0.914 vs 0.919) is largely <strong>capacity</strong>, not the ltrb formulation being "harder" — the like-for-like comparisons within the ltrb line (all D=128) remain valid. <span class="tag">stave-primary</span> has now validated as the best architecture at this budget, so a full-size retrain (D=256/H=8/mlp=1024) of it is the next step.</div>
+  <div class="result-box neutral" style="font-size:0.84rem"><strong>Model size note.</strong> <span class="tag">basic</span>–<span class="tag">enhanced2-vflip</span> ran at <strong>D=256 · H=8 · mlp=1024</strong>. From <span class="tag">enhanced2-sampler</span> onward the <code>StafferConfig</code> default had silently shrunk to <strong>D=128 · H=4 · mlp=512</strong> (the small-model config, never restored; <code>train</code> has no override flag) — so <span class="tag">enhanced2-sampler</span>, <span class="tag">enhanced2-ltrb</span>, <span class="tag">enhanced2-ltrb-anchor</span>, <span class="tag">enhanced2-ltrb-anchor-iter</span>, <span class="tag">stave-primary</span> and <span class="tag">stave-primary-grid</span> are all <strong>half-size</strong>. The D column above is corrected to reflect the saved <code>hparams.yaml</code>. <em>Consequence:</em> the sys-IoU gap of the ltrb line vs <span class="tag">enhanced2</span> (0.914 vs 0.919) is largely <strong>capacity</strong>, not the ltrb formulation being "harder" — the like-for-like comparisons within the ltrb line (all D=128) remain valid. <span class="tag">stave-primary</span> has now validated as the best architecture at this budget, so a full-size retrain (D=256/H=8/mlp=1024) of it is the next step.</div>
 
   <!-- ════════════════════ Comparison charts ════════════════════ -->
   <h2>Cross-run comparison</h2>
@@ -940,6 +946,67 @@
     <div class="result-box neutral"><strong>The <code>val/stave_l1</code> curve is corrupted — do not read it, and it is not retrofittable.</strong> It reads ~0.0104 for stave-primary (vs the anchor's ~0.0049), which looked like a 2× regression, yet direct measurement on the full val distribution gives a clean per-page error of <strong>1.84 px (0.00192 normalised)</strong> — the logged value is <strong>~5.4× too high</strong>, not a clean ×2, and the number does not reproduce by <em>any</em> constant factor. Cause: <code>StafferModule._step</code> logged <code>{stage}/stave_l1</code> twice under one key (the clean <code>_mean_stave_l1</code> metric, then the multiplied <code>LossDict.stave_l1</code> loss term in the <code>fields(loss)</code> loop). Lightning silently keeps the last write (no warning), and the duplicate-key + multi-batch <code>on_epoch</code> reduction inflates it unpredictably. Bug born at <strong>16cf337</strong> (2026-05-21, the <code>stave_box→stave_l1</code> rename that collided with the explicit log) and present in every run since — so the column can't be rescaled, only ignored. <strong>The per-bin eval table is authoritative.</strong> <em>Fixed</em> going forward: the clean metric is now logged as <code>{stage}/stave_l1_px</code> under its own key; the existing <code>stave_l1</code> column stays the (corrupted) loss-term and the L1 charts are kept only for within-run trend.</div>
   </div>
 
+  <!-- ════════════════════════════════════════════ stave-primary-grid -->
+  <div class="session">
+    <div class="session-header">
+      <h2><span class="tag">stave-primary-grid</span></h2>
+      <span class="session-meta">2026-05-31 · tag: <code>train/stave-primary-grid</code> · 7 epochs · D=128 H=4</span>
+      <span class="in-progress"><span class="dot-pulse"></span>training</span>
+    </div>
+    <p>Same architecture as <span class="tag">stave-primary</span>, changing only <em>how stave queries are matched to ground truth</em>. In stave-primary the matching is <strong>positional</strong> — GT stave <em>i</em> (top-to-bottom) is always served by query <em>i</em>, and the per-slot anchor is <em>learnable</em>. That makes query <em>i</em>'s target high-variance: "the i-th stave from the top" sits at a very different y depending on how many staves are on the page, and the high-index queries only fire on dense pages, so they train rarely and learn their band poorly — the residual bottom-of-page error every prior run shows.</p>
+    <p>grid <strong>freezes</strong> the anchors to a uniform grid at <code>(i+0.5)/M</code> and routes each GT stave to the query whose frozen anchor sits nearest it (1-D optimal assignment via <code>scipy.linear_sum_assignment</code> on <code>|anchor_center − gt_center|</code>). The slot→stave map is now <strong>free / non-contiguous</strong> — GT stave 4 may be served by query 6 — so each query's anchor becomes a true, count-independent <em>spatial</em> prior and every query trains at ~uniform frequency. 1-D matchings never cross, so the top-to-bottom order (and the boundary-flag <code>cumsum</code> grouping) stays valid. At inference there is no routing: the active queries (objectness&nbsp;&gt;&nbsp;0) <em>are</em> the staves.</p>
+    <h3>Changes from stave-primary</h3>
+    <div class="changes">
+      <div class="change-item"><span class="change-sym mod">~</span> Stave anchors <strong>frozen</strong> (<code>requires_grad=False</code>) at the uniform grid <code>(i+0.5)/M</code>; box head predicts a residual onto it</div>
+      <div class="change-item"><span class="change-sym add">+</span> <code>assign_staves()</code> — 1-D optimal GT→query matching by nearest frozen anchor (free, non-contiguous)</div>
+      <div class="change-item"><span class="change-sym mod">~</span> Assignment threaded through all 4 loss terms + 2 metrics; objectness target scattered at matched query indices (not <code>[:num_gt]</code>)</div>
+      <div class="change-item"><span class="change-sym slate">·</span> Everything else identical to stave-primary (systems still positional/contiguous; 7 epochs, D=128, sampler)</div>
+    </div>
+    <h3>Architecture</h3>
+    <div class="arch">
+      <div class="arch-col">
+        <div class="arch-label">Backbone</div>
+        <div class="arch-block amber">ViT + pos embed<br>+ LayerNorm<br><small>D=128 · H=4</small></div>
+      </div>
+      <div class="arch-divider"></div>
+      <div class="arch-col">
+        <div class="arch-label">Stave (M=16) · primary</div>
+        <div class="arch-block slate">Self-Attn</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block slate">Cross-Attn (img)</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block slate">FFN</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block green">Stave (top, bottom)<br><small>frozen anchor grid</small></div>
+        <div class="arch-block green">Stave obj</div>
+        <div class="arch-block violet">Boundary flag</div>
+      </div>
+      <div class="arch-divider"></div>
+      <div class="arch-col">
+        <div class="arch-label">GT → query routing</div>
+        <div class="arch-block violet">nearest frozen anchor<br><small>1-D linear_sum_assignment</small></div>
+        <div class="arch-block slate">free / non-contiguous<br><small>stave 4 → query 6</small></div>
+        <div class="arch-block slate">order-preserving<br><small>(cumsum grouping ok)</small></div>
+      </div>
+      <div class="arch-divider"></div>
+      <div class="arch-col">
+        <div class="arch-label">System (N=16) · derived</div>
+        <div class="arch-block green">Sys (left, right)</div>
+        <div class="arch-block violet">Sys box = stave hull</div>
+        <div class="arch-block amber">Derived sys GIoU</div>
+        <div class="arch-block slate">Stave L1 · Boundary BCE<br>Sys L1 (l,r) · obj BCE</div>
+      </div>
+    </div>
+    <p style="font-size:0.82rem;color:var(--muted)">Only the stave matching differs from <span class="tag">stave-primary</span>: positional slot <em>i</em>→GT <em>i</em> becomes nearest-frozen-anchor routing. Grouping, system derivation, and all loss terms are unchanged.</p>
+    <h3>Training curves</h3>
+    <div class="charts">
+      <div class="chart-card"><h4>Val loss — vs stave-primary</h4><canvas id="c-spg-loss"></canvas></div>
+      <div class="chart-card"><h4>Val sys IoU — vs stave-primary</h4><canvas id="c-spg-iou"></canvas></div>
+      <div class="chart-card"><h4>Val stave_l1_px (clean, px)</h4><canvas id="c-spg-l1"></canvas></div>
+    </div>
+    <div class="result-box pending"><span class="in-progress"><span class="dot-pulse"></span></span> Training in progress (7 epochs, D=128, launched 2026-05-31 ~19:11). Eval table + final metrics to follow — full-distribution per-bin + clean <code>stave_l1_px</code>, head-to-head vs <span class="tag">stave-primary</span> (sys IoU 0.951; bottom bins 12–14 ~5–7 px). Open question: does frozen-grid routing — by training the rarely-fired high slots at uniform frequency — shave the residual bottom-of-page error below stave-primary's, the lever the anchor/iter line never moved?</div>
+  </div>
+
 </main>
 
 <div id="chart-modal" class="chart-modal" role="dialog" aria-modal="true">
@@ -969,6 +1036,7 @@ const C = {
   anchor:  '#7c3aed',
   iter:    '#a21caf',
   sp:      '#4338ca',
+  spg:     '#65a30d',
 };
 
 const basic = {
@@ -1038,6 +1106,14 @@ const sp = {
   loss: [0.4338,0.2768,0.2409,0.1808,0.1630,0.1423,0.1380],
   iou:  [0.8507,0.9017,0.9124,0.9349,0.9409,0.9489,0.9509],
   l1:   [0.01554,0.01326,0.01214,0.01126,0.01085,0.01052,0.01042],
+};
+// stave-primary-grid — training in progress (launched 2026-05-31 ~19:11). Fill
+// per-epoch val on completion. NB: l1 here is the CLEAN val/stave_l1_px (px),
+// NOT the corrupted stave_l1 column — so it is not comparable to sp.l1 above.
+const spg = {
+  loss: [],
+  iou:  [],
+  l1:   [],
 };
 
 function line(label, data, color, opts={}) {
@@ -1194,6 +1270,13 @@ makeChart('c-iter-l1',   ep7.slice(0,iter.l1.length   || ep7.length), [line('enh
 makeChart('c-sp-loss', ep7.slice(0,sp.loss.length || ep7.length), [line('enhanced2-ltrb-anchor',anchor.loss,C.anchor,{dashed:true}), line('stave-primary',sp.loss,C.sp,{fill:true})]);
 makeChart('c-sp-iou',  ep7.slice(0,sp.iou.length  || ep7.length), [line('enhanced2-ltrb-anchor',anchor.iou, C.anchor,{dashed:true}), line('stave-primary',sp.iou, C.sp,{fill:true})], {min:0,max:1});
 makeChart('c-sp-l1',   ep7.slice(0,sp.l1.length   || ep7.length), [line('enhanced2-ltrb-anchor',anchor.l1,  C.anchor,{dashed:true}), line('stave-primary',sp.l1,  C.sp,{fill:true})]);
+
+// stave-primary-grid vs stave-primary (spg data filled when training completes).
+// loss/iou compare vs sp; the l1 panel is grid-only (clean stave_l1_px, not the
+// corrupted sp.l1 column — different quantity/units, so no sp line there).
+makeChart('c-spg-loss', ep7.slice(0,spg.loss.length || ep7.length), [line('stave-primary',sp.loss,C.sp,{dashed:true}), line('stave-primary-grid',spg.loss,C.spg,{fill:true})]);
+makeChart('c-spg-iou',  ep7.slice(0,spg.iou.length  || ep7.length), [line('stave-primary',sp.iou, C.sp,{dashed:true}), line('stave-primary-grid',spg.iou, C.spg,{fill:true})], {min:0,max:1});
+makeChart('c-spg-l1',   ep7.slice(0,spg.l1.length   || ep7.length), [line('stave-primary-grid',spg.l1, C.spg,{fill:true})]);
 
 // ── Modal close wiring: backdrop click, close button, Esc.
 document.querySelector('.chart-modal-close').addEventListener('click', closeChartModal);
