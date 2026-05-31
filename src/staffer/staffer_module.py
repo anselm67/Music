@@ -50,11 +50,19 @@ class StafferModule(L.LightningModule):
         sys_iou = self._mean_sys_iou(
             pred_stave_tb, pred_sys_lr, gt_sys_boxes, gt_assign
         )
-        stave_l1 = self._mean_stave_l1(pred_stave_tb, gt_stave_boxes, gt_assign)
+        stave_l1_px = (
+            self._mean_stave_l1(pred_stave_tb, gt_stave_boxes, gt_assign)
+            * self.config.image_shape[0]
+        )
 
         self.log(f"{stage}/loss", loss.total(), prog_bar=True)
         self.log(f"{stage}/sys_iou", sys_iou)
-        self.log(f"{stage}/stave_l1", stave_l1)
+        # The clean mean stave-edge error in px. Logged under a distinct key from
+        # the `stave_l1` loss term below: LossDict has a `stave_l1` field, so the
+        # fields(loss) loop also emits `{stage}/stave_l1`. They previously shared
+        # the key — Lightning silently kept the (multiplied) loss term and the
+        # clean metric was lost. See docs/staffer-training.html.
+        self.log(f"{stage}/stave_l1_px", stave_l1_px)
         for f in fields(loss):
             self.log(f"{stage}/{f.name}", getattr(loss, f.name))
 

@@ -207,7 +207,7 @@
         <td><span class="tag">enhanced2-ltrb-anchor</span></td><td>2026-05-30</td><td>128</td><td>16</td>
         <td>0.219</td><td>0.914</td><td>stave L1 0.00490†</td>
         <td>Learnable vertical query anchors (DAB-style reference points)</td>
-        <td><span class="badge badge-green">best ltrb</span></td>
+        <td><span class="badge badge-slate">prev best</span></td>
       </tr>
       <tr>
         <td><span class="tag">enhanced2-ltrb-anchor-iter</span></td><td>2026-05-30–31</td><td>128</td><td>16</td>
@@ -217,14 +217,14 @@
       </tr>
       <tr>
         <td><span class="tag">stave-primary</span></td><td>2026-05-31</td><td>128</td><td>16</td>
-        <td>—</td><td>—</td><td>—</td>
+        <td>0.138</td><td>0.951</td><td>bins 12–14 ~5–6 px‡</td>
         <td>Staves lead; systems derived as stave hull; boundary-flag grouping; static anchors (no iter)</td>
-        <td><span class="badge badge-blue">training</span></td>
+        <td><span class="badge badge-green">new best</span></td>
       </tr>
     </tbody>
   </table>
-  <p style="font-size:0.82rem;color:var(--muted)">† stave L1 not comparable to prior runs: enhanced2-ltrb stave head outputs (top, bottom) directly; prior runs output (cy, h).</p>
-  <div class="result-box neutral" style="font-size:0.84rem"><strong>Model size note.</strong> <span class="tag">basic</span>–<span class="tag">enhanced2-vflip</span> ran at <strong>D=256 · H=8 · mlp=1024</strong>. From <span class="tag">enhanced2-sampler</span> onward the <code>StafferConfig</code> default had silently shrunk to <strong>D=128 · H=4 · mlp=512</strong> (the small-model config, never restored; <code>train</code> has no override flag) — so <span class="tag">enhanced2-sampler</span>, <span class="tag">enhanced2-ltrb</span>, <span class="tag">enhanced2-ltrb-anchor</span>, <span class="tag">enhanced2-ltrb-anchor-iter</span> and <span class="tag">stave-primary</span> are all <strong>half-size</strong>. The D column above is corrected to reflect the saved <code>hparams.yaml</code>. <em>Consequence:</em> the sys-IoU gap of the ltrb line vs <span class="tag">enhanced2</span> (0.914 vs 0.919) is largely <strong>capacity</strong>, not the ltrb formulation being "harder" — the like-for-like comparisons within the ltrb line (all D=128) remain valid. A full-size retrain (D=256/H=8/mlp=1024) is planned once <span class="tag">stave-primary</span> validates.</div>
+  <p style="font-size:0.82rem;color:var(--muted)">† stave L1 not comparable to prior runs: enhanced2-ltrb stave head outputs (top, bottom) directly; prior runs output (cy, h). ‡ <span class="tag">stave-primary</span>'s <code>val/stave_l1</code> is not a clean metric (logging-key collision, see its card), so its stave column reports the eval table's bottom-of-page error instead — directly comparable to the anchor's bins 12–14 (~12–13 px).</p>
+  <div class="result-box neutral" style="font-size:0.84rem"><strong>Model size note.</strong> <span class="tag">basic</span>–<span class="tag">enhanced2-vflip</span> ran at <strong>D=256 · H=8 · mlp=1024</strong>. From <span class="tag">enhanced2-sampler</span> onward the <code>StafferConfig</code> default had silently shrunk to <strong>D=128 · H=4 · mlp=512</strong> (the small-model config, never restored; <code>train</code> has no override flag) — so <span class="tag">enhanced2-sampler</span>, <span class="tag">enhanced2-ltrb</span>, <span class="tag">enhanced2-ltrb-anchor</span>, <span class="tag">enhanced2-ltrb-anchor-iter</span> and <span class="tag">stave-primary</span> are all <strong>half-size</strong>. The D column above is corrected to reflect the saved <code>hparams.yaml</code>. <em>Consequence:</em> the sys-IoU gap of the ltrb line vs <span class="tag">enhanced2</span> (0.914 vs 0.919) is largely <strong>capacity</strong>, not the ltrb formulation being "harder" — the like-for-like comparisons within the ltrb line (all D=128) remain valid. <span class="tag">stave-primary</span> has now validated as the best architecture at this budget, so a full-size retrain (D=256/H=8/mlp=1024) of it is the next step.</div>
 
   <!-- ════════════════════ Comparison charts ════════════════════ -->
   <h2>Cross-run comparison</h2>
@@ -852,7 +852,7 @@
     <div class="session-header">
       <h2><span class="tag">stave-primary</span></h2>
       <span class="session-meta">2026-05-31 · tag: <code>train/stave-primary</code> · 7 epochs · D=128 H=4</span>
-      <span class="in-progress"><span class="dot-pulse"></span>training</span>
+      <span class="badge badge-green">new best</span>
     </div>
     <p>Inverts the hierarchy used through <span class="tag">enhanced2-ltrb-anchor</span>: instead of systems leading and staves conditioned on them via group attention, <strong>staves are the primary stream and systems are derived</strong>. Two reasons. (1) Staves march down the page at ~constant pitch, so stave <em>i</em>'s top is near-linear in the slot index — a strong, low-variance prior the static anchor captures well; system tops are separated by a variable number of staves, so their slot→position map is high-variance (which is why per-slot anchoring helped systems only weakly). (2) The GT system box <em>is</em> exactly the hull of its staves (<code>System.box = Box(staves[0].top_left, staves[-1].bot_right)</code>), so predicting it through a separate head was redundant and let the two disagree.</p>
     <p>Mechanics: 16 stave queries — independent of systems (no group attention) — predict <code>(top, bottom)</code> + objectness as a residual to <strong>static</strong> learnable per-slot anchors (no iterative refinement; see <span class="tag">enhanced2-ltrb-anchor-iter</span>'s negative result). A per-stave <strong>boundary flag</strong> (“starts a new system”) replaces the assignment head — <code>cumsum</code> recovers the contiguous grouping. A thin system stream predicts <code>(left, right)</code> + objectness only. The system box is <strong>derived</strong> as <code>(sys.left, min stave tops, sys.right, max stave bottoms)</code>; a GIoU loss on this derived box routes gradient into the extreme staves. The dependency is strictly one-directional — image → stave&nbsp;y → grouping → system&nbsp;x — so a noisy system estimate can no longer leak into the staves.</p>
@@ -914,7 +914,30 @@
       <div class="chart-card"><h4>Val sys IoU — vs anchor</h4><canvas id="c-sp-iou"></canvas></div>
       <div class="chart-card"><h4>Val stave L1 — vs anchor</h4><canvas id="c-sp-l1"></canvas></div>
     </div>
-    <div class="result-box pending"><span class="in-progress"><span class="dot-pulse"></span></span> Training in progress (7 epochs, D=128, started 2026-05-31). Eval table + final metrics to follow. Open question: does making staves the primary, anchored stream — with systems derived as their hull — reduce the bottom-of-page error (anchor: bins 12–14 ~12–13 px) and/or lift sys IoU, at the same half-size budget? Compared head-to-head against <span class="tag">enhanced2-ltrb-anchor</span> (best ltrb, also D=128).</div>
+    <h3>Eval — stave top/bottom error by vertical position (2500 samples, full val distribution, H=960 px)</h3>
+    <table class="eval-table">
+      <thead><tr><th>Bin</th><th>Y range</th><th>n</th><th>top_err</th><th>bot_err</th><th>vs anchor (top)</th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td>0–60</td><td>1874</td><td>0.3 px</td><td>0.4 px</td><td><span class="eval-bar" style="width:3px;background:#059669"></span> 0.9</td></tr>
+        <tr><td>1</td><td>60–120</td><td>1678</td><td>1.0 px</td><td>1.0 px</td><td><span class="eval-bar" style="width:7px;background:#059669"></span> 1.9</td></tr>
+        <tr><td>2</td><td>120–180</td><td>2360</td><td>1.0 px</td><td>1.0 px</td><td><span class="eval-bar" style="width:7px;background:#059669"></span> 2.1</td></tr>
+        <tr><td>3</td><td>180–240</td><td>2200</td><td>1.3 px</td><td>1.3 px</td><td><span class="eval-bar" style="width:8px;background:#059669"></span> 3.0</td></tr>
+        <tr><td>4</td><td>240–300</td><td>1727</td><td>1.7 px</td><td>1.7 px</td><td><span class="eval-bar" style="width:12px;background:#65a30d"></span> 3.9</td></tr>
+        <tr><td>5</td><td>300–360</td><td>1415</td><td>1.9 px</td><td>2.1 px</td><td><span class="eval-bar" style="width:15px;background:#84cc16"></span> 4.9</td></tr>
+        <tr><td>6</td><td>360–420</td><td>1345</td><td>2.6 px</td><td>2.9 px</td><td><span class="eval-bar" style="width:18px;background:#84cc16"></span> 5.3</td></tr>
+        <tr><td>7</td><td>420–480</td><td>1239</td><td>2.8 px</td><td>3.0 px</td><td><span class="eval-bar" style="width:20px;background:#eab308"></span> 7.0</td></tr>
+        <tr><td>8</td><td>480–540</td><td>1102</td><td>3.1 px</td><td>3.3 px</td><td><span class="eval-bar" style="width:24px;background:#eab308"></span> 7.1</td></tr>
+        <tr><td>9</td><td>540–600</td><td>956</td><td>3.7 px</td><td>4.0 px</td><td><span class="eval-bar" style="width:20px;background:#eab308"></span> 6.2</td></tr>
+        <tr><td>10</td><td>600–660</td><td>816</td><td>3.9 px</td><td>4.5 px</td><td><span class="eval-bar" style="width:24px;background:#f97316"></span> 9.2</td></tr>
+        <tr><td>11</td><td>660–720</td><td>723</td><td>4.3 px</td><td>4.7 px</td><td><span class="eval-bar" style="width:26px;background:#f97316"></span> 7.0</td></tr>
+        <tr><td>12</td><td>720–780</td><td>453</td><td>6.0 px</td><td>6.8 px</td><td><span class="eval-bar" style="width:34px;background:#ef4444"></span> 12.0</td></tr>
+        <tr><td>13</td><td>780–840</td><td>254</td><td>7.3 px</td><td>6.9 px</td><td><span class="eval-bar" style="width:40px;background:#ef4444"></span> 12.9</td></tr>
+        <tr><td>14</td><td>840–900</td><td>108</td><td>4.5 px</td><td>4.4 px</td><td><span class="eval-bar" style="width:37px;background:#ef4444"></span> 13.1</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">stave-primary's columns are sampled across the <strong>full</strong> dataset (2500 random pages of 399,963 samples) — the honest val distribution. The <em>vs anchor</em> column is <span class="tag">enhanced2-ltrb-anchor</span>'s top_err for the same bin from its original eval (a first-CSV-rows pool; its checkpoint predates this architecture and won't reload, so it can't be re-run on the full pool). Matching is positional (query&nbsp;<em>i</em>&nbsp;→&nbsp;GT&nbsp;stave&nbsp;<em>i</em>). For stave-primary the early-pool and full-distribution profiles are nearly identical (≤1&nbsp;px/bin), so the comparison direction is robust even though the anchor column is early-pool. n-weighted mean top_err ≈ <strong>2.2 px</strong>; per-page mean 1.84 px (only 0.6% of pages exceed 20 px — no catastrophic-failure tail).</p>
+    <div class="result-box positive"><strong>New best.</strong> stave-primary beats <span class="tag">enhanced2-ltrb-anchor</span> on <strong>both</strong> axes at the same half-size budget (D=128): sys IoU <strong>0.951</strong> vs 0.914, and — the headline — the <strong>bottom-of-page drift the entire anchor/iter line failed to bend is roughly halved</strong>. Bins 12–14, stuck at ~12–13 px through every prior ltrb experiment, drop to <strong>~5–7 px</strong> (full-distribution eval); the n-weighted mean top error is <strong>~2.2 px vs the anchor's 4.4 px</strong>, and top-of-page is even crisper (bin 0: 0.3 px vs 0.9). Making staves the primary, directly-anchored stream — so a noisy system estimate can no longer leak into stave y, and each stave owns its own vertical prediction — is what finally moved the bottom bins, where count-conditional anchoring (<span class="tag">enhanced2-ltrb-anchor-iter</span>) could not.</div>
+    <div class="result-box neutral"><strong>The <code>val/stave_l1</code> curve is corrupted — do not read it, and it is not retrofittable.</strong> It reads ~0.0104 for stave-primary (vs the anchor's ~0.0049), which looked like a 2× regression, yet direct measurement on the full val distribution gives a clean per-page error of <strong>1.84 px (0.00192 normalised)</strong> — the logged value is <strong>~5.4× too high</strong>, not a clean ×2, and the number does not reproduce by <em>any</em> constant factor. Cause: <code>StafferModule._step</code> logged <code>{stage}/stave_l1</code> twice under one key (the clean <code>_mean_stave_l1</code> metric, then the multiplied <code>LossDict.stave_l1</code> loss term in the <code>fields(loss)</code> loop). Lightning silently keeps the last write (no warning), and the duplicate-key + multi-batch <code>on_epoch</code> reduction inflates it unpredictably. Bug born at <strong>16cf337</strong> (2026-05-21, the <code>stave_box→stave_l1</code> rename that collided with the explicit log) and present in every run since — so the column can't be rescaled, only ignored. <strong>The per-bin eval table is authoritative.</strong> <em>Fixed</em> going forward: the clean metric is now logged as <code>{stage}/stave_l1_px</code> under its own key; the existing <code>stave_l1</code> column stays the (corrupted) loss-term and the L1 charts are kept only for within-run trend.</div>
   </div>
 
 </main>
@@ -1009,11 +1032,12 @@ const iter = {
   iou:  [0.6930, 0.8135, 0.8401, 0.8452, 0.8853, 0.8928, 0.8937],
   l1:   [0.01668, 0.01041, 0.00883, 0.00769, 0.00687, 0.00674, 0.00657],
 };
-// stave-primary — training in progress; fill per-epoch val metrics on completion.
+// stave-primary — 7 epochs (per-epoch val). NB: l1 is the CORRUPTED val/stave_l1
+// column (~5.4x inflated, not retrofittable — see card); trend only, use eval table.
 const sp = {
-  loss: [],
-  iou:  [],
-  l1:   [],
+  loss: [0.4338,0.2768,0.2409,0.1808,0.1630,0.1423,0.1380],
+  iou:  [0.8507,0.9017,0.9124,0.9349,0.9409,0.9489,0.9509],
+  l1:   [0.01554,0.01326,0.01214,0.01126,0.01085,0.01052,0.01042],
 };
 
 function line(label, data, color, opts={}) {
