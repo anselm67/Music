@@ -162,7 +162,7 @@ noter --log-file logs/noter/<model-name>.log train OPTIONS...
 - Training metrics will be available - eg for staffer - as logs/staffer/<model-name>/metrics.csv
 - Finally you should always update the training log (docs/staffer-training.html or docs/noter-training.html) with eval results and metrics for the run.
 
-**Current checkpoint status:** `enhanced2-ltrb` is the latest model — sys IoU 0.893, top_err 1.2px / bot_err 1.4px at bin 0, both growing symmetrically to ~9.5/9.7px at bin 13. Fixes the structural 16px bottom drift from `enhanced2` (sys IoU 0.919, cy_err 0.9→16px). The asymmetry is eliminated; aggregate IoU is slightly lower, likely due to a harder optimization landscape under ltrb. Previous experiments: enhanced3 (cy_delta) reverted; enhanced2-staffer-small smaller model worse; enhanced2-vflip negative; enhanced2-sampler negative.
+**Current checkpoint status:** `enhanced2-ltrb-anchor` is the best ltrb model — sys IoU 0.914, symmetric top/bottom edges, top_err 0.9px at bin 0 growing to ~13px at bins 12–14. Static learnable per-slot vertical anchors recovered the aggregate IoU lost by plain `enhanced2-ltrb` (0.893) while keeping ltrb's symmetric edges. `enhanced2-ltrb-anchor-iter` (iterative box refinement / count-conditional anchoring on top of the anchors) was **NEGATIVE** — worse on every axis (sys IoU 0.894, stave L1 0.00657, bin-13 17.6px vs 12.9px), so iterative refinement is dropped. Next: **stave-primary** architecture (staves lead, systems derived as the hull of their staves; static anchors, no iter) — code complete on branch `worktree-staffer-stave-primary`, pending training. Previous experiments: enhanced3 (cy_delta) reverted; enhanced2-staffer-small worse; enhanced2-vflip negative; enhanced2-sampler negative.
 
 ---
 

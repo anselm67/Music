@@ -210,10 +210,10 @@
         <td><span class="badge badge-green">best ltrb</span></td>
       </tr>
       <tr>
-        <td><span class="tag">enhanced2-ltrb-anchor-iter</span></td><td>2026-05-30</td><td>256</td><td>16</td>
-        <td>—</td><td>—</td><td>—</td>
+        <td><span class="tag">enhanced2-ltrb-anchor-iter</span></td><td>2026-05-30–31</td><td>256</td><td>16</td>
+        <td>0.272</td><td>0.894</td><td>stave L1 0.00657†</td>
         <td>Iterative box refinement (count-conditional anchoring) + deep supervision</td>
-        <td><span class="badge badge-blue">training</span></td>
+        <td><span class="badge badge-amber">negative</span></td>
       </tr>
     </tbody>
   </table>
@@ -714,8 +714,8 @@
   <div class="session">
     <div class="session-header">
       <h2><span class="tag">enhanced2-ltrb-anchor-iter</span></h2>
-      <span class="session-meta">2026-05-30 · tag: <code>train/enhanced2-ltrb-anchor-iter</code> · 7 epochs · D=256 H=8</span>
-      <span class="in-progress"><span class="dot-pulse"></span>training</span>
+      <span class="session-meta">2026-05-30–31 · tag: <code>train/enhanced2-ltrb-anchor-iter</code> · 7 epochs · D=256 H=8</span>
+      <span class="badge badge-amber">negative</span>
     </div>
     <p>Directly attacks the marginal-anchor limitation left open by <span class="tag">enhanced2-ltrb-anchor</span>: a single per-slot scalar can only encode the <em>count-averaged</em> vertical position of slot <em>i</em>, so the image-conditioned head must absorb all count-dependent variance and does so worst for the rarely-active high slots (the bottom-of-page ~12 px error). The fix turns the static anchor into a <strong>count-conditional</strong> one via <strong>iterative box refinement</strong> across the four decoder layers, supervised at every layer (<strong>deep supervision</strong>).</p>
     <p>Each layer's box head predicts a logit-space <em>residual</em> Δ added to a running vertical reference; the output box is <code>σ(Δ + ref)</code>. The detached, re-linearised output <code>ref ← logit(box.detach())</code> becomes the next layer's reference. Because the reference is now derived from the previous layer's <em>content-dependent</em> box (not a frozen per-slot constant), it adapts to how many systems are actually on the page. Only the vertical edges (system top/bottom, stave top/bottom) are refined; left/right stay unanchored and are predicted per layer. The learnable even-spacing anchor from the parent model seeds the first layer's reference.</p>
@@ -814,7 +814,29 @@
       <div class="chart-card"><h4>Val sys IoU — vs anchor</h4><canvas id="c-iter-iou"></canvas></div>
       <div class="chart-card"><h4>Val stave L1 — vs anchor</h4><canvas id="c-iter-l1"></canvas></div>
     </div>
-    <div class="result-box pending"><span class="in-progress"><span class="dot-pulse"></span></span> Training in progress (7 epochs, started 2026-05-30 17:18). Eval table and final metrics to follow. Open question: does count-conditional refinement finally bend down the bottom-of-page error (bins 12–14, ~12–13 px in the parent) without sacrificing the aggregate sys IoU (0.914) recovered by the static anchor?</div>
+    <h3>Eval — stave top/bottom error by vertical position (500 samples, H=960 px)</h3>
+    <table class="eval-table">
+      <thead><tr><th>Bin</th><th>Y range</th><th>n</th><th>top_err</th><th>bot_err</th><th></th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td>0–60</td><td>349</td><td>1.5 px</td><td>1.6 px</td><td><span class="eval-bar" style="width:8px;background:#059669"></span></td></tr>
+        <tr><td>1</td><td>60–120</td><td>351</td><td>3.0 px</td><td>3.2 px</td><td><span class="eval-bar" style="width:17px;background:#84cc16"></span></td></tr>
+        <tr><td>2</td><td>120–180</td><td>467</td><td>2.7 px</td><td>2.7 px</td><td><span class="eval-bar" style="width:14px;background:#65a30d"></span></td></tr>
+        <tr><td>3</td><td>180–240</td><td>434</td><td>3.3 px</td><td>3.7 px</td><td><span class="eval-bar" style="width:19px;background:#84cc16"></span></td></tr>
+        <tr><td>4</td><td>240–300</td><td>344</td><td>4.3 px</td><td>4.5 px</td><td><span class="eval-bar" style="width:23px;background:#eab308"></span></td></tr>
+        <tr><td>5</td><td>300–360</td><td>295</td><td>5.2 px</td><td>5.3 px</td><td><span class="eval-bar" style="width:28px;background:#f97316"></span></td></tr>
+        <tr><td>6</td><td>360–420</td><td>268</td><td>5.6 px</td><td>6.1 px</td><td><span class="eval-bar" style="width:32px;background:#f97316"></span></td></tr>
+        <tr><td>7</td><td>420–480</td><td>255</td><td>7.0 px</td><td>6.8 px</td><td><span class="eval-bar" style="width:37px;background:#ef4444"></span></td></tr>
+        <tr><td>8</td><td>480–540</td><td>214</td><td>8.0 px</td><td>8.5 px</td><td><span class="eval-bar" style="width:44px;background:#ef4444"></span></td></tr>
+        <tr><td>9</td><td>540–600</td><td>183</td><td>8.2 px</td><td>8.4 px</td><td><span class="eval-bar" style="width:44px;background:#ef4444"></span></td></tr>
+        <tr><td>10</td><td>600–660</td><td>152</td><td>8.2 px</td><td>8.2 px</td><td><span class="eval-bar" style="width:43px;background:#ef4444"></span></td></tr>
+        <tr><td>11</td><td>660–720</td><td>134</td><td>10.2 px</td><td>10.1 px</td><td><span class="eval-bar" style="width:53px;background:#dc2626"></span></td></tr>
+        <tr><td>12</td><td>720–780</td><td>87</td><td>12.1 px</td><td>12.2 px</td><td><span class="eval-bar" style="width:64px;background:#b91c1c"></span></td></tr>
+        <tr><td>13</td><td>780–840</td><td>50</td><td>17.6 px</td><td>17.6 px</td><td><span class="eval-bar" style="width:92px;background:#7f1d1d"></span></td></tr>
+        <tr class="warn"><td>14</td><td>840–900</td><td>16</td><td>16.9 px</td><td>18.6 px</td><td><small>n=16, sparse</small></td></tr>
+      </tbody>
+    </table>
+    <div class="result-box negative">Negative result. Iterative refinement underperformed the static-anchor parent on <em>every</em> axis: sys IoU 0.894 vs 0.914, stave L1 0.00657 vs 0.00490, val loss 0.272 vs 0.219. Decisively, it did <strong>not</strong> fix the bottom-of-page error it targeted — bin 13 rose to 17.6 px (vs 12.9 px for the static anchor) — and top-of-page precision also degraded (bin 0: 1.5 px vs 0.9 px). The per-layer detached-reference threading appears to destabilise rather than help; the count-conditional anchoring hypothesis does not hold here.</div>
+    <div class="result-box neutral">Consequences: (1) <span class="tag">enhanced2-ltrb-anchor</span> remains the best ltrb model; (2) iterative refinement is dropped from the <em>stave-primary</em> successor, which keeps the static anchors only; (3) since count-conditional anchoring failed to bend the bottom down, the index-based matching scheme itself is implicated — reverting to Hungarian matching stays a live option.</div>
   </div>
 
 </main>
@@ -844,6 +866,7 @@ const C = {
   sampler: '#0d9488',
   ltrb:    '#0ea5e9',
   anchor:  '#7c3aed',
+  iter:    '#a21caf',
 };
 
 const basic = {
@@ -901,11 +924,11 @@ const anchor = {
   iou:  [0.7713,0.8452,0.8785,0.8853,0.8984,0.9125,0.9140],
   l1:   [0.01273,0.00811,0.00652,0.00642,0.00532,0.00493,0.00490],
 };
-// enhanced2-ltrb-anchor-iter — training in progress; fill per-epoch val metrics here.
+// enhanced2-ltrb-anchor-iter — 7 epochs (per-epoch val).
 const iter = {
-  loss: [],
-  iou:  [],
-  l1:   [],
+  loss: [0.7778, 0.4695, 0.3912, 0.3696, 0.2962, 0.2777, 0.2717],
+  iou:  [0.6930, 0.8135, 0.8401, 0.8452, 0.8853, 0.8928, 0.8937],
+  l1:   [0.01668, 0.01041, 0.00883, 0.00769, 0.00687, 0.00674, 0.00657],
 };
 
 function line(label, data, color, opts={}) {
@@ -975,7 +998,8 @@ makeChart('cmp-loss', ep12,
    line('flat',flat.loss,C.flat),
    line('enhanced2-sampler',sampler.loss,C.sampler),
    line('enhanced2-ltrb',ltrb.loss,C.ltrb),
-   line('enhanced2-ltrb-anchor',anchor.loss,C.anchor)]);
+   line('enhanced2-ltrb-anchor',anchor.loss,C.anchor),
+   line('enhanced2-ltrb-anchor-iter',iter.loss,C.iter)]);
 makeChart('cmp-iou', ep12,
   [line('staffyh',staffyh.iou,C.staffyh,{dashed:true}),
    line('enhanced2',e2.iou,C.e2),
@@ -984,7 +1008,8 @@ makeChart('cmp-iou', ep12,
    line('flat',flat.iou,C.flat),
    line('enhanced2-sampler',sampler.iou,C.sampler),
    line('enhanced2-ltrb',ltrb.iou,C.ltrb),
-   line('enhanced2-ltrb-anchor',anchor.iou,C.anchor)], {min:0,max:1});
+   line('enhanced2-ltrb-anchor',anchor.iou,C.anchor),
+   line('enhanced2-ltrb-anchor-iter',iter.iou,C.iter)], {min:0,max:1});
 makeChart('cmp-l1', ep12,
   [line('staffyh',staffyh.l1,C.staffyh,{dashed:true}),
    line('enhanced2',e2.l1,C.e2),
@@ -993,7 +1018,8 @@ makeChart('cmp-l1', ep12,
    line('flat',flat.l1,C.flat),
    line('enhanced2-sampler',sampler.l1,C.sampler),
    line('enhanced2-ltrb',ltrb.l1,C.ltrb),
-   line('enhanced2-ltrb-anchor',anchor.l1,C.anchor)]);
+   line('enhanced2-ltrb-anchor',anchor.l1,C.anchor),
+   line('enhanced2-ltrb-anchor-iter',iter.l1,C.iter)]);
 
 // ── basic solo
 makeChart('c-basic-loss', ep12, [line('basic',basic.loss,C.basic,{fill:true})]);
@@ -1051,9 +1077,9 @@ makeChart('c-anchor-iou',  ep7, [line('enhanced2-ltrb',ltrb.iou, C.ltrb,{dashed:
 makeChart('c-anchor-l1',   ep7, [line('enhanced2-ltrb',ltrb.l1,  C.ltrb,{dashed:true}), line('enhanced2-ltrb-anchor',anchor.l1,  C.anchor,{fill:true})]);
 
 // ── enhanced2-ltrb-anchor-iter vs enhanced2-ltrb-anchor (iter data filled when training completes)
-makeChart('c-iter-loss', ep7.slice(0,iter.loss.length || ep7.length), [line('enhanced2-ltrb-anchor',anchor.loss,C.anchor,{dashed:true}), line('enhanced2-ltrb-anchor-iter',iter.loss,C.sampler,{fill:true})]);
-makeChart('c-iter-iou',  ep7.slice(0,iter.iou.length  || ep7.length), [line('enhanced2-ltrb-anchor',anchor.iou, C.anchor,{dashed:true}), line('enhanced2-ltrb-anchor-iter',iter.iou, C.sampler,{fill:true})], {min:0,max:1});
-makeChart('c-iter-l1',   ep7.slice(0,iter.l1.length   || ep7.length), [line('enhanced2-ltrb-anchor',anchor.l1,  C.anchor,{dashed:true}), line('enhanced2-ltrb-anchor-iter',iter.l1,  C.sampler,{fill:true})]);
+makeChart('c-iter-loss', ep7.slice(0,iter.loss.length || ep7.length), [line('enhanced2-ltrb-anchor',anchor.loss,C.anchor,{dashed:true}), line('enhanced2-ltrb-anchor-iter',iter.loss,C.iter,{fill:true})]);
+makeChart('c-iter-iou',  ep7.slice(0,iter.iou.length  || ep7.length), [line('enhanced2-ltrb-anchor',anchor.iou, C.anchor,{dashed:true}), line('enhanced2-ltrb-anchor-iter',iter.iou, C.iter,{fill:true})], {min:0,max:1});
+makeChart('c-iter-l1',   ep7.slice(0,iter.l1.length   || ep7.length), [line('enhanced2-ltrb-anchor',anchor.l1,  C.anchor,{dashed:true}), line('enhanced2-ltrb-anchor-iter',iter.l1,  C.iter,{fill:true})]);
 
 // ── Modal close wiring: backdrop click, close button, Esc.
 document.querySelector('.chart-modal-close').addEventListener('click', closeChartModal);
