@@ -78,5 +78,6 @@ disallow_untyped_defs = true
 module = [
     "torchvision.*",
     "torch.*",
+    "scipy.*",
 ]
 ignore_missing_imports = true
