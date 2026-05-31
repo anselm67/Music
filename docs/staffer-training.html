@@ -177,7 +177,7 @@
         <td><span class="tag">enhanced2-staffer-small</span></td><td>2026-05-24</td><td>128</td><td>16</td>
         <td>0.254</td><td>0.900</td><td>stave L1 0.00360</td>
         <td>Smaller model (D=128, H=4)</td>
-        <td><span class="badge badge-slate">archived</span></td>
+        <td><span class="badge badge-amber">negative</span></td>
       </tr>
       <tr>
         <td><span class="tag">enhanced2-vflip</span></td><td>2026-05-28</td><td>256</td><td>16</td>
@@ -192,32 +192,39 @@
         <td><span class="badge badge-amber">negative</span></td>
       </tr>
       <tr>
-        <td><span class="tag">enhanced2-sampler</span></td><td>2026-05-29</td><td>256</td><td>16</td>
+        <td><span class="tag">enhanced2-sampler</span></td><td>2026-05-29</td><td>128</td><td>16</td>
         <td>0.2269</td><td>0.904</td><td>stave L1 0.00340</td>
         <td>Bottom-of-page sampler bias; 4× more data (350k); 8 epochs</td>
         <td><span class="badge badge-amber">negative</span></td>
       </tr>
       <tr>
-        <td><span class="tag">enhanced2-ltrb</span></td><td>2026-05-29–30</td><td>256</td><td>16</td>
+        <td><span class="tag">enhanced2-ltrb</span></td><td>2026-05-29–30</td><td>128</td><td>16</td>
         <td>0.274</td><td>0.893</td><td>stave L1 0.00600†</td>
         <td>Direct ltrb box format; GIoU area clamping fix; sampler retained</td>
         <td><span class="badge badge-amber">partial</span></td>
       </tr>
       <tr>
-        <td><span class="tag">enhanced2-ltrb-anchor</span></td><td>2026-05-30</td><td>256</td><td>16</td>
+        <td><span class="tag">enhanced2-ltrb-anchor</span></td><td>2026-05-30</td><td>128</td><td>16</td>
         <td>0.219</td><td>0.914</td><td>stave L1 0.00490†</td>
         <td>Learnable vertical query anchors (DAB-style reference points)</td>
         <td><span class="badge badge-green">best ltrb</span></td>
       </tr>
       <tr>
-        <td><span class="tag">enhanced2-ltrb-anchor-iter</span></td><td>2026-05-30–31</td><td>256</td><td>16</td>
+        <td><span class="tag">enhanced2-ltrb-anchor-iter</span></td><td>2026-05-30–31</td><td>128</td><td>16</td>
         <td>0.272</td><td>0.894</td><td>stave L1 0.00657†</td>
         <td>Iterative box refinement (count-conditional anchoring) + deep supervision</td>
         <td><span class="badge badge-amber">negative</span></td>
       </tr>
+      <tr>
+        <td><span class="tag">stave-primary</span></td><td>2026-05-31</td><td>128</td><td>16</td>
+        <td>—</td><td>—</td><td>—</td>
+        <td>Staves lead; systems derived as stave hull; boundary-flag grouping; static anchors (no iter)</td>
+        <td><span class="badge badge-blue">training</span></td>
+      </tr>
     </tbody>
   </table>
   <p style="font-size:0.82rem;color:var(--muted)">† stave L1 not comparable to prior runs: enhanced2-ltrb stave head outputs (top, bottom) directly; prior runs output (cy, h).</p>
+  <div class="result-box neutral" style="font-size:0.84rem"><strong>Model size note.</strong> <span class="tag">basic</span>–<span class="tag">enhanced2-vflip</span> ran at <strong>D=256 · H=8 · mlp=1024</strong>. From <span class="tag">enhanced2-sampler</span> onward the <code>StafferConfig</code> default had silently shrunk to <strong>D=128 · H=4 · mlp=512</strong> (the small-model config, never restored; <code>train</code> has no override flag) — so <span class="tag">enhanced2-sampler</span>, <span class="tag">enhanced2-ltrb</span>, <span class="tag">enhanced2-ltrb-anchor</span>, <span class="tag">enhanced2-ltrb-anchor-iter</span> and <span class="tag">stave-primary</span> are all <strong>half-size</strong>. The D column above is corrected to reflect the saved <code>hparams.yaml</code>. <em>Consequence:</em> the sys-IoU gap of the ltrb line vs <span class="tag">enhanced2</span> (0.914 vs 0.919) is largely <strong>capacity</strong>, not the ltrb formulation being "harder" — the like-for-like comparisons within the ltrb line (all D=128) remain valid. A full-size retrain (D=256/H=8/mlp=1024) is planned once <span class="tag">stave-primary</span> validates.</div>
 
   <!-- ════════════════════ Comparison charts ════════════════════ -->
   <h2>Cross-run comparison</h2>
@@ -446,7 +453,7 @@
       <div class="chart-card"><h4>Val sys IoU — vs enhanced2</h4><canvas id="c-small-iou"></canvas></div>
       <div class="chart-card"><h4>Val stave L1 — vs enhanced2</h4><canvas id="c-small-l1"></canvas></div>
     </div>
-    <div class="result-box neutral">Acceptable: sys IoU 0.900 vs 0.919. ~5% penalty for 4× fewer parameters. Confirms the architecture scales down reasonably — motivates the flat pool experiment at D=128.</div>
+    <div class="result-box negative">Negative (capacity). This is a clean single-variable comparison vs <span class="tag">enhanced2</span> — only the size triple differs (D 256→128, H 8→4, mlp 1024→512) — so the 0.919→0.900 sys-IoU drop is squarely attributable to capacity: larger is better. Note this same D=128 default then silently leaked into every run from <span class="tag">enhanced2-sampler</span> onward (see the model-size note above), making it the de-facto config rather than a one-off ablation.</div>
   </div>
 
   <!-- ════════════════════════════════════════════ enhanced2-vflip -->
@@ -579,7 +586,7 @@
   <div class="session">
     <div class="session-header">
       <h2><span class="tag">enhanced2-sampler</span></h2>
-      <span class="session-meta">2026-05-29 · tag: <code>train/enhanced2-sampler</code> · 8 epochs (6+2 resumed) · D=256 H=8</span>
+      <span class="session-meta">2026-05-29 · tag: <code>train/enhanced2-sampler</code> · 8 epochs (6+2 resumed) · D=128 H=4</span>
     </div>
     <p>Hypothesis: the 16 px bottom-of-page cy drift is caused by underrepresentation of bottom systems in training data. Two changes: (1) replace the <code>is_last_page</code> sampler heuristic with a continuous <code>max_sys_bottom</code> weight (<code>sqrt_inv[part_count] × (1 + 3.0 × max_sys_bottom)</code>), and (2) expand training data from 200k to 350k samples (all available Staff16 pages), training for 8 epochs total (6 initial, +2 resumed with a cosine LR stretch).</p>
     <h3>Changes from enhanced2</h3>
@@ -617,14 +624,15 @@
         <tr class="warn"><td>15</td><td>900–960</td><td>5</td><td>24.7 px</td><td>0.5 px</td><td><small>n=5, ignore</small></td></tr>
       </tbody>
     </table>
-    <div class="result-box negative">Negative result. The bottom-bias sampler did not fix the cy drift: bin 13 error is 14.4 px vs 14.3 px for enhanced2 — essentially unchanged. Sys IoU (0.904) and stave L1 (0.00340) are also worse than enhanced2 despite more data and more epochs. Sampler analysis confirmed it is working correctly (bottom pages 1.7× upsampled), but raw bottom-system sample counts were already adequate (26% of data). The drift is structural, not a data distribution problem.</div>
+    <div class="result-box negative">Negative on its goal: the bottom-bias sampler did <strong>not</strong> fix the top→bottom drift — bin 13 stayed ~14 px, the very thing it was meant to pull down. The sampler worked mechanically (bottom pages 1.7× upsampled), but bottom-system counts were already adequate (26% of data), so the drift is structural, not a data-distribution problem.</div>
+    <div class="result-box neutral"><strong>Correction (size confound).</strong> The earlier claim that sys IoU 0.904 / stave L1 0.00340 were "worse than enhanced2 (0.919)" compared a <strong>D=128</strong> run against the <strong>D=256</strong> enhanced2 — confounded by capacity. Against the only like-size point, <span class="tag">enhanced2-staffer-small</span> (0.900, also D=128), this run is marginally <em>higher</em> — so on aggregate IoU the sampler is <strong>inconclusive</strong>, not negative. The valid negative is narrowly that it failed to bend the drift.</div>
   </div>
 
   <!-- ════════════════════════════════════════════ enhanced2-ltrb -->
   <div class="session">
     <div class="session-header">
       <h2><span class="tag">enhanced2-ltrb</span></h2>
-      <span class="session-meta">2026-05-29–30 · tag: <code>train/enhanced2-ltrb</code> · 7 epochs · D=256 H=8</span>
+      <span class="session-meta">2026-05-29–30 · tag: <code>train/enhanced2-ltrb</code> · 7 epochs · D=128 H=4</span>
     </div>
     <p>Hypothesis: the cy drift is structural — in cxcywh, both edges share the same gradient through cy, so bias in one direction compounds into large bottom errors. Switching to direct ltrb (left, top, right, bottom) gives each edge its own independent gradient signal. A GIoU area clamping fix was also required: random sigmoid predictions at initialisation can produce invalid boxes (right &lt; left), causing negative area and a pathological false minimum. Training had to be restarted after the first run diverged (sys_iou → −27, loss → −52) before the clamp was applied.</p>
     <h3>Changes from enhanced2</h3>
@@ -670,7 +678,7 @@
   <div class="session">
     <div class="session-header">
       <h2><span class="tag">enhanced2-ltrb-anchor</span></h2>
-      <span class="session-meta">2026-05-30 · tag: <code>train/enhanced2-ltrb-anchor</code> · 7 epochs · D=256 H=8</span>
+      <span class="session-meta">2026-05-30 · tag: <code>train/enhanced2-ltrb-anchor</code> · 7 epochs · D=128 H=4</span>
     </div>
     <p>Hypothesis: the residual top→bottom error growth in enhanced2-ltrb comes from under-trained high query slots. Matching is index-based top-to-bottom (slot <em>i</em> → <em>i</em>-th system/stave from the page top), so the high slots only ever see rare bottom-of-page content and learn their position poorly. Fix (DAB-DETR style): give each query a learnable logit-space anchor initialised evenly down the page at <code>(i+0.5)/N</code>; the box head predicts a residual added to the anchor before the sigmoid, so slot <em>i</em> starts near its vertical position instead of collapsing to 0.5. Only the vertical edges are anchored (system top/bottom, stave top/bottom); left/right stay unanchored. Change is internal to <code>PredictionHeads</code> — output semantics unchanged.</p>
     <h3>Changes from enhanced2-ltrb</h3>
@@ -714,7 +722,7 @@
   <div class="session">
     <div class="session-header">
       <h2><span class="tag">enhanced2-ltrb-anchor-iter</span></h2>
-      <span class="session-meta">2026-05-30–31 · tag: <code>train/enhanced2-ltrb-anchor-iter</code> · 7 epochs · D=256 H=8</span>
+      <span class="session-meta">2026-05-30–31 · tag: <code>train/enhanced2-ltrb-anchor-iter</code> · 7 epochs · D=128 H=4</span>
       <span class="badge badge-amber">negative</span>
     </div>
     <p>Directly attacks the marginal-anchor limitation left open by <span class="tag">enhanced2-ltrb-anchor</span>: a single per-slot scalar can only encode the <em>count-averaged</em> vertical position of slot <em>i</em>, so the image-conditioned head must absorb all count-dependent variance and does so worst for the rarely-active high slots (the bottom-of-page ~12 px error). The fix turns the static anchor into a <strong>count-conditional</strong> one via <strong>iterative box refinement</strong> across the four decoder layers, supervised at every layer (<strong>deep supervision</strong>).</p>
@@ -730,7 +738,7 @@
     <div class="arch">
       <div class="arch-col">
         <div class="arch-label">Backbone</div>
-        <div class="arch-block amber">ViT + pos embed<br>+ LayerNorm<br><small>D=256 · H=8</small></div>
+        <div class="arch-block amber">ViT + pos embed<br>+ LayerNorm<br><small>D=128 · H=4</small></div>
       </div>
       <div class="arch-divider"></div>
       <div class="arch-col">
@@ -839,6 +847,76 @@
     <div class="result-box neutral">Consequences: (1) <span class="tag">enhanced2-ltrb-anchor</span> remains the best ltrb model; (2) iterative refinement is dropped from the <em>stave-primary</em> successor, which keeps the static anchors only; (3) since count-conditional anchoring failed to bend the bottom down, the index-based matching scheme itself is implicated — reverting to Hungarian matching stays a live option.</div>
   </div>
 
+  <!-- ════════════════════════════════════════════ stave-primary -->
+  <div class="session">
+    <div class="session-header">
+      <h2><span class="tag">stave-primary</span></h2>
+      <span class="session-meta">2026-05-31 · tag: <code>train/stave-primary</code> · 7 epochs · D=128 H=4</span>
+      <span class="in-progress"><span class="dot-pulse"></span>training</span>
+    </div>
+    <p>Inverts the hierarchy used through <span class="tag">enhanced2-ltrb-anchor</span>: instead of systems leading and staves conditioned on them via group attention, <strong>staves are the primary stream and systems are derived</strong>. Two reasons. (1) Staves march down the page at ~constant pitch, so stave <em>i</em>'s top is near-linear in the slot index — a strong, low-variance prior the static anchor captures well; system tops are separated by a variable number of staves, so their slot→position map is high-variance (which is why per-slot anchoring helped systems only weakly). (2) The GT system box <em>is</em> exactly the hull of its staves (<code>System.box = Box(staves[0].top_left, staves[-1].bot_right)</code>), so predicting it through a separate head was redundant and let the two disagree.</p>
+    <p>Mechanics: 16 stave queries — independent of systems (no group attention) — predict <code>(top, bottom)</code> + objectness as a residual to <strong>static</strong> learnable per-slot anchors (no iterative refinement; see <span class="tag">enhanced2-ltrb-anchor-iter</span>'s negative result). A per-stave <strong>boundary flag</strong> (“starts a new system”) replaces the assignment head — <code>cumsum</code> recovers the contiguous grouping. A thin system stream predicts <code>(left, right)</code> + objectness only. The system box is <strong>derived</strong> as <code>(sys.left, min stave tops, sys.right, max stave bottoms)</code>; a GIoU loss on this derived box routes gradient into the extreme staves. The dependency is strictly one-directional — image → stave&nbsp;y → grouping → system&nbsp;x — so a noisy system estimate can no longer leak into the staves.</p>
+    <h3>Changes from enhanced2-ltrb-anchor</h3>
+    <div class="changes">
+      <div class="change-item"><span class="change-sym add">+</span> Staves primary &amp; independent — removed stave→system group attention</div>
+      <div class="change-item"><span class="change-sym add">+</span> Per-stave <strong>boundary flag</strong> (cumsum → grouping); replaces the assignment head</div>
+      <div class="change-item"><span class="change-sym mod">~</span> System head predicts <strong>(left, right) only</strong>; vertical extent derived as the stave hull</div>
+      <div class="change-item"><span class="change-sym mod">~</span> Derived-system GIoU loss — gradient flows to the extreme staves of each system</div>
+      <div class="change-item"><span class="change-sym rem">−</span> Iterative refinement + deep supervision dropped (iter was negative); static anchors kept</div>
+      <div class="change-item"><span class="change-sym add">+</span> Hard containment by construction (subsumes the planned containment-loss experiment)</div>
+    </div>
+    <h3>Architecture</h3>
+    <div class="arch">
+      <div class="arch-col">
+        <div class="arch-label">Backbone</div>
+        <div class="arch-block amber">ViT + pos embed<br>+ LayerNorm<br><small>D=128 · H=4</small></div>
+      </div>
+      <div class="arch-divider"></div>
+      <div class="arch-col">
+        <div class="arch-label">Stave (M=16) · primary</div>
+        <div class="arch-block slate">Self-Attn</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block slate">Cross-Attn (img)</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block slate">FFN</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block green">Stave (top, bottom)<br><small>static anchor</small></div>
+        <div class="arch-block green">Stave obj</div>
+        <div class="arch-block violet">Boundary flag</div>
+      </div>
+      <div class="arch-divider"></div>
+      <div class="arch-col">
+        <div class="arch-label">System (N=16) · derived</div>
+        <div class="arch-block slate">Self-Attn</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block slate">Cross-Attn (img)</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block slate">FFN</div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block green">Sys (left, right)</div>
+        <div class="arch-block green">Sys obj</div>
+      </div>
+      <div class="arch-divider"></div>
+      <div class="arch-col">
+        <div class="arch-label">Derived + loss</div>
+        <div class="arch-block violet">Sys box = stave hull<br><small>(l, min tops, r, max bots)</small></div>
+        <div class="arch-block slate">Stave L1</div>
+        <div class="arch-block slate">Boundary BCE</div>
+        <div class="arch-block slate">Sys L1 (l, r)</div>
+        <div class="arch-block amber">Derived sys GIoU</div>
+        <div class="arch-block slate">Stave/Sys obj BCE</div>
+      </div>
+    </div>
+    <p style="font-size:0.82rem;color:var(--muted)">Grouping: <code>system_id = cumsum(boundary) − 1</code> over the top-to-bottom staves, so systems are contiguous runs by construction. Each stave inherits <code>(left, right)</code> from its system; each system inherits its vertical extent from its staves.</p>
+    <h3>Training curves</h3>
+    <div class="charts">
+      <div class="chart-card"><h4>Val loss — vs anchor</h4><canvas id="c-sp-loss"></canvas></div>
+      <div class="chart-card"><h4>Val sys IoU — vs anchor</h4><canvas id="c-sp-iou"></canvas></div>
+      <div class="chart-card"><h4>Val stave L1 — vs anchor</h4><canvas id="c-sp-l1"></canvas></div>
+    </div>
+    <div class="result-box pending"><span class="in-progress"><span class="dot-pulse"></span></span> Training in progress (7 epochs, D=128, started 2026-05-31). Eval table + final metrics to follow. Open question: does making staves the primary, anchored stream — with systems derived as their hull — reduce the bottom-of-page error (anchor: bins 12–14 ~12–13 px) and/or lift sys IoU, at the same half-size budget? Compared head-to-head against <span class="tag">enhanced2-ltrb-anchor</span> (best ltrb, also D=128).</div>
+  </div>
+
 </main>
 
 <div id="chart-modal" class="chart-modal" role="dialog" aria-modal="true">
@@ -867,6 +945,7 @@ const C = {
   ltrb:    '#0ea5e9',
   anchor:  '#7c3aed',
   iter:    '#a21caf',
+  sp:      '#4338ca',
 };
 
 const basic = {
@@ -929,6 +1008,12 @@ const iter = {
   loss: [0.7778, 0.4695, 0.3912, 0.3696, 0.2962, 0.2777, 0.2717],
   iou:  [0.6930, 0.8135, 0.8401, 0.8452, 0.8853, 0.8928, 0.8937],
   l1:   [0.01668, 0.01041, 0.00883, 0.00769, 0.00687, 0.00674, 0.00657],
+};
+// stave-primary — training in progress; fill per-epoch val metrics on completion.
+const sp = {
+  loss: [],
+  iou:  [],
+  l1:   [],
 };
 
 function line(label, data, color, opts={}) {
@@ -1080,6 +1165,11 @@ makeChart('c-anchor-l1',   ep7, [line('enhanced2-ltrb',ltrb.l1,  C.ltrb,{dashed:
 makeChart('c-iter-loss', ep7.slice(0,iter.loss.length || ep7.length), [line('enhanced2-ltrb-anchor',anchor.loss,C.anchor,{dashed:true}), line('enhanced2-ltrb-anchor-iter',iter.loss,C.iter,{fill:true})]);
 makeChart('c-iter-iou',  ep7.slice(0,iter.iou.length  || ep7.length), [line('enhanced2-ltrb-anchor',anchor.iou, C.anchor,{dashed:true}), line('enhanced2-ltrb-anchor-iter',iter.iou, C.iter,{fill:true})], {min:0,max:1});
 makeChart('c-iter-l1',   ep7.slice(0,iter.l1.length   || ep7.length), [line('enhanced2-ltrb-anchor',anchor.l1,  C.anchor,{dashed:true}), line('enhanced2-ltrb-anchor-iter',iter.l1,  C.iter,{fill:true})]);
+
+// ── stave-primary vs enhanced2-ltrb-anchor (sp data filled when training completes)
+makeChart('c-sp-loss', ep7.slice(0,sp.loss.length || ep7.length), [line('enhanced2-ltrb-anchor',anchor.loss,C.anchor,{dashed:true}), line('stave-primary',sp.loss,C.sp,{fill:true})]);
+makeChart('c-sp-iou',  ep7.slice(0,sp.iou.length  || ep7.length), [line('enhanced2-ltrb-anchor',anchor.iou, C.anchor,{dashed:true}), line('stave-primary',sp.iou, C.sp,{fill:true})], {min:0,max:1});
+makeChart('c-sp-l1',   ep7.slice(0,sp.l1.length   || ep7.length), [line('enhanced2-ltrb-anchor',anchor.l1,  C.anchor,{dashed:true}), line('stave-primary',sp.l1,  C.sp,{fill:true})]);
 
 // ── Modal close wiring: backdrop click, close button, Esc.
 document.querySelector('.chart-modal-close').addEventListener('click', closeChartModal);
