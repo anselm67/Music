@@ -136,13 +136,13 @@ def check() -> None:
     print(f"input:          {x.shape}")
 
     with torch.no_grad():
-        sys_boxes, sys_logits, stave_tb, stave_logits, assign_logits = model(x)
+        stave_tb, stave_logits, boundary_logits, sys_lr, sys_logits = model(x)
 
-    print(f"sys_boxes:      {sys_boxes.shape}")  # (B, 16, 4)
-    print(f"sys_logits:     {sys_logits.shape}")  # (B, 16, 1)
     print(f"stave_tb:       {stave_tb.shape}")  # (B, 16, 2) — top, bottom
     print(f"stave_logits:   {stave_logits.shape}")  # (B, 16, 1)
-    print(f"assign_logits:  {assign_logits.shape}")  # (B, 16, 16)
+    print(f"boundary_logits:{boundary_logits.shape}")  # (B, 16, 1)
+    print(f"sys_lr:         {sys_lr.shape}")  # (B, 16, 2) — left, right
+    print(f"sys_logits:     {sys_logits.shape}")  # (B, 16, 1)
 
 
 @click.command()
@@ -354,14 +354,14 @@ LOG_VARIABLES = [
     # From StafferModule._step():
     "loss",
     "lr",  # Training only.
-    # From LossDict:
-    "sys_box",
-    "sys_giou",
-    "sys_obj",
     "sys_iou",
+    # From LossDict:
     "stave_l1",
     "stave_obj",
-    "assign",
+    "boundary",
+    "sys_lr",
+    "sys_obj",
+    "sys_giou",
 ]
 
 
@@ -431,8 +431,8 @@ def logs(
 
     \b
     The following METRIC are available:
-    - loss, lr (training only), stave_l1, sys_iou,
-    - sys_{box, giou, obj}, stave_{box, obj}, assign,
+    - loss, lr (training only), sys_iou,
+    - stave_l1, stave_obj, boundary, sys_lr, sys_obj, sys_giou,
     """
     # Parses the metric names and select train/valid variant.
     train_columns = tuple(i for c in train_columns for i in c.split(","))
@@ -542,32 +542,39 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
         img = dataset.transform(img).cuda()
         with torch.no_grad():
             (
-                pred_sys_boxes,
-                pred_sys_logits,
                 pred_stave_tb,
                 pred_stave_logits,
-                pred_assign,
+                pred_boundary_logits,
+                pred_sys_lr,
+                pred_sys_logits,
             ) = tuple(map(lambda t: t.squeeze(0), model.forward(img.unsqueeze(0))))
 
         img = img.squeeze(0).cpu().numpy()
         img = np.stack([img] * 3, axis=-1) * 255
         width_height = img.shape[1], img.shape[0]
-        # Try to make sense of the ground truth data.
-        for sys_index in range(pred_sys_boxes.shape[0]):
+        # Stave -> system grouping: cumsum of the boundary flag (1 = new system).
+        stave_logit = pred_stave_logits.squeeze(-1)
+        boundary = (pred_boundary_logits.squeeze(-1) > 0.0).long()
+        group = (boundary.cumsum(0) - 1).clamp(0, pred_sys_lr.shape[0] - 1)
+        # System boxes are derived as the hull of each system's active staves.
+        for sys_index in range(pred_sys_logits.shape[0]):
             print(f"\tsystem[{sys_index}]: {pred_sys_logits[sys_index].item():.2f}")
-            if pred_sys_logits[sys_index].item() > 0.0:
-                box = unbox(width_height, pred_sys_boxes[sys_index])
+            mask = (group == sys_index) & (stave_logit > 0.0)
+            if pred_sys_logits[sys_index].item() > 0.0 and bool(mask.any()):
+                top = pred_stave_tb[mask][:, 0].min()
+                bot = pred_stave_tb[mask][:, 1].max()
+                left, right = pred_sys_lr[sys_index]
+                box = unbox(width_height, torch.stack([left, top, right, bot]))
                 cv2.rectangle(img, box.top_left, box.bot_right, (0, 0, 255), 2)
-        stave_assignment = torch.argmax(pred_assign, dim=1)
-        for staff_index in range(pred_assign.shape[0]):
-            sys_idx = int(stave_assignment[staff_index].item())
+        for staff_index in range(pred_stave_tb.shape[0]):
+            sys_idx = int(group[staff_index].item())
             print(
-                f"\tstaff[{staff_index}]: {pred_stave_logits[staff_index].item():.2f}, "
+                f"\tstaff[{staff_index}]: {stave_logit[staff_index].item():.2f}, "
                 f"system: {sys_idx}"
             )
-            if pred_stave_logits[staff_index].item() > 0.0:
+            if stave_logit[staff_index].item() > 0.0:
                 top, bot = pred_stave_tb[staff_index]
-                left, _, right, _ = pred_sys_boxes[sys_idx]
+                left, right = pred_sys_lr[sys_idx]
                 box = unbox(width_height, torch.stack([left, top, right, bot]))
                 cv2.rectangle(img, box.top_left, box.bot_right, (0, 255, 0), 1)
         cv2.imshow("Page", img)
@@ -613,7 +620,7 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
     with torch.no_grad():
         for idx in tqdm(indices, desc="Evaluating"):
             img_tensor, _gt_sys, gt_staff, gt_assign = dataset[idx]
-            _, _, pred_stave_tb, _, _ = model.forward(
+            pred_stave_tb, _, _, _, _ = model.forward(
                 img_tensor.unsqueeze(0).to(device)
             )
             pred_stave_tb = pred_stave_tb.squeeze(0)  # (num_stave_queries, 2)

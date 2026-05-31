@@ -28,28 +28,28 @@ class StafferModule(L.LightningModule):
     def _step(self, batch: tuple, stage: str) -> Tensor:
         images, gt_sys_boxes, gt_stave_boxes, gt_assign = batch
         (
-            pred_sys_boxes,
-            pred_sys_logits,
             pred_stave_tb,
             pred_stave_logits,
-            pred_assign,
+            pred_boundary_logits,
+            pred_sys_lr,
+            pred_sys_logits,
         ) = self.model(images)
 
         loss = self.loss_fn.forward(
-            pred_sys_boxes,
-            pred_sys_logits,
             pred_stave_tb,
             pred_stave_logits,
-            pred_assign,
+            pred_boundary_logits,
+            pred_sys_lr,
+            pred_sys_logits,
             gt_sys_boxes,
             gt_stave_boxes,
             gt_assign,
-            aux_sys_boxes=self.model.aux_sys_boxes,
-            aux_stave_tb=self.model.aux_stave_tb,
         )
 
-        # IoU metrics
-        sys_iou = self._mean_sys_iou(pred_sys_boxes, gt_sys_boxes, gt_assign)
+        # IoU metrics — the system box is derived from its staves' hull.
+        sys_iou = self._mean_sys_iou(
+            pred_stave_tb, pred_sys_lr, gt_sys_boxes, gt_assign
+        )
         stave_l1 = self._mean_stave_l1(pred_stave_tb, gt_stave_boxes, gt_assign)
 
         self.log(f"{stage}/loss", loss.total(), prog_bar=True)
@@ -65,15 +65,29 @@ class StafferModule(L.LightningModule):
 
     def _mean_sys_iou(
         self,
-        pred_boxes: Tensor,  # (B, N, 4)
+        pred_stave_tb: Tensor,  # (B, M, 2) — top, bottom
+        pred_sys_lr: Tensor,  # (B, N, 2) — left, right
         gt_boxes: list[Tensor],  # list of (N, 4) padded
         gt_assign: list[Tensor],
     ) -> Tensor:
+        """IoU of the derived system boxes (hull of each system's staves)."""
         ious = []
-        for i in range(pred_boxes.shape[0]):
-            num_gt = int(gt_assign[i][gt_assign[i] != -1].max().item()) + 1
-            matched = pred_boxes[i][:num_gt]
-            gt = gt_boxes[i][:num_gt]
+        for i in range(pred_stave_tb.shape[0]):
+            assign = gt_assign[i]
+            num_gt_staves = int((assign != -1).sum().item())
+            num_gt_sys = int(assign[assign != -1].max().item()) + 1
+            a = assign[:num_gt_staves]
+            tb = pred_stave_tb[i][:num_gt_staves]
+            derived = []
+            for j in range(num_gt_sys):
+                mask = a == j
+                top = tb[mask][:, 0].min()
+                bot = tb[mask][:, 1].max()
+                derived.append(
+                    torch.stack([pred_sys_lr[i][j, 0], top, pred_sys_lr[i][j, 1], bot])
+                )
+            matched = torch.stack(derived)
+            gt = gt_boxes[i][:num_gt_sys]
             iou = generalized_iou(matched, gt).clamp(min=0).mean()
             ious.append(1.0 - iou)
         return torch.stack(ious).mean()
