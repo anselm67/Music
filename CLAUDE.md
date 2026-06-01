@@ -120,7 +120,14 @@ src/
   utils/       # Walker async pool, json_query, misc helpers
   verovio/     # Verovio wrapper, SVG scraper (LayoutExtractor), binaries
 tests/         # pytest, mirrors src/ structure
+scripts/       # one-off diagnostics (run, not imported; outside the package)
 ```
+
+`scripts/` holds standalone tools run via `uv run python scripts/<name>.py` — they
+import from `src/` but are not part of the installable package (not type-checked
+under `mypy src tests`, may use private APIs). e.g. `eval_predicted_boxes.py`:
+feeds staffer's predicted stave crops to noter to measure the transcription drop
+vs ground-truth crops (the pre-merge tolerance diagnostic).
 
 ---
 
