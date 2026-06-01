@@ -2,13 +2,13 @@
 """One-off PRE-MERGE DIAGNOSTIC — not wired into any CLI, no src/ changes.
 
 Measures how much noter's transcription degrades when fed staffer's PREDICTED
-stave crops instead of ground-truth crops, bucketed by vertical page position.
+stave crops instead of ground-truth crops.
 
 It answers the question behind the end-to-end merge: noter is trained on
 geometrically perfect GT crops; at merge time it sees the detector's jittering
-boxes. This quantifies (a) the per-bin token-similarity drop and (b) the
-matched-box error distribution (Δtop/Δbottom px) + detection miss rate — i.e.
-the SPEC for the noter box-jitter augmentation.
+boxes. This quantifies (a) the token-similarity drop and (b) the matched-box
+error magnitude (Δtop/Δbottom px) + detection miss/extra rate — i.e. the SPEC
+for the noter box-jitter augmentation.
 
 Both models run inference only. Everything is imported/reused from src/; the
 single copied block is staffer predict's active-stave grouping (see below).
@@ -42,8 +42,6 @@ from utils import sequence_edit_distance, strip_eos
 
 # Mirror StafferDataset.transform (the normalize constants are dataset stats).
 _NORM_MEAN, _NORM_STD = 0.9563435316085815, 0.16557540870879858
-
-NUM_BINS = 16
 
 
 def make_staffer_transform(cfg: StafferConfig) -> v2.Transform:
@@ -149,7 +147,6 @@ def main() -> None:
     s_transform = make_staffer_transform(s_cfg)
 
     page_h, page_w = n_cfg.page_shape  # (966, 680)
-    bin_size = page_h / NUM_BINS
 
     # Group GT staves (noter items) by page image.
     page_to_idx: dict[str, list[int]] = defaultdict(list)
@@ -159,13 +156,12 @@ def main() -> None:
     random.shuffle(pages)
     pages = pages[: args.pages]
 
-    # Per-bin accumulators.
-    base: list[list[float]] = [[] for _ in range(NUM_BINS)]  # GT-box similarity
-    pred: list[list[float]] = [[] for _ in range(NUM_BINS)]  # predicted-box sim
-    dtop: list[list[float]] = [[] for _ in range(NUM_BINS)]  # |pred_top-gt_top| px
-    dbot: list[list[float]] = [[] for _ in range(NUM_BINS)]  # |pred_bot-gt_bot| px
+    # Accumulators.
+    base: list[float] = []  # GT-box similarity
+    pred: list[float] = []  # predicted-box similarity
+    dtop: list[float] = []  # |pred_top - gt_top| px
+    dbot: list[float] = []  # |pred_bot - gt_bot| px
     n_gt = n_missed = n_extra = 0
-    missed = [0 for _ in range(NUM_BINS)]  # detection misses per bin
 
     for png in tqdm(pages, desc="pages"):
         idxs = page_to_idx[png]
@@ -202,7 +198,6 @@ def main() -> None:
         # --- score each GT stave: GT-box baseline vs predicted-box ---
         for gpos, (idx, cy, _h) in enumerate(gts):
             mxl, png_path, gt_box, spine, fb, lb = dataset.items[idx]
-            b = min(int(cy / bin_size), NUM_BINS - 1)
 
             res = dataset._load_image(mxl, png_path, gt_box)
             seq = dataset._load_sequence(mxl, spine, fb, lb)
@@ -212,11 +207,10 @@ def main() -> None:
             p0 = noter.predict(
                 img0.unsqueeze(0).to(device), torch.tensor([w0]).to(device)
             )
-            base[b].append(similarity(seq, p0[0], n_cfg.max_chords))
+            base.append(similarity(seq, p0[0], n_cfg.max_chords))
 
             if gpos not in match:  # detection miss → whole staff lost
-                pred[b].append(0.0)
-                missed[b] += 1
+                pred.append(0.0)
                 n_missed += 1
                 continue
             pl, pt, pr, pb = pred_boxes[match[gpos]]
@@ -224,17 +218,17 @@ def main() -> None:
                 (int(pl * page_w), int(pt * page_h)),
                 (int(pr * page_w), int(pb * page_h)),
             )
-            dtop[b].append(abs(pt * page_h - gt_box.top))
-            dbot[b].append(abs(pb * page_h - gt_box.bottom))
+            dtop.append(abs(pt * page_h - gt_box.top))
+            dbot.append(abs(pb * page_h - gt_box.bottom))
             res2 = dataset._load_image(mxl, png_path, pbox)
             if res2 is None:
-                pred[b].append(0.0)
+                pred.append(0.0)
                 continue
             img1, w1 = res2
             p1 = noter.predict(
                 img1.unsqueeze(0).to(device), torch.tensor([w1]).to(device)
             )
-            pred[b].append(similarity(seq, p1[0], n_cfg.max_chords))
+            pred.append(similarity(seq, p1[0], n_cfg.max_chords))
 
     # --- report ---
     def avg(xs: list[float]) -> float:
@@ -248,31 +242,12 @@ def main() -> None:
         f"(miss {n_missed}, {miss_pct:.1f}%) · extra preds {n_extra}\n"
     )
     print(
-        f"  {'bin':>3} {'y-range':>10} {'n':>5} {'base':>7} {'pred':>7} "
-        f"{'Δsim':>7} {'miss%':>6} {'Δtop':>6} {'Δbot':>6}"
+        f"  similarity: base={avg(base):.4f} pred={avg(pred):.4f} "
+        f"Δ={avg(base) - avg(pred):.4f}"
     )
-    tot_b, tot_p = [], []
-    for bb in range(NUM_BINS):
-        nb = len(base[bb])
-        if nb == 0:
-            continue
-        tot_b += base[bb]
-        tot_p += pred[bb]
-        print(
-            f"  {bb:>3} {int(bb * bin_size):>4}-{int((bb + 1) * bin_size):<5} {nb:>5} "
-            f"{avg(base[bb]):>7.3f} {avg(pred[bb]):>7.3f} "
-            f"{avg(base[bb]) - avg(pred[bb]):>7.3f} {100 * missed[bb] / nb:>5.1f}% "
-            f"{avg(dtop[bb]):>5.1f} {avg(dbot[bb]):>5.1f}"
-        )
-    print(
-        f"\n  TOTAL base={avg(tot_b):.4f} pred={avg(tot_p):.4f} "
-        f"Δ={avg(tot_b) - avg(tot_p):.4f}"
-    )
-    all_top = [v for b in dtop for v in b]
-    all_bot = [v for b in dbot for v in b]
     print(
         f"  matched-box error (jitter spec): "
-        f"Δtop {avg(all_top):.2f}px  Δbot {avg(all_bot):.2f}px"
+        f"Δtop {avg(dtop):.2f}px  Δbot {avg(dbot):.2f}px"
     )
 
 
