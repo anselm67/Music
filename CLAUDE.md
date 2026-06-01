@@ -115,6 +115,7 @@ src/
   pdmx/        # PDMX index, layout types (Score, Box), asset builder, stats
   staffer/     # HierarchicalDETR model, loss, module, dataset, datamodule
   noter/       # NoterModel/Config, module, dataset, datamodule, vocab
+  scorer/      # [planned] end-to-end model: staffer+noter in one forward pass (see docs/architecture.html)
   kern/        # Humdrum Kern parser, tokenizer, kern→MIDI converter
   midi/        # Binary MIDI I/O (input, output, typing)
   utils/       # Walker async pool, json_query, misc helpers
@@ -244,4 +245,4 @@ Multi-page scores store per-page PNGs; single-page scores use a flat filename.
 2. **NoterModel** — `enhanced3` baseline is solid (99.58% val acc). Next: longer sequences, harder scores, multi-staff generalisation.
 3. **Stave↔spine alignment** — mostly done; bar number mismatches remain when Score/page/system computed bar numbers diverge from Verovio output.
 4. [longer term] Multi-stave processing: `SystemTransformer` + `SharedSpineDecoder` + RoIAlign feature extraction from `staffer` detections.
-5. Single end-to-end model (detection + transcription in one forward pass).
+5. Single end-to-end model (detection + transcription in one forward pass) — the `scorer` package (`staffer`/`noter`/`scorer`); design in `docs/architecture.html`.

@@ -249,7 +249,7 @@
   no coordinate rounding, hence "aligned".
 </p>
 <p>
-  In the E2E model, the shared 4×4 patch embedding produces a feature map at
+  In the Scorer model, the shared 4×4 patch embedding produces a feature map at
   <code>(240×172)</code> spatial resolution (each position = 4×4 px of the input).
   A typical stave is 32–64 px tall = <strong>8–16 feature rows</strong> — a
   significant improvement over the 2–4 rows that would result from a 16×16 backbone.
@@ -351,8 +351,8 @@
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════════ -->
-<section id="e2e">
-<h2>4 — End-to-End Model</h2>
+<section id="scorer">
+<h2>4 — Scorer (End-to-End Model)</h2>
 <p>
   A single <strong>shared Conv2d(1→256, k=4, s=4)</strong> replaces both models' patch
   embeddings. The resulting <code>(B, 256, 240, 172)</code> feature map branches into
@@ -602,12 +602,12 @@
     <tr><td>MLP Head Linear(256 → 8 × 4 784)</td><td>9.84 M</td><td>19.7 MB</td><td>—</td><td>✓</td><td>✓ fine-tuned</td></tr>
     <tr><td>RoIAlign bridge</td><td>0</td><td>—</td><td>—</td><td>—</td><td>✓ inserted</td></tr>
     <tr style="font-weight:600;background:#f8fafc;">
-      <td>E2E total (Stage 3)</td><td>32.1 M</td><td>64 MB bf16 · 128 MB fp32</td><td></td><td></td><td>det + CE joint loss</td>
+      <td>Scorer total (Stage 3)</td><td>32.1 M</td><td>64 MB bf16 · 128 MB fp32</td><td></td><td></td><td>det + CE joint loss</td>
     </tr>
   </tbody>
 </table>
 <p style="margin-top:0.75rem;font-size:0.88rem;color:#64748b;">
-  <strong>Training VRAM (B=16, E2E fine-tuning, bf16-mixed):</strong>
+  <strong>Training VRAM (B=16, Scorer fine-tuning, bf16-mixed):</strong>
   bf16 compute weights 64 MB + fp32 master weights 128 MB + AdamW fp32 m/v states 256 MB ≈ 448 MB;
   shared feature map (B, 256, 240, 172) in bf16 ≈ 340 MB;
   bf16 activations through 8 Transformer layers + RoIAlign ≈ 600 MB.
@@ -627,7 +627,7 @@
   <div class="rationale-card">
     <h4>Starting point: naïve RoIAlign from 16×16 backbone</h4>
     <p>
-      The first E2E proposal reused the Staffer's 16×16 patch ViT feature map
+      The first Scorer proposal reused the Staffer's 16×16 patch ViT feature map
       <code>(B, 256, 60, 43)</code> as the RoIAlign source, with
       <code>output_size=(4, 192)</code>.
     </p>
@@ -697,17 +697,17 @@
 <section id="impl">
 <h2>7 — Implementation Guide</h2>
 <p>
-  Everything needed to go from the two standalone checkpoints to a working E2E model.
+  Everything needed to go from the two standalone checkpoints to a working Scorer model.
   No decisions are left open — only write code.
 </p>
 <div class="callout">
   <strong>Non-destructive principle:</strong> the existing <code>staffer</code> and
-  <code>noter</code> CLIs and models are unchanged. <code>E2EModel</code> composes them
+  <code>noter</code> CLIs and models are unchanged. <code>ScorerModel</code> composes them
   by <em>importing</em> their sub-modules (e.g. <code>StafferModel.backbone.blocks</code>,
   <code>NoterModel.target_embedder</code>) — not by modifying those classes. Both
   standalone training pipelines continue to work exactly as before. Where helpful,
   expose a <code>build_encoder()</code> or similar factory on the existing model classes
-  so <code>E2EModel</code> can construct the right sub-graph without duplicating code.
+  so <code>ScorerModel</code> can construct the right sub-graph without duplicating code.
 </div>
 
 <h3>7.1 Pre-trained checkpoints</h3>
@@ -726,18 +726,18 @@
 
 <h3>7.2 New files to create</h3>
 <p style="font-size:.875rem;color:var(--muted);">
-  All E2E code lives in a new top-level package <code>src/e2e/</code>, mirroring the
+  All Scorer code lives in a new top-level package <code>src/scorer/</code>, mirroring the
   <code>src/noter/</code> and <code>src/models/</code> layout. No existing source files are
   modified.
 </p>
 <table>
   <thead><tr><th>File</th><th>Contents</th></tr></thead>
   <tbody>
-    <tr><td><code>src/e2e/__init__.py</code></td><td>empty (package marker)</td></tr>
-    <tr><td><code>src/e2e/e2e_model.py</code></td><td><code>E2EConfig</code>, <code>E2EModel</code> (shared embed, down branch, noter branch), <code>build_stave_boxes()</code></td></tr>
-    <tr><td><code>src/e2e/e2e_module.py</code></td><td><code>E2EModule</code> (Lightning): joint loss, <code>load_from_checkpoints()</code></td></tr>
-    <tr><td><code>src/e2e/e2e_dataset.py</code></td><td><code>E2EDataset</code>: yields full-page image + layout GT + token sequences per stave</td></tr>
-    <tr><td><code>src/e2e/e2e_datamodule.py</code></td><td><code>E2EDataModule</code>: Lightning DataModule wrapping <code>E2EDataset</code></td></tr>
+    <tr><td><code>src/scorer/__init__.py</code></td><td>empty (package marker)</td></tr>
+    <tr><td><code>src/scorer/scorer_model.py</code></td><td><code>ScorerConfig</code>, <code>ScorerModel</code> (shared embed, down branch, noter branch), <code>build_stave_boxes()</code></td></tr>
+    <tr><td><code>src/scorer/scorer_module.py</code></td><td><code>ScorerModule</code> (Lightning): joint loss, <code>load_from_checkpoints()</code></td></tr>
+    <tr><td><code>src/scorer/scorer_dataset.py</code></td><td><code>ScorerDataset</code>: yields full-page image + layout GT + token sequences per stave</td></tr>
+    <tr><td><code>src/scorer/scorer_datamodule.py</code></td><td><code>ScorerDataModule</code>: Lightning DataModule wrapping <code>ScorerDataset</code></td></tr>
   </tbody>
 </table>
 
@@ -747,7 +747,7 @@
   Keys marked <em>new</em> must be randomly initialised; all others transfer directly.
 </p>
 <table>
-  <thead><tr><th>Source checkpoint</th><th>Source key prefix</th><th>E2E module attribute</th><th>Action</th></tr></thead>
+  <thead><tr><th>Source checkpoint</th><th>Source key prefix</th><th>Scorer module attribute</th><th>Action</th></tr></thead>
   <tbody>
     <tr><td>staffer</td><td><code>backbone.blocks.*</code></td><td><code>vit_blocks</code></td><td>transfer ✓</td></tr>
     <tr><td>staffer</td><td><code>backbone.patch_embed.pos_embed</code></td><td><code>down_branch.pos_embed</code></td><td>transfer ✓</td></tr>
@@ -828,14 +828,14 @@ memory = crops.squeeze(2).permute(0, 2, 1)  # (n_active, 192, 256)  ← noter me
   The Staffer resizes pages to <code>(960, 688)</code> px via
   <code>StafferConfig.scale_to_patch()</code>: <code>max_height=1449 / divider=1.5 → 966 → round to 16 → 960</code>;
   <code>max_width=1024 / 1.5 → 682.7 → round to 16 → 688</code>.
-  The E2E model must use the same size. With the shared 4×4 embed the
+  The Scorer model must use the same size. With the shared 4×4 embed the
   feature map is <code>(240, 172)</code>; after the DownConv k=4 the Staffer sees
   <code>(60, 43)</code> = 2 580 patches — identical to its standalone training.
 </p>
 
-<h3>7.6 E2E dataset</h3>
+<h3>7.6 Scorer dataset</h3>
 <p>
-  <code>E2EDataset</code> must provide per-sample:
+  <code>ScorerDataset</code> must provide per-sample:
 </p>
 <ul style="font-size:.875rem;">
   <li><strong>image</strong> <code>(1, 960, 688)</code> — resized page, grayscale, float32</li>
@@ -847,7 +847,7 @@ memory = crops.squeeze(2).permute(0, 2, 1)  # (n_active, 192, 256)  ← noter me
 <p style="font-size:.875rem;color:var(--muted);">
   <code>StafferDataset</code> already provides the first four fields.
   <code>NoterDataset</code> provides staff crops + token sequences for a subset (≤2 staves).
-  <code>E2EDataset</code> should inherit or wrap <code>StafferDataset</code> and add token
+  <code>ScorerDataset</code> should inherit or wrap <code>StafferDataset</code> and add token
   sequences by matching stave positions to the Kern token files from PDMX.
   Use only scores present in <code>System2.csv</code> initially (guarantees token coverage).
 </p>
