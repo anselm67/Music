@@ -59,7 +59,7 @@ class StafferModule(L.LightningModule):
         sys_iou = self._mean_sys_iou(
             pred_stave_tb, pred_sys_lr, gt_sys_boxes, gt_assign, assign_q
         )
-        stave_l1_px = (
+        stave_err_px = (
             self._mean_stave_l1(pred_stave_tb, gt_stave_boxes, assign_q)
             * self.config.image_shape[0]
         )
@@ -71,7 +71,7 @@ class StafferModule(L.LightningModule):
         # fields(loss) loop also emits `{stage}/stave_l1`. They previously shared
         # the key — Lightning silently kept the (multiplied) loss term and the
         # clean metric was lost. See docs/staffer-training.html.
-        self.log(f"{stage}/stave_l1_px", stave_l1_px)
+        self.log(f"{stage}/stave_err_px", stave_err_px)
         for f in fields(loss):
             self.log(f"{stage}/{f.name}", getattr(loss, f.name))
 

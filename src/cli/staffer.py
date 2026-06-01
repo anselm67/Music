@@ -356,7 +356,7 @@ LOG_VARIABLES = [
     "loss",
     "lr",  # Training only.
     "sys_iou",
-    "stave_l1_px",  # Clean mean stave-edge error (px); see staffer_module._step.
+    "stave_err_px",  # Clean mean stave-edge error (px); see staffer_module._step.
     # From LossDict:
     "stave_l1",
     "stave_obj",
@@ -433,7 +433,7 @@ def logs(
 
     \b
     The following METRIC are available:
-    - loss, lr (training only), sys_iou, stave_l1_px (clean stave error),
+    - loss, lr (training only), sys_iou, stave_err_px (clean stave error),
     - stave_l1, stave_obj, boundary, sys_lr, sys_obj, sys_giou,
     """
     # Parses the metric names and select train/valid variant.
