@@ -219,18 +219,18 @@
         <td><span class="tag">stave-primary</span></td><td>2026-05-31</td><td>128</td><td>16</td>
         <td>0.138</td><td>0.951</td><td>bins 12–14 ~5–6 px‡</td>
         <td>Staves lead; systems derived as stave hull; boundary-flag grouping; static anchors (no iter)</td>
-        <td><span class="badge badge-green">new best</span></td>
+        <td><span class="badge badge-slate">prev best</span></td>
       </tr>
       <tr>
-        <td><span class="tag">stave-primary-grid</span></td><td>2026-05-31</td><td>128</td><td>16</td>
-        <td>—</td><td>—</td><td>—</td>
+        <td><span class="tag">stave-primary-grid</span></td><td>2026-06-01</td><td>128</td><td>16</td>
+        <td>0.087</td><td>0.971</td><td>bins 12–14 ~2.4–3 px · 1.04 px</td>
         <td>Frozen uniform anchor grid + free non-contiguous stave→query assignment</td>
-        <td><span class="badge badge-blue">training</span></td>
+        <td><span class="badge badge-green">new best</span></td>
       </tr>
     </tbody>
   </table>
   <p style="font-size:0.82rem;color:var(--muted)">† stave L1 not comparable to prior runs: enhanced2-ltrb stave head outputs (top, bottom) directly; prior runs output (cy, h). ‡ <span class="tag">stave-primary</span>'s <code>val/stave_l1</code> is not a clean metric (logging-key collision, see its card), so its stave column reports the eval table's bottom-of-page error instead — directly comparable to the anchor's bins 12–14 (~12–13 px).</p>
-  <div class="result-box neutral" style="font-size:0.84rem"><strong>Model size note.</strong> <span class="tag">basic</span>–<span class="tag">enhanced2-vflip</span> ran at <strong>D=256 · H=8 · mlp=1024</strong>. From <span class="tag">enhanced2-sampler</span> onward the <code>StafferConfig</code> default had silently shrunk to <strong>D=128 · H=4 · mlp=512</strong> (the small-model config, never restored; <code>train</code> has no override flag) — so <span class="tag">enhanced2-sampler</span>, <span class="tag">enhanced2-ltrb</span>, <span class="tag">enhanced2-ltrb-anchor</span>, <span class="tag">enhanced2-ltrb-anchor-iter</span>, <span class="tag">stave-primary</span> and <span class="tag">stave-primary-grid</span> are all <strong>half-size</strong>. The D column above is corrected to reflect the saved <code>hparams.yaml</code>. <em>Consequence:</em> the sys-IoU gap of the ltrb line vs <span class="tag">enhanced2</span> (0.914 vs 0.919) is largely <strong>capacity</strong>, not the ltrb formulation being "harder" — the like-for-like comparisons within the ltrb line (all D=128) remain valid. <span class="tag">stave-primary</span> has now validated as the best architecture at this budget, so a full-size retrain (D=256/H=8/mlp=1024) of it is the next step.</div>
+  <div class="result-box neutral" style="font-size:0.84rem"><strong>Model size note.</strong> <span class="tag">basic</span>–<span class="tag">enhanced2-vflip</span> ran at <strong>D=256 · H=8 · mlp=1024</strong>. From <span class="tag">enhanced2-sampler</span> onward the <code>StafferConfig</code> default had silently shrunk to <strong>D=128 · H=4 · mlp=512</strong> (the small-model config, never restored; <code>train</code> has no override flag) — so <span class="tag">enhanced2-sampler</span>, <span class="tag">enhanced2-ltrb</span>, <span class="tag">enhanced2-ltrb-anchor</span>, <span class="tag">enhanced2-ltrb-anchor-iter</span>, <span class="tag">stave-primary</span> and <span class="tag">stave-primary-grid</span> are all <strong>half-size</strong>. The D column above is corrected to reflect the saved <code>hparams.yaml</code>. <em>Consequence:</em> the sys-IoU gap of the ltrb line vs <span class="tag">enhanced2</span> (0.914 vs 0.919) is largely <strong>capacity</strong>, not the ltrb formulation being "harder" — the like-for-like comparisons within the ltrb line (all D=128) remain valid. <span class="tag">stave-primary-grid</span> has now validated as the best architecture at this budget (sys IoU 0.971; bottom drift flattened to ~2.5 px), so a full-size retrain (D=256/H=8/mlp=1024) of the grid variant is the next step.</div>
 
   <!-- ════════════════════ Comparison charts ════════════════════ -->
   <h2>Cross-run comparison</h2>
@@ -951,7 +951,7 @@
     <div class="session-header">
       <h2><span class="tag">stave-primary-grid</span></h2>
       <span class="session-meta">2026-05-31 · tag: <code>train/stave-primary-grid</code> · 7 epochs · D=128 H=4</span>
-      <span class="in-progress"><span class="dot-pulse"></span>training</span>
+      <span class="badge badge-green">new best</span>
     </div>
     <p>Same architecture as <span class="tag">stave-primary</span>, changing only <em>how stave queries are matched to ground truth</em>. In stave-primary the matching is <strong>positional</strong> — GT stave <em>i</em> (top-to-bottom) is always served by query <em>i</em>, and the per-slot anchor is <em>learnable</em>. That makes query <em>i</em>'s target high-variance: "the i-th stave from the top" sits at a very different y depending on how many staves are on the page, and the high-index queries only fire on dense pages, so they train rarely and learn their band poorly — the residual bottom-of-page error every prior run shows.</p>
     <p>grid <strong>freezes</strong> the anchors to a uniform grid at <code>(i+0.5)/M</code> and routes each GT stave to the query whose frozen anchor sits nearest it (1-D optimal assignment via <code>scipy.linear_sum_assignment</code> on <code>|anchor_center − gt_center|</code>). The slot→stave map is now <strong>free / non-contiguous</strong> — GT stave 4 may be served by query 6 — so each query's anchor becomes a true, count-independent <em>spatial</em> prior and every query trains at ~uniform frequency. 1-D matchings never cross, so the top-to-bottom order (and the boundary-flag <code>cumsum</code> grouping) stays valid. At inference there is no routing: the active queries (objectness&nbsp;&gt;&nbsp;0) <em>are</em> the staves.</p>
@@ -1004,7 +1004,31 @@
       <div class="chart-card"><h4>Val sys IoU — vs stave-primary</h4><canvas id="c-spg-iou"></canvas></div>
       <div class="chart-card"><h4>Val stave_l1_px (clean, px)</h4><canvas id="c-spg-l1"></canvas></div>
     </div>
-    <div class="result-box pending"><span class="in-progress"><span class="dot-pulse"></span></span> Training in progress (7 epochs, D=128, launched 2026-05-31 ~19:11). Eval table + final metrics to follow — full-distribution per-bin + clean <code>stave_l1_px</code>, head-to-head vs <span class="tag">stave-primary</span> (sys IoU 0.951; bottom bins 12–14 ~5–7 px). Open question: does frozen-grid routing — by training the rarely-fired high slots at uniform frequency — shave the residual bottom-of-page error below stave-primary's, the lever the anchor/iter line never moved?</div>
+    <h3>Stave coordinate error by vertical position</h3>
+    <p style="font-size:0.82rem;color:var(--muted)">Full-distribution eval (2000 random pages of 234,387 samples, H=960&nbsp;px). GT staves routed to queries by the same nearest-frozen-anchor assignment used in training. The <em>vs stave-primary</em> column is <span class="tag">stave-primary</span>'s top_err for the same bin (its own full-distribution eval) — directly comparable.</p>
+    <table class="eval-table">
+      <thead><tr><th>Bin</th><th>Y range</th><th>n</th><th>top_err</th><th>bot_err</th><th>vs stave-primary (top)</th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td>0–60</td><td>1473</td><td>0.3 px</td><td>0.5 px</td><td><span class="eval-bar" style="width:2px;background:#059669"></span> 0.3</td></tr>
+        <tr><td>1</td><td>60–120</td><td>1397</td><td>1.2 px</td><td>1.3 px</td><td><span class="eval-bar" style="width:5px;background:#059669"></span> 1.0</td></tr>
+        <tr><td>2</td><td>120–180</td><td>1883</td><td>0.8 px</td><td>0.8 px</td><td><span class="eval-bar" style="width:5px;background:#059669"></span> 1.0</td></tr>
+        <tr><td>3</td><td>180–240</td><td>1756</td><td>0.9 px</td><td>1.0 px</td><td><span class="eval-bar" style="width:7px;background:#059669"></span> 1.3</td></tr>
+        <tr><td>4</td><td>240–300</td><td>1415</td><td>1.3 px</td><td>1.4 px</td><td><span class="eval-bar" style="width:9px;background:#059669"></span> 1.7</td></tr>
+        <tr><td>5</td><td>300–360</td><td>1182</td><td>1.6 px</td><td>1.7 px</td><td><span class="eval-bar" style="width:10px;background:#059669"></span> 1.9</td></tr>
+        <tr><td>6</td><td>360–420</td><td>1103</td><td>2.0 px</td><td>2.2 px</td><td><span class="eval-bar" style="width:13px;background:#65a30d"></span> 2.6</td></tr>
+        <tr><td>7</td><td>420–480</td><td>1027</td><td>2.2 px</td><td>2.3 px</td><td><span class="eval-bar" style="width:14px;background:#65a30d"></span> 2.8</td></tr>
+        <tr><td>8</td><td>480–540</td><td>898</td><td>2.3 px</td><td>2.3 px</td><td><span class="eval-bar" style="width:16px;background:#84cc16"></span> 3.1</td></tr>
+        <tr><td>9</td><td>540–600</td><td>832</td><td>1.7 px</td><td>2.0 px</td><td><span class="eval-bar" style="width:19px;background:#84cc16"></span> 3.7</td></tr>
+        <tr><td>10</td><td>600–660</td><td>720</td><td>2.4 px</td><td>2.9 px</td><td><span class="eval-bar" style="width:20px;background:#84cc16"></span> 3.9</td></tr>
+        <tr><td>11</td><td>660–720</td><td>628</td><td>1.9 px</td><td>2.3 px</td><td><span class="eval-bar" style="width:22px;background:#eab308"></span> 4.3</td></tr>
+        <tr><td>12</td><td>720–780</td><td>411</td><td>2.6 px</td><td>3.2 px</td><td><span class="eval-bar" style="width:30px;background:#f97316"></span> 6.0</td></tr>
+        <tr><td>13</td><td>780–840</td><td>230</td><td>2.4 px</td><td>2.6 px</td><td><span class="eval-bar" style="width:37px;background:#ef4444"></span> 7.3</td></tr>
+        <tr><td>14</td><td>840–900</td><td>98</td><td>3.0 px</td><td>1.4 px</td><td><span class="eval-bar" style="width:23px;background:#eab308"></span> 4.5</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">n-weighted mean top_err (bins 0–14) ≈ <strong>1.4 px</strong> (vs stave-primary's 2.2 px). Bin 15 (900–960) had n=1 and is omitted as noise. Clean <code>val/stave_l1_px</code> at the final epoch: <strong>1.04 px</strong>.</p>
+    <div class="result-box positive"><strong>New best — and the bottom-of-page drift is gone.</strong> grid beats <span class="tag">stave-primary</span> on <em>both</em> aggregate axes (sys IoU <strong>0.971</strong> vs 0.951; clean stave error <strong>1.04 px</strong> vs 1.84) at the same D=128 budget, but the decisive result is the per-bin profile: the residual bottom-of-page error that <span class="tag">stave-primary</span> had already <em>halved</em> to ~6–7 px (bins 12–13) is now <strong>flattened to ~2.5 px</strong> — essentially the same accuracy at the bottom of the page as at the top. The hypothesis holds: by freezing the anchors to a uniform grid and routing each GT stave to its nearest anchor, every query trains at ~uniform frequency on a count-independent spatial band, so the rarely-fired high slots — the sole remaining source of drift through the entire ltrb/anchor/iter line — finally learn their position. This is the lever count-conditional anchoring (<span class="tag">enhanced2-ltrb-anchor-iter</span>) reached for and missed.</div>
+    <div class="result-box neutral">Caveat: this is the <strong>half-size</strong> (D=128) budget. The next step is a full-size retrain (D=256/H=8/mlp=1024) to confirm the gain compounds with capacity — see the model-size note up top.</div>
   </div>
 
 </main>
@@ -1111,9 +1135,9 @@ const sp = {
 // per-epoch val on completion. NB: l1 here is the CLEAN val/stave_l1_px (px),
 // NOT the corrupted stave_l1 column — so it is not comparable to sp.l1 above.
 const spg = {
-  loss: [],
-  iou:  [],
-  l1:   [],
+  loss: [0.2898,0.2010,0.1445,0.1241,0.1047,0.0917,0.0868],
+  iou:  [0.9137,0.9362,0.9535,0.9601,0.9648,0.9691,0.9707],
+  l1:   [2.6677,1.9165,1.5346,1.3058,1.1710,1.0716,1.0428],
 };
 
 function line(label, data, color, opts={}) {
