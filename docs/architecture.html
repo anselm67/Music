@@ -789,6 +789,7 @@
 #   boundary_logits: (M,)    — >0 ⇒ this stave starts a new system
 
 H_feat, W_feat = 240, 172          # shared feature map spatial size
+features_2d = shared_embed(image)  # (B, 256, 240, 172) shared page embedding (from the forward pass)
 
 # Group active staves into systems, then inherit (left,right) from the owner.
 # Active queries are non-contiguous, so the boundary cumsum runs over the
@@ -806,7 +807,7 @@ y1 = stave_tb[active, 0] * H_feat;  y2 = stave_tb[active, 1] * H_feat
 batch_idx = torch.zeros_like(x1)                           # page's index in B
 boxes = torch.stack([batch_idx, x1, y1, x2, y2], dim=-1)   # (n_active, 5)
 
-# features_2d: (B, 256, H_feat, W_feat)  ← shared embed output reshaped
+# RoIAlign crops each stave box from the shared feature map (defined above).
 crops = torchvision.ops.roi_align(
     features_2d, boxes.float(),
     output_size=(16, 192),
