@@ -234,6 +234,12 @@ def main() -> None:
     def avg(xs: list[float]) -> float:
         return sum(xs) / len(xs) if xs else float("nan")
 
+    def pct(xs: list[float], q: float) -> float:
+        if not xs:
+            return float("nan")
+        s = sorted(xs)
+        return s[min(len(s) - 1, int(q * len(s)))]
+
     print(f"\nPredicted-box tolerance — noter={args.noter} staffer={args.staffer}")
     print(f"{len(pages)} pages, {n_gt} GT staves, page_shape={n_cfg.page_shape}")
     miss_pct = 100 * n_missed / max(n_gt, 1)
@@ -245,10 +251,13 @@ def main() -> None:
         f"  similarity: base={avg(base):.4f} pred={avg(pred):.4f} "
         f"Δ={avg(base) - avg(pred):.4f}"
     )
-    print(
-        f"  matched-box error (jitter spec): "
-        f"Δtop {avg(dtop):.2f}px  Δbot {avg(dbot):.2f}px"
-    )
+    print("  matched-box error (jitter spec):")
+    print(f"  {'':>6} {'mean':>6} {'p50':>6} {'p90':>6} {'p99':>6} {'max':>7}")
+    for label, xs in (("Δtop", dtop), ("Δbot", dbot)):
+        print(
+            f"  {label:>6} {avg(xs):>5.2f}p {pct(xs, 0.50):>5.2f}p "
+            f"{pct(xs, 0.90):>5.2f}p {pct(xs, 0.99):>5.2f}p {max(xs):>6.1f}p"
+        )
 
 
 if __name__ == "__main__":
