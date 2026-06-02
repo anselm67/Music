@@ -1,0 +1,37 @@
+"""The ``Source`` protocol: the data contract every dataset backend implements.
+
+A ``Source`` yields exactly what the ``staffer`` / ``noter`` / ``scorer`` datasets need,
+hiding each dataset's on-disk layout behind a uniform interface. PDMX and KernSheet each
+provide an implementation (``PdmxSource`` / ``KernSheetSource``).
+
+The vocabulary is intentionally *not* part of this protocol: a single shared vocab is
+built once and passed to the datasets alongside the source.
+"""
+
+from typing import Iterable, Protocol
+
+from torch import Tensor
+
+from .layout import Score
+
+
+class Source(Protocol):
+    def scores(self) -> Iterable[Score]:
+        """Enumerate the dataset's scores (layout included). Frugal: yield lazily."""
+        ...
+
+    def score(self, id: str) -> Score:
+        """(Re)load one score's layout by its ``Score.id`` key.
+
+        Used per ``__getitem__`` so datasets can keep only lightweight keys in memory
+        rather than holding every parsed ``Score``.
+        """
+        ...
+
+    def image(self, id: str, page_number: int) -> Tensor:
+        """Raw page image ``(C, H, W)`` in original pixels; the dataset transforms."""
+        ...
+
+    def records(self, id: str, first_bar: int, last_bar: int) -> list[str] | None:
+        """Kern rows for the bar range, spines tab-separated; None if unavailable."""
+        ...

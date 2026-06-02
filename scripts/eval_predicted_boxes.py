@@ -31,12 +31,12 @@ from pathlib import Path
 
 import torch
 from scipy.optimize import linear_sum_assignment
-from torchvision.io import decode_image
 from torchvision.transforms import v2
 from tqdm import tqdm
 
 from noter import NoterConfig, NoterDataset, NoterModule, Vocab
-from pdmx import PDMX, Box
+from pdmx import PDMX, PdmxSource
+from sheetmusic import Box
 from staffer import StafferConfig, StafferModule
 from utils import sequence_edit_distance, strip_eos
 
@@ -117,13 +117,15 @@ def main() -> None:
     )
 
     pdmx = PDMX(args.home, args.csv, -1, args.limit)
+    source = PdmxSource(pdmx)
+    vocab = Vocab.load(pdmx.home / "build/vocab.json")
 
     # noter
     n_ckpt = Path("checkpoints") / "noter" / args.noter / "last.ckpt"
     n_hp = torch.load(n_ckpt, weights_only=False)["hyper_parameters"]
     n_keep = {f.name for f in fields(NoterConfig)}
     n_cfg = NoterConfig(**{k: v for k, v in n_hp.items() if k in n_keep})
-    dataset = NoterDataset(n_cfg, pdmx)
+    dataset = NoterDataset(n_cfg, source, vocab)
     noter = (
         NoterModule.load_from_checkpoint(
             n_ckpt, config=n_cfg, weights_only=False, map_location=device
@@ -149,9 +151,9 @@ def main() -> None:
     page_h, page_w = n_cfg.page_shape  # (966, 680)
 
     # Group GT staves (noter items) by page image.
-    page_to_idx: dict[str, list[int]] = defaultdict(list)
+    page_to_idx: dict[tuple[str, int], list[int]] = defaultdict(list)
     for idx, item in enumerate(dataset.items):
-        page_to_idx[str(item[1])].append(idx)
+        page_to_idx[(item[0], item[1])].append(idx)
     pages = list(page_to_idx)
     random.shuffle(pages)
     pages = pages[: args.pages]
@@ -163,11 +165,13 @@ def main() -> None:
     dbot: list[float] = []  # |pred_bot - gt_bot| px
     n_gt = n_missed = n_extra = 0
 
-    for png in tqdm(pages, desc="pages"):
-        idxs = page_to_idx[png]
+    for page_key in tqdm(pages, desc="pages"):
+        idxs = page_to_idx[page_key]
+        score_id, page_number = page_key
         # --- staffer inference on the page ---
         try:
-            page_img = s_transform(decode_image(png)).unsqueeze(0).to(device)
+            raw = dataset.source.image(score_id, page_number)
+            page_img = s_transform(raw).unsqueeze(0).to(device)
         except Exception:
             continue
         pred_boxes = staffer_active_boxes(staffer, page_img)
@@ -197,10 +201,10 @@ def main() -> None:
 
         # --- score each GT stave: GT-box baseline vs predicted-box ---
         for gpos, (idx, cy, _h) in enumerate(gts):
-            mxl, png_path, gt_box, spine, fb, lb = dataset.items[idx]
+            sid, pno, gt_box, spine, fb, lb = dataset.items[idx]
 
-            res = dataset._load_image(mxl, png_path, gt_box)
-            seq = dataset._load_sequence(mxl, spine, fb, lb)
+            res = dataset._load_image(sid, pno, gt_box)
+            seq = dataset._load_sequence(sid, spine, fb, lb)
             if res is None or seq is None:
                 continue
             img0, w0 = res
@@ -220,7 +224,7 @@ def main() -> None:
             )
             dtop.append(abs(pt * page_h - gt_box.top))
             dbot.append(abs(pb * page_h - gt_box.bottom))
-            res2 = dataset._load_image(mxl, png_path, pbox)
+            res2 = dataset._load_image(sid, pno, pbox)
             if res2 is None:
                 pred.append(0.0)
                 continue

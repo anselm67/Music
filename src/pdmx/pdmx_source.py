@@ -1,0 +1,50 @@
+"""``Source`` implementation backed by a :class:`PDMX` dataset.
+
+A thin adapter: it keeps ``PDMX``'s builder / query role separate from the read-only
+data contract the datasets consume. The score key (``Score.id``) is the home-relative
+mxl path (e.g. ``mxl/10/10/Qm….mxl``), so everything resolves via ``home / id`` and the
+existing ``get_path`` rules.
+"""
+
+import json
+from collections.abc import Iterator
+
+from torch import Tensor
+from torchvision.io import decode_image
+
+from kern import KernReader
+from sheetmusic import Score
+
+from .pdmx import PDMX
+
+
+class PdmxSource:
+    def __init__(self, pdmx: PDMX) -> None:
+        self.pdmx = pdmx
+
+    def scores(self) -> Iterator[Score]:
+        for _, row in self.pdmx.df.iterrows():
+            mxl = row["mxl"]
+            if isinstance(mxl, str):
+                yield self.score(mxl)
+
+    def score(self, id: str) -> Score:
+        mxl_file = self.pdmx.home / id
+        layout_file = self.pdmx.get_path(mxl_file, "layout")
+        return Score.from_json(json.loads(layout_file.read_text()))
+
+    def image(self, id: str, page_number: int) -> Tensor:
+        # Single-page scores use a flat png name; multi-page use a `_NNN` suffix.
+        # Pick by existence probe (no Score needed): flat if present, else paged.
+        mxl_file = self.pdmx.home / id
+        flat = self.pdmx.get_path(mxl_file, "png")
+        png_file = (
+            flat
+            if flat.exists()
+            else self.pdmx.get_page_path(mxl_file, "png", page_number)
+        )
+        return decode_image(png_file.as_posix())
+
+    def records(self, id: str, first_bar: int, last_bar: int) -> list[str] | None:
+        tokens_file = self.pdmx.get_path(self.pdmx.home / id, "tokens")
+        return KernReader(tokens_file).get_text(first_bar, last_bar)

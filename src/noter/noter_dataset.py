@@ -1,27 +1,25 @@
-import json
 import logging
-from pathlib import Path
 
 import torch
 from torch import Tensor
 from torch.utils.data import Dataset
-from torchvision.io import decode_image
 from torchvision.transforms import v2
 from torchvision.transforms.functional import crop
 from tqdm import tqdm
 
-from pdmx import PDMX, Box, Score
-from kern.kern_reader import KernReader
+from sheetmusic import Box, Source
 
 from .noter_model import NoterConfig
 from .noter_vocab import Vocab
 
 
 class NoterDataset(Dataset):
-    def __init__(self, config: NoterConfig, pdmx: PDMX, count: int = -1) -> None:
-        self.pdmx = pdmx
+    def __init__(
+        self, config: NoterConfig, source: Source, vocab: Vocab, count: int = -1
+    ) -> None:
+        self.source = source
         self.config = config
-        self.vocab = Vocab.load(pdmx.home / "build/vocab.json")
+        self.vocab = vocab
         # Sets up image transforms.
         self.transform = v2.Compose(
             [
@@ -43,18 +41,9 @@ class NoterDataset(Dataset):
         # Creates the actual dataset, with theright number of samples.
         logging.info("Initializing NoterDataset...")
         self.items = []
-        for _, row in tqdm(
-            pdmx.df.iterrows(), total=len(pdmx.df), desc="Loading noter dataset"
-        ):
-            mxl_file = pdmx.home / row["mxl"]
-            layout_file = pdmx.get_path(mxl_file, "layout")
-            score = Score.from_json(json.loads(layout_file.read_text()))
+        for score in tqdm(source.scores(), desc="Loading noter dataset"):
             score = score.resize(config.page_shape[1], config.page_shape[0])
             for page in score.pages:
-                if score.page_count > 1:
-                    png_file = pdmx.get_page_path(mxl_file, "png", page.page_number)
-                else:
-                    png_file = pdmx.get_path(mxl_file, "png")
                 for system in page.systems:
                     match system.staff_count:
                         case 1:
@@ -63,51 +52,49 @@ class NoterDataset(Dataset):
                             spine_numbers = [1, 0]
                         case _:
                             logging.error(
-                                f"{mxl_file}: too many staves in system "
-                                f"({len(page.systems)} vs 2)"
+                                f"{score.id}: too many staves in system "
+                                f"({system.staff_count} vs 2)"
                             )
                             continue
                     for idx, staff in enumerate(system.staves):
                         self.items.append(
                             (
-                                mxl_file,
-                                png_file,
+                                score.id,
+                                page.page_number,
                                 staff.box,
                                 spine_numbers[idx],
                                 system.first_bar_number,
                                 system.last_bar_number,
                             )
                         )
-                if count >= 0 and len(self.items) >= count:
-                    self.items = self.items[:count]
-                    break
+            if count >= 0 and len(self.items) >= count:
+                self.items = self.items[:count]
+                break
         logging.info(f"\tNoterDataset: {len(self.items):,} samples.")
 
     def __len__(self) -> int:
         return len(self.items)
 
     def get_item_stats(self, idx: int) -> tuple[tuple[int, int], int]:
-        mxl_file, _, box, _, first_bar_number, last_bar_number = self.items[idx]
-        kern_path = self.pdmx.get_path(mxl_file, "tokens")
-        reader = KernReader(kern_path)
-        records = reader.get_text(first_bar_number, last_bar_number)
+        score_id, _, box, _, first_bar_number, last_bar_number = self.items[idx]
+        records = self.source.records(score_id, first_bar_number, last_bar_number)
         return (box.height, box.width), len(records) if records else -1
 
     def _load_image(
-        self, mxl_file: Path, png_file: Path, box: Box
+        self, score_id: str, page_number: int, box: Box
     ) -> tuple[Tensor, int] | None:
         # Gets the image and crop it to the system box.
         try:
-            tensor = decode_image(png_file.as_posix())
+            tensor = self.source.image(score_id, page_number)
             _, image_height, image_width = tensor.shape
             if box.width > image_width or box.height > image_height:
                 logging.error(
-                    f"{mxl_file}: image too large (H x W) {box.height}x{box.width}"
+                    f"{score_id}: image too large (H x W) {box.height}x{box.width}"
                 )
                 return None
             tensor = self.transform(tensor)
         except Exception as e:
-            logging.error(f"{png_file}: {e}")
+            logging.error(f"{score_id}: {e}")
             return None
         height, width = self.config.input_shape
         tensor = crop(
@@ -125,29 +112,27 @@ class NoterDataset(Dataset):
 
     def _load_sequence(
         self,
-        mxl_file: Path,
+        score_id: str,
         spine_number: int,
         first_bar_number: int,
         last_bar_number: int,
     ) -> Tensor | None:
-        kern_path = self.pdmx.get_path(mxl_file, "tokens")
         try:
-            reader = KernReader(kern_path)
+            records = self.source.records(score_id, first_bar_number, last_bar_number)
         except Exception as e:
-            logging.error(f"{kern_path}: {e}")
+            logging.error(f"{score_id}: {e}")
             return None
         tensor = torch.full(
             (self.config.max_seqlen - 1, self.config.max_chords), self.vocab.PAD
         )
-        records = reader.get_text(first_bar_number, last_bar_number)
         if records is None:
             logging.error(
-                f"{mxl_file}: bars {first_bar_number}:{last_bar_number} not found."
+                f"{score_id}: bars {first_bar_number}:{last_bar_number} not found."
             )
             return None
         elif len(records) + 2 > self.config.max_seqlen:
             logging.error(
-                f"{mxl_file}: bars {first_bar_number}:{last_bar_number}, "
+                f"{score_id}: bars {first_bar_number}:{last_bar_number}, "
                 f"sequence too long {len(records)} (max {self.config.max_seqlen - 2})"
             )
             return None
@@ -158,22 +143,22 @@ class NoterDataset(Dataset):
                     str_tok.strip().split(), max_chords=self.config.max_chords
                 )
             except Exception as e:
-                logging.error(f"{mxl_file}: {e}")
+                logging.error(f"{score_id}: {e}")
                 return None
         tensor[len(records), :] = self.s_eos
         return torch.cat([self.s_sos, tensor])
 
     def __getitem__(self, idx: int) -> tuple[Tensor, Tensor, Tensor]:
         while True:
-            mxl_file, png_file, box, spine_number, first_bar_number, last_bar_number = (
-                self.items[idx]
-            )
-            logging.debug(f"Loading {mxl_file}")
-            if (result := self._load_image(mxl_file, png_file, box)) is None:
+            score_id, page_number, box, spine_number, first_bar, last_bar = self.items[
+                idx
+            ]
+            logging.debug(f"Loading {score_id}")
+            if (result := self._load_image(score_id, page_number, box)) is None:
                 idx = (idx + 1) % len(self)
             elif (
                 sequence := self._load_sequence(
-                    mxl_file, spine_number, first_bar_number, last_bar_number
+                    score_id, spine_number, first_bar, last_bar
                 )
             ) is None:
                 idx = (idx + 1) % len(self)

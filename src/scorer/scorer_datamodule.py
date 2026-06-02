@@ -3,7 +3,9 @@
 import lightning as L
 from torch.utils.data import DataLoader, Dataset, random_split
 
-from pdmx import PDMX
+from sheetmusic import Source
+
+from noter import Vocab
 
 from .scorer_dataset import ScorerDataset
 from .scorer_model import ScorerConfig
@@ -11,20 +13,27 @@ from .scorer_model import ScorerConfig
 
 class ScorerDataModule(L.LightningDataModule):
     config: ScorerConfig
-    pdmx: PDMX
+    source: Source
+    vocab: Vocab
     num_workers: int
     train_ds: Dataset
     val_ds: Dataset
 
-    def __init__(self, config: ScorerConfig, pdmx: PDMX, num_workers: int = 8) -> None:
+    def __init__(
+        self, config: ScorerConfig, source: Source, vocab: Vocab, num_workers: int = 8
+    ) -> None:
         super().__init__()
         self.config = config
-        self.pdmx = pdmx
+        self.source = source
+        self.vocab = vocab
         self.num_workers = num_workers
 
     def setup(self, stage: str | None = None) -> None:
         full = ScorerDataset(
-            self.config, self.pdmx, count=self.config.train_len + self.config.valid_len
+            self.config,
+            self.source,
+            self.vocab,
+            count=self.config.train_len + self.config.valid_len,
         )
         self.train_ds, self.val_ds = random_split(
             full, [self.config.train_len, self.config.valid_len]

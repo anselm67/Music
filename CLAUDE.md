@@ -112,7 +112,8 @@ kern ...   # Kern file utilities
 ```
 src/
   cli/         # Click entry points: kern.py, pdmx.py, staffer.py, noter.py
-  pdmx/        # PDMX index, layout types (Score, Box), asset builder, stats
+  sheetmusic/  # Source protocol + layout types (Score, Page, System, Staff, Box), shared by all datasets
+  pdmx/        # PDMX index, asset builder, stats
   staffer/     # HierarchicalDETR model, loss, module, dataset, datamodule
   noter/       # NoterModel/Config, module, dataset, datamodule, vocab
   scorer/      # [planned] end-to-end model: staffer+noter in one forward pass (see docs/architecture.html)

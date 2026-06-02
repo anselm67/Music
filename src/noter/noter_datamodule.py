@@ -1,28 +1,36 @@
 import lightning as L
 from torch.utils.data import DataLoader, Dataset, random_split
 
-from pdmx import PDMX
+from sheetmusic import Source
 
 from .noter_dataset import NoterDataset
 from .noter_model import NoterConfig
+from .noter_vocab import Vocab
 
 
 class NoterDataModule(L.LightningDataModule):
     config: NoterConfig
-    pdmx: PDMX
+    source: Source
+    vocab: Vocab
     num_workers: int
     train_ds: Dataset
     val_ds: Dataset
 
-    def __init__(self, config: NoterConfig, pdmx: PDMX, num_workers: int = 8):
+    def __init__(
+        self, config: NoterConfig, source: Source, vocab: Vocab, num_workers: int = 8
+    ):
         super().__init__()
         self.config = config
-        self.pdmx = pdmx
+        self.source = source
+        self.vocab = vocab
         self.num_workers = num_workers
 
     def setup(self, stage: str | None = None) -> None:
         full = NoterDataset(
-            self.config, self.pdmx, count=self.config.train_len + self.config.valid_len
+            self.config,
+            self.source,
+            self.vocab,
+            count=self.config.train_len + self.config.valid_len,
         )
         self.train_ds, self.val_ds = random_split(
             full, [self.config.train_len, self.config.valid_len]

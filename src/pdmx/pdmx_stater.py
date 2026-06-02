@@ -12,7 +12,7 @@ from pathlib import Path
 
 import aiofiles
 
-from .layout import Score
+from sheetmusic import Score
 
 from .pdmx import PDMX
 

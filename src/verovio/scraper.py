@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from xml.etree.ElementTree import Element, ElementTree, parse
 
-from pdmx import Box, Page, Staff, System
+from sheetmusic import Box, Page, Staff, System
 
 
 class LayoutExtractor:
