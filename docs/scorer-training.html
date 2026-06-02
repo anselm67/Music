@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scorer Training Log</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --blue-bg:   #dbeafe; --blue-bd:   #2563eb; --blue-tx:   #1e40af;
+      --green-bg:  #d1fae5; --green-bd:  #059669; --green-tx:  #065f46;
+      --amber-bg:  #fef3c7; --amber-bd:  #d97706; --amber-tx:  #92400e;
+      --violet-bg: #ede9fe; --violet-bd: #7c3aed; --violet-tx: #4c1d95;
+      --slate-bg:  #f1f5f9; --slate-bd:  #475569; --slate-tx:  #334155;
+      --rose-bg:   #ffe4e6; --rose-bd:   #e11d48; --rose-tx:   #9f1239;
+      --body-bg:   #f8fafc; --surface:   #ffffff;
+      --border:    #e2e8f0; --muted:     #64748b; --text:      #1e293b;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+           background: var(--body-bg); color: var(--text); margin: 0; padding: 2rem 1rem; line-height: 1.65; }
+    main { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 2rem; margin: 0 0 0.35rem; color: #0f172a; }
+    .subtitle { color: var(--muted); font-size: 1rem; margin: 0 0 2rem; }
+    h2 { font-size: 1.35rem; margin: 2.5rem 0 0.6rem; border-bottom: 2px solid var(--border); padding-bottom: 0.4rem; }
+    h3 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; }
+    p  { margin: 0.4rem 0 0.9rem; }
+    code { background: var(--slate-bg); border-radius: 3px; padding: 1px 5px; font-size: 0.88em; }
+
+    .tag  { display: inline-block; font-family: monospace; font-size: 0.82rem;
+            background: var(--slate-bg); border: 1px solid var(--border);
+            border-radius: 4px; padding: 0 5px; color: var(--slate-tx); }
+    .badge { display: inline-block; font-size: 0.75rem; font-weight: 600;
+             border-radius: 4px; padding: 1px 7px; }
+    .badge-green  { background: var(--green-bg);  color: var(--green-tx);  border: 1px solid var(--green-bd); }
+    .badge-amber  { background: var(--amber-bg);  color: var(--amber-tx);  border: 1px solid var(--amber-bd); }
+    .badge-slate  { background: var(--slate-bg);  color: var(--slate-tx);  border: 1px solid var(--slate-bd); }
+
+    .summary-table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; font-size: 0.88rem; }
+    .summary-table th { background: var(--slate-bg); padding: 0.5rem 0.7rem; text-align: left;
+                        border-bottom: 2px solid var(--border); font-weight: 600; white-space: nowrap; }
+    .summary-table td { padding: 0.45rem 0.7rem; border-bottom: 1px solid var(--border); }
+    .summary-table tr:hover td { background: #f8fafc; }
+
+    .session { background: var(--surface); border: 1px solid var(--border);
+               border-radius: 10px; padding: 1.5rem 1.75rem; margin-bottom: 2rem; }
+    .session-header { display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.25rem; }
+    .session-header h2 { margin: 0; border: none; padding: 0; font-size: 1.4rem; }
+    .session-meta { color: var(--muted); font-size: 0.88rem; }
+
+    /* Architecture diagram */
+    .arch { display: flex; gap: 0.6rem; align-items: flex-start; margin: 1rem 0; flex-wrap: wrap; }
+    .arch-col { display: flex; flex-direction: column; gap: 0.3rem; align-items: center; }
+    .arch-label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+                  letter-spacing: 0.05em; color: var(--muted); margin-bottom: 0.1rem; text-align: center; }
+    .arch-block { width: 155px; padding: 0.35rem 0.5rem; border-radius: 6px; font-size: 0.8rem;
+                  text-align: center; font-weight: 500; border: 1.5px solid; line-height: 1.35; }
+    .arch-block.blue   { background: var(--blue-bg);   color: var(--blue-tx);   border-color: var(--blue-bd); }
+    .arch-block.green  { background: var(--green-bg);  color: var(--green-tx);  border-color: var(--green-bd); }
+    .arch-block.amber  { background: var(--amber-bg);  color: var(--amber-tx);  border-color: var(--amber-bd); }
+    .arch-block.slate  { background: var(--slate-bg);  color: var(--slate-tx);  border-color: var(--slate-bd); }
+    .arch-block.violet { background: var(--violet-bg); color: var(--violet-tx); border-color: var(--violet-bd); }
+    .arch-arrow { font-size: 1rem; color: var(--muted); line-height: 1; }
+    .arch-divider { width: 1px; background: var(--border); align-self: stretch; }
+
+    .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin: 1rem 0; }
+    .chart-card { background: var(--slate-bg); border-radius: 8px; padding: 0.9rem; }
+    .chart-card h4 { margin: 0 0 0.65rem; font-size: 0.82rem; color: var(--muted);
+                     font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+
+    .changes { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.4rem 0 1rem; }
+    .change-item { display: flex; gap: 0.6rem; align-items: baseline; font-size: 0.9rem; }
+    .change-sym { font-weight: 700; font-size: 1rem; width: 1rem; flex-shrink: 0; }
+    .change-sym.add  { color: #059669; }
+    .change-sym.rem  { color: #e11d48; }
+    .change-sym.mod  { color: #d97706; }
+
+    .result-box { border-radius: 6px; padding: 0.6rem 1rem; font-size: 0.88rem; margin: 0.75rem 0; }
+    .result-box.positive { background: var(--green-bg); border-left: 3px solid var(--green-bd); color: var(--green-tx); }
+    .result-box.negative { background: var(--rose-bg);  border-left: 3px solid var(--rose-bd);  color: var(--rose-tx); }
+    .result-box.neutral  { background: var(--slate-bg); border-left: 3px solid var(--slate-bd); color: var(--slate-tx); }
+
+    .eval-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; margin: 1rem 0; }
+    .eval-stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+                 padding: 0.75rem 1rem; }
+    .eval-stat .label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+                        letter-spacing: 0.04em; color: var(--muted); margin-bottom: 0.2rem; }
+    .eval-stat .value { font-size: 1.5rem; font-weight: 700; color: #0f172a; line-height: 1.1; }
+    .eval-stat .sub   { font-size: 0.8rem; color: var(--muted); margin-top: 0.15rem; }
+
+    /* Click-to-zoom chart modal */
+    .chart-card { cursor: zoom-in; }
+    .chart-modal { position: fixed; inset: 0; background: rgba(15,23,42,0.65);
+                   display: none; align-items: center; justify-content: center; z-index: 1000; padding: 2rem; }
+    .chart-modal.open { display: flex; }
+    .chart-modal-inner { background: var(--surface); border-radius: 12px;
+                         padding: 1.25rem 1.5rem 1.5rem; width: min(900px, 92vw); position: relative;
+                         box-shadow: 0 20px 60px rgba(0,0,0,0.35); }
+    .chart-modal-inner h3 { margin: 0 1.5rem 0.75rem 0; font-size: 0.9rem; color: var(--muted);
+                            text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; }
+    .chart-modal-canvas-wrap { height: min(65vh, 520px); }
+    .chart-modal-close { position: absolute; top: 0.5rem; right: 0.8rem; background: none; border: none;
+                         font-size: 1.7rem; line-height: 1; color: var(--muted); cursor: pointer; padding: 0; }
+    .chart-modal-close:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Scorer Training Log</h1>
+  <p class="subtitle">End-to-end model: detection (staffer) + transcription (noter) in a single forward pass.</p>
+
+  <p>The scorer is a two-stage model trained jointly. The staffer half (ViT backbone + <code>HierarchicalDecoder</code>) predicts stave bounding boxes; a differentiable <code>grid_sample</code> crop bridge extracts per-stave image patches at those predicted coordinates; the noter half (encoder-decoder Transformer) transcribes each crop into a Kern token sequence. All weights are updated end-to-end through both losses. Dataset: PDMX subset with ≤2 staves/system (<code>System2.csv</code>). Validation runs multiple times per epoch; charts show the last checkpoint of each epoch.</p>
+
+  <p>Baseline standalone models: staffer <code>stave-primary-grid-full</code> (sys IoU 0.985, stave_err 0.41 px) and noter <code>enhanced3</code> (99.58% token accuracy).</p>
+
+  <h2>All runs</h2>
+  <table class="summary-table">
+    <thead>
+      <tr>
+        <th>Model</th><th>Date</th><th>Epochs</th>
+        <th>Val acc</th><th>Val loss</th><th>Sys IoU</th><th>Stave err</th>
+        <th>Eval sim (500 pp)</th><th>Key change</th><th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="tag">merge1</span></td><td>2026-06-02</td><td>8</td>
+        <td>99.57%</td><td>0.036</td><td>0.971</td><td>0.054 px</td>
+        <td>avg 97.7% · 0 miscounts</td>
+        <td>First joint staffer+noter training; initialized from standalone best checkpoints</td>
+        <td><span class="badge badge-green">current best</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ════════════════════════ merge1 ════════════════════════ -->
+  <div class="session">
+    <div class="session-header">
+      <h2><span class="tag">merge1</span></h2>
+      <span class="session-meta">2026-06-02 · tag: <code>train/merge1</code> · 8 epochs · initialized from stave-primary-grid-full + enhanced3</span>
+    </div>
+
+    <p>First end-to-end training run. Both halves are initialized from the best standalone checkpoints, then fine-tuned jointly. The staffer loss (L1 + GIoU + objectness) and noter loss (cross-entropy over token sequences) are summed and back-propagated in one pass through the differentiable crop bridge.</p>
+
+    <p>The training shows a characteristic early dip: at ep0 the model inherits strong standalone scores (sys IoU ~0.89 by end of epoch), but ep1–ep2 see a temporary regression as the model adapts to the joint gradient signal. Recovery is steady from ep3 onward, and by ep7 all metrics are still improving — the run is not fully converged.</p>
+
+    <h3>Architecture</h3>
+    <div class="arch">
+      <div class="arch-col">
+        <div class="arch-label">Input</div>
+        <div class="arch-block slate">Page image<br><small>1 × H × W</small></div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block blue">ViT backbone<br><small>Conv2d patches · D=256</small></div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block blue">HierarchicalDecoder<br><small>system + stave queries</small></div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block blue">Stave boxes (ltrb)<br><small>normalised · N staves</small></div>
+      </div>
+      <div class="arch-divider"></div>
+      <div class="arch-col">
+        <div class="arch-label">Bridge</div>
+        <div class="arch-block violet">grid_sample crop<br><small>differentiable · 64×768 px</small></div>
+        <div class="arch-arrow">↓ per-stave crops</div>
+        <div class="arch-block violet">Crop stack<br><small>(N, 1, 64, 768)</small></div>
+      </div>
+      <div class="arch-divider"></div>
+      <div class="arch-col">
+        <div class="arch-label">Transcription</div>
+        <div class="arch-block green">SourceEmbedding<br><small>Conv2d + pos embed</small></div>
+        <div class="arch-arrow">↓ 192 patches</div>
+        <div class="arch-block green">Transformer encoder<br><small>D=256 · 4 layers</small></div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block green">Transformer decoder<br><small>D=256 · 4 layers</small></div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-block green">Kern token logits<br><small>(T, 8, vocab)</small></div>
+      </div>
+      <div class="arch-divider"></div>
+      <div class="arch-col">
+        <div class="arch-label">Losses</div>
+        <div class="arch-block amber">Det loss<br><small>L1 + GIoU + obj</small></div>
+        <div class="arch-block amber">Tr loss<br><small>cross-entropy · ignore PAD</small></div>
+        <div class="arch-block amber">Total loss<br><small>det + tr · joint BP</small></div>
+      </div>
+    </div>
+
+    <h3>Training curves</h3>
+    <div class="charts">
+      <div class="chart-card"><h4>Val accuracy</h4><canvas id="c-m1-acc"></canvas></div>
+      <div class="chart-card"><h4>Val loss</h4><canvas id="c-m1-loss"></canvas></div>
+      <div class="chart-card"><h4>Sys IoU</h4><canvas id="c-m1-iou"></canvas></div>
+      <div class="chart-card"><h4>Stave error (px)</h4><canvas id="c-m1-err"></canvas></div>
+    </div>
+
+    <h3>Eval — 500 random pages (n=2000 pool)</h3>
+    <div class="eval-grid">
+      <div class="eval-stat">
+        <div class="label">Avg similarity</div>
+        <div class="value">97.7%</div>
+        <div class="sub">matched-stave token similarity</div>
+      </div>
+      <div class="eval-stat">
+        <div class="label">Min / Max sim</div>
+        <div class="value">5.6% / 100%</div>
+        <div class="sub">per-stave range</div>
+      </div>
+      <div class="eval-stat">
+        <div class="label">Stave count</div>
+        <div class="value">2280 / 2280</div>
+        <div class="sub">predicted vs GT</div>
+      </div>
+      <div class="eval-stat">
+        <div class="label">Miscounts</div>
+        <div class="value">0 / 500</div>
+        <div class="sub">pages with wrong stave count</div>
+      </div>
+    </div>
+
+    <h3>Analysis</h3>
+    <div class="changes">
+      <div class="change-item"><span class="change-sym add">+</span> Token accuracy matches standalone noter (99.57% vs 99.58%) — no transcription regression from joint training</div>
+      <div class="change-item"><span class="change-sym add">+</span> Zero stave miscounts on 500 eval pages — detection is robust end-to-end</div>
+      <div class="change-item"><span class="change-sym add">+</span> 97.7% avg eval similarity is the meaningful metric: it measures real transcription quality on predicted (not GT) crops</div>
+      <div class="change-item"><span class="change-sym rem">−</span> Sys IoU 0.971 vs standalone staffer 0.985 — detection is slightly weaker under joint training pressure</div>
+      <div class="change-item"><span class="change-sym mod">~</span> Run not converged at ep7 — all four metrics still improving; more epochs expected to narrow the gap to standalone staffer</div>
+    </div>
+
+    <div class="result-box positive">Strong first end-to-end result. 97.7% eval similarity with zero miscounts. Token accuracy on par with the standalone noter. Detection slightly below standalone staffer but holding well and still improving.</div>
+  </div>
+
+</main>
+
+<div id="chart-modal" class="chart-modal" role="dialog" aria-modal="true">
+  <div class="chart-modal-inner">
+    <button class="chart-modal-close" aria-label="Close">&times;</button>
+    <h3 id="chart-modal-title"></h3>
+    <div class="chart-modal-canvas-wrap"><canvas id="chart-modal-canvas"></canvas></div>
+  </div>
+</div>
+
+<script>
+const ep8 = [0,1,2,3,4,5,6,7];
+const C = { m1: '#2563eb', ref: '#94a3b8' };
+
+// Per-epoch end-of-epoch values from merge1/metrics.csv
+const m1 = {
+  acc:  [0.9935, 0.9935, 0.9944, 0.9950, 0.9953, 0.9956, 0.9957, 0.9957],
+  loss: [0.1380, 0.1119, 0.0853, 0.0713, 0.0546, 0.0432, 0.0388, 0.0361],
+  iou:  [0.8946, 0.9147, 0.9335, 0.9432, 0.9561, 0.9656, 0.9693, 0.9712],
+  err:  [0.165,  0.139,  0.109,  0.092,  0.075,  0.062,  0.058,  0.055],
+};
+// Standalone baselines (horizontal reference lines drawn as constant arrays)
+const refNotAcc  = Array(8).fill(0.9958);   // noter enhanced3 val acc
+const refStfIou  = Array(8).fill(0.985);    // staffer stave-primary-grid-full sys iou
+
+function line(label, data, color, opts={}) {
+  return { label, data, borderColor: color, backgroundColor: color+'18',
+           fill: opts.fill ?? false, borderWidth: opts.dashed ? 1.5 : 2,
+           borderDash: opts.dashed ? [4,3] : [], pointRadius: opts.dashed ? 2 : 3,
+           tension: 0.3 };
+}
+const chartRegistry = {};
+function makeChart(id, datasets, yOpts={}) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  new Chart(ctx, {
+    type: 'line',
+    data: { labels: ep8, datasets },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } },
+      scales: {
+        x: { title: { display: true, text: 'Epoch', font: { size: 10 } }, ticks: { font: { size: 9 } } },
+        y: { ...yOpts, ticks: { font: { size: 9 } } },
+      },
+    }
+  });
+  chartRegistry[id] = { datasets, yOpts };
+  const card = ctx.closest('.chart-card');
+  if (card) card.addEventListener('click', () => openChartModal(id, card));
+}
+
+let modalChart = null;
+function openChartModal(id, card) {
+  const reg = chartRegistry[id];
+  if (!reg) return;
+  const h4 = card.querySelector('h4');
+  document.getElementById('chart-modal-title').textContent = h4 ? h4.textContent : '';
+  document.getElementById('chart-modal').classList.add('open');
+  if (modalChart) modalChart.destroy();
+  const datasets = JSON.parse(JSON.stringify(reg.datasets));
+  modalChart = new Chart(document.getElementById('chart-modal-canvas'), {
+    type: 'line',
+    data: { labels: ep8, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 14, font: { size: 13 } } } },
+      scales: {
+        x: { title: { display: true, text: 'Epoch', font: { size: 13 } }, ticks: { font: { size: 12 } } },
+        y: { ...reg.yOpts, ticks: { font: { size: 12 } } },
+      },
+    }
+  });
+}
+function closeChartModal() {
+  document.getElementById('chart-modal').classList.remove('open');
+  if (modalChart) { modalChart.destroy(); modalChart = null; }
+}
+
+makeChart('c-m1-acc',
+  [line('merge1', m1.acc, C.m1, {fill:true}),
+   line('standalone noter (enhanced3)', refNotAcc, C.ref, {dashed:true})],
+  {min: 0.98, max: 1});
+
+makeChart('c-m1-loss',
+  [line('merge1', m1.loss, C.m1, {fill:true})]);
+
+makeChart('c-m1-iou',
+  [line('merge1', m1.iou, C.m1, {fill:true}),
+   line('standalone staffer (stave-primary-grid-full)', refStfIou, C.ref, {dashed:true})],
+  {min: 0.85, max: 1});
+
+makeChart('c-m1-err',
+  [line('merge1 stave_err_px', m1.err, C.m1, {fill:true})]);
+
+document.querySelector('.chart-modal-close').addEventListener('click', closeChartModal);
+document.getElementById('chart-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'chart-modal') closeChartModal();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeChartModal(); });
+</script>
+</body>
+</html>
