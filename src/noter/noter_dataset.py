@@ -10,7 +10,6 @@ from torchvision.transforms import v2
 from torchvision.transforms.functional import crop
 from tqdm import tqdm
 
-# TODO This should eventually be NoterModel's Config
 from pdmx import PDMX, Box, Score
 from kern.kern_reader import KernReader
 
