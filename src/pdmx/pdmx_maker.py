@@ -213,7 +213,10 @@ class PDMXMaker:
                     bar_number = page.next_bar_number
                     page_number += 1
                 # Saves the final json file.
-                score = Score(id=str(self.pdmx.get_path(json_file, "mxl")), pages=pages)
+                score = Score(
+                    id=str(self.pdmx.relative(self.pdmx.get_path(json_file, "mxl"))),
+                    pages=pages,
+                )
                 async with aiofiles.open(json_file, "w") as f:
                     await f.write(json.dumps(score.asdict(), indent=2))
             except Exception as e:

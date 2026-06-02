@@ -321,3 +321,37 @@ class TestDryRun:
 
         mock_exec.assert_not_called()
         mock_exec.assert_not_called()
+
+
+class TestLayoutId:
+    @pytest.mark.asyncio
+    async def test_make_layout_writes_home_relative_id(self, tmp_path: Path) -> None:
+        import json
+
+        from sheetmusic import Box, Page, Staff, System
+
+        p = make_maker(tmp_path, force=True)
+        svg = tmp_path / "svg/1/aa/score.svg"
+        json_file = p.pdmx.get_path(svg, "layout")
+        json_file.parent.mkdir(parents=True, exist_ok=True)
+
+        page = Page(
+            page_number=1,
+            image_width=100,
+            image_height=100,
+            systems=[
+                System(
+                    bar_numbers=[1],
+                    svg_bar_numbers=[1],
+                    staves=[Staff(box=Box((0, 0), (10, 10)), bars=[0, 10])],
+                )
+            ],
+            validated=True,
+        )
+        with patch("pdmx.pdmx_maker.LayoutExtractor") as mock_le:
+            mock_le.return_value.parse.return_value = page
+            await p.make_layout([svg], json_file)
+
+        obj = json.loads(json_file.read_text())
+        # id is the home-relative mxl path, not an absolute path.
+        assert obj["id"] == "mxl/1/aa/score.mxl"
