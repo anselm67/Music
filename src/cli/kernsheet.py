@@ -100,6 +100,26 @@ def make(ctx: ClickContext, id: str | None) -> None:
 
 
 @click.command()
+@click.argument("id")
+@click.option(
+    "--fast",
+    "-f",
+    is_flag=True,
+    default=False,
+    help="Fast mode: auto-save and validate pages on jumps.",
+)
+@click.pass_obj
+def edit(ctx: ClickContext, id: str, fast: bool) -> None:
+    """Open the interactive layout editor on score ID (press 'h' for help)."""
+    from kernsheet.editor import StaffEditor
+    from kernsheet.editor_backend import EditorBackend
+
+    if not (ctx.home / "layout" / f"{id}.json").exists():
+        raise click.ClickException(f"no migrated layout for {id!r}")
+    StaffEditor(EditorBackend(ctx.home, id)).edit(fast_mode=fast)
+
+
+@click.command()
 @click.pass_obj
 def stats(ctx: ClickContext) -> None:
     """Layout statistics over the migrated KernSheet scores."""
@@ -131,6 +151,7 @@ def stats(ctx: ClickContext) -> None:
 
 cli.add_command(migrate)
 cli.add_command(make)
+cli.add_command(edit)
 cli.add_command(stats)
 
 
