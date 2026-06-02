@@ -150,14 +150,11 @@ class BaseHandler(Handler[Spine]):
     def position(self, spine: Spine) -> int:
         return self.spines.index(spine)
 
-    def output_position(self, spine: Spine) -> int:
-        pos = 0
-        for s in self.spines:
-            if s == spine:
-                return pos
-            if not isinstance(s, IgnoredSpine):
-                pos += 1
-        raise ValueError("spine not found.")
+    def base_spine(self, spine: Spine) -> Spine:
+        """Resolve a (possibly nested) *^ branch to the base spine it folds into."""
+        while isinstance(spine, MergeSpine):
+            spine = spine.into
+        return spine
 
     def open_spine(
         self, spine_type: str | None = None, parent: Spine | None = None
@@ -312,13 +309,19 @@ class NormHandler(BaseHandler):
         return toks
 
     def merge_tokens(self, tokens: list[tuple[Spine, Token]]) -> list[str]:
-        output: list[list[Token]] = [[] for _ in range(len(self.spines))]
-        for idx, (spine, tok) in enumerate(tokens):
-            if isinstance(spine, MergeSpine):
-                dst_index = self.output_position(cast(MergeSpine, spine).into)
-                output[dst_index].append(tok)
-            else:
-                output[idx].append(tok)
+        # Output columns are the base spines (non-branch, non-ignored), in order;
+        # every *^ branch — including nested branches — folds into its base column.
+        bases = [
+            s for s in self.spines if not isinstance(s, (MergeSpine, IgnoredSpine))
+        ]
+        column = {id(s): i for i, s in enumerate(bases)}
+        output: list[list[Token]] = [[] for _ in bases]
+        for spine, tok in tokens:
+            base = id(self.base_spine(spine))
+            # A branch (*^) off an ignored spine (e.g. **dynam divisi) folds back
+            # into that ignored spine — drop it, just like its un-split parent.
+            if base in column:
+                output[column[base]].append(tok)
         # Remove redundant tokens from each remaining spine.
         output = [self.merge(toks) for toks in output if toks]
         # Space join tokens that belong to the same spine.
