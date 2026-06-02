@@ -156,6 +156,11 @@ class ScorerDataset(Dataset[Sample]):
                     ]
                 )
                 for i, staff in enumerate(system.staves):
+                    # System2.csv only bounds the first system's staff count, so a
+                    # page of many 2-staff systems can exceed num_stave_queries.
+                    if staff_idx >= c.num_stave_queries:
+                        is_ok = False
+                        break
                     seq = self._load_sequence(
                         mxl_file,
                         spine_numbers[i],
