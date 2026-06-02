@@ -10,7 +10,8 @@ from torchvision.transforms import v2
 from torchvision.transforms.functional import crop
 from tqdm import tqdm
 
-from pdmx import PDMX, Box, Score
+from pdmx import PDMX
+from sheetmusic import Box, Score
 from kern.kern_reader import KernReader
 
 from .noter_model import NoterConfig

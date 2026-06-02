@@ -18,7 +18,8 @@ from torchvision.transforms import v2
 from tqdm import tqdm
 
 from kern.kern_reader import KernReader
-from pdmx import PDMX, Score
+from pdmx import PDMX
+from sheetmusic import Score
 
 from noter import Vocab
 

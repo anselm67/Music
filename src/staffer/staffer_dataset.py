@@ -14,7 +14,8 @@ from torchvision.io import decode_image
 from torchvision.transforms import v2
 from tqdm import tqdm
 
-from pdmx import PDMX, Score
+from pdmx import PDMX
+from sheetmusic import Score
 from .staffer_model import StafferConfig
 
 

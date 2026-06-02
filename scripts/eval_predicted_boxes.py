@@ -36,7 +36,8 @@ from torchvision.transforms import v2
 from tqdm import tqdm
 
 from noter import NoterConfig, NoterDataset, NoterModule, Vocab
-from pdmx import PDMX, Box
+from pdmx import PDMX
+from sheetmusic import Box
 from staffer import StafferConfig, StafferModule
 from utils import sequence_edit_distance, strip_eos
 

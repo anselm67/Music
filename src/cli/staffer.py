@@ -26,7 +26,8 @@ from torchinfo import summary as model_summary
 from torchvision.io import decode_image
 from tqdm import tqdm
 
-from pdmx import PDMX, Box
+from pdmx import PDMX
+from sheetmusic import Box
 from staffer import (
     StafferConfig,
     StafferModel,

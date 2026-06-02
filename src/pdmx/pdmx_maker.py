@@ -23,7 +23,7 @@ from pathlib import Path
 
 import aiofiles
 
-from .layout import Page, Score
+from sheetmusic import Page, Score
 from kern import tokenize
 from verovio import (
     LayoutExtractor,

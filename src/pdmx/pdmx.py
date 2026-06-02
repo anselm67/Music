@@ -15,7 +15,7 @@ import pandas as pd
 from kern import KernReader
 from utils import compile_filter
 
-from .layout import Score
+from sheetmusic import Score
 
 if TYPE_CHECKING:
     from .pdmx_stater import PDMXStats

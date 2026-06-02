@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from pdmx import Page, Staff, System
+from sheetmusic import Page, Staff, System
 from verovio.scraper import LayoutExtractor
 
 # ---------------------------------------------------------------------------

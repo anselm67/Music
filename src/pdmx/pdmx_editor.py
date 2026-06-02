@@ -7,7 +7,7 @@ from cv2.typing import MatLike
 
 from kern import KernReader
 
-from .layout import Page, Score
+from sheetmusic import Page, Score
 from .pdmx import PDMX
 
 
