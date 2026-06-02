@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import logging
+import random
 import shutil
 import sys
 from dataclasses import dataclass, replace
@@ -7,19 +8,33 @@ from pathlib import Path
 from typing import Any, cast
 
 import click
+import cv2
 import lightning as L
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import torch
 from lightning.pytorch.callbacks import Callback, EarlyStopping, ModelCheckpoint
 from lightning.pytorch.callbacks.early_stopping import EarlyStoppingReason
 from lightning.pytorch.loggers import CSVLogger
 from matplotlib.backend_bases import Event, KeyEvent
+from tqdm import tqdm
 
 from noter import NoterConfig, Vocab
 from pdmx import PDMX
-from scorer import ScorerConfig, ScorerDataModule, ScorerModule, build_stave_boxes
+from scorer import (
+    STAFFER_NORM,
+    ScorerConfig,
+    ScorerDataModule,
+    ScorerDataset,
+    ScorerModule,
+    build_stave_boxes,
+)
 from staffer import StafferConfig
+from utils import format_sequence_columns, sequence_edit_distance, strip_eos
+
+# STAFFER_NORM = (mean, std) page normalisation; unpacked to denormalise for display.
+PAGE_MEAN, PAGE_STD = STAFFER_NORM
 
 HOME = Path("/home/anselm/datasets/PDMX")
 
@@ -446,9 +461,125 @@ def logs(
     print("Bye!")
 
 
+def _similarity(gt_seq: torch.Tensor, pred_seq: torch.Tensor, max_chords: int) -> float:
+    """Edit-distance similarity between a GT (SOS-led) and predicted token sequence."""
+    gt_content = strip_eos(gt_seq[1:], Vocab.EOS)  # drop SOS, cut at EOS
+    pred_content = strip_eos(pred_seq, Vocab.EOS)
+    edit = sequence_edit_distance(gt_content, pred_content, Vocab.PAD)
+    max_cost = max(len(gt_content), len(pred_content)) * max_chords
+    return 1.0 - edit / max_cost if max_cost > 0 else 1.0
+
+
+def _load_for_inference(name: str) -> tuple[ScorerConfig, ScorerModule]:
+    """Load a trained Scorer checkpoint for evaluation, on the best available device."""
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    ckpt_path = Path("checkpoints") / "scorer" / name / "last.ckpt"
+    config = config_from_checkpoint(ckpt_path)
+    module = ScorerModule.load_from_checkpoint(
+        ckpt_path, config=config, weights_only=False, map_location=device
+    )
+    module.eval()
+    return config, module
+
+
+@click.command()
+@click.argument("name", type=str)
+@click.pass_obj
+def predict(ctx: ClickContext, name: str) -> None:
+    """Detects, crops, and transcribes every stave on random pages.
+
+    NAME: The model version to use to make the predictions.
+    """
+    config, module = _load_for_inference(name)
+    dataset = ScorerDataset(config, ctx.pdmx)
+    indices = list(range(len(dataset)))
+    random.shuffle(indices)
+
+    cv2.namedWindow("Page")
+    for idx in indices:
+        image, _gt_sys, _gt_stave, gt_assign, stave_tokens = dataset[idx]
+        boxes, tokens = module.predict(image.unsqueeze(0).to(module.device))
+        num_gt = int((gt_assign != -1).sum())
+
+        img = image.squeeze(0).cpu().numpy() * PAGE_STD + PAGE_MEAN
+        img = np.stack([(np.clip(img, 0.0, 1.0) * 255).astype(np.uint8)] * 3, axis=-1)
+
+        click.clear()
+        print(f"Item {idx}: detected {boxes.shape[0]} staves (GT {num_gt})")
+        for k in range(boxes.shape[0]):
+            _, left, top, right, bot = boxes[k].tolist()
+            cv2.rectangle(
+                img, (int(left), int(top)), (int(right), int(bot)), (0, 255, 0), 1
+            )
+            pred_tokens = dataset.vocab.i2tok(tokens[k].cpu())
+            print(f"\n── stave[{k}] ──")
+            if k < num_gt:
+                gt_tokens = dataset.vocab.i2tok(stave_tokens[k][1:])  # skip SOS
+                print(format_sequence_columns(gt_tokens, pred_tokens))
+            else:
+                print(" ".join(pred_tokens))  # spurious stave — no GT to compare
+        cv2.imshow("Page", img)
+        if cv2.waitKey(0) == ord("q"):
+            break
+    cv2.destroyAllWindows()
+
+
+@click.command()
+@click.argument("name", type=str)
+@click.option(
+    "--size",
+    type=int,
+    default=500,
+    show_default=True,
+    help="Number of random pages to evaluate.",
+)
+@click.pass_obj
+def run_eval(ctx: ClickContext, name: str, size: int) -> None:
+    """Evaluates end-to-end transcription on N random pages.
+
+    Reports token similarity on order-matched (top-to-bottom) predicted vs GT staves,
+    plus detection counts so geometric slop and miss/extra are visible separately.
+
+    NAME: The model version to evaluate.
+    """
+    config, module = _load_for_inference(name)
+    dataset = ScorerDataset(config, ctx.pdmx)
+    n = min(size, len(dataset))
+    indices = random.sample(range(len(dataset)), n)
+
+    similarities: list[float] = []
+    total_gt, total_pred, pages_miscount = 0, 0, 0
+    for idx in tqdm(indices, desc="Evaluating"):
+        image, _gt_sys, _gt_stave, gt_assign, stave_tokens = dataset[idx]
+        num_gt = int((gt_assign != -1).sum())
+        _boxes, tokens = module.predict(image.unsqueeze(0).to(module.device))
+        num_pred = tokens.shape[0]
+        total_gt += num_gt
+        total_pred += num_pred
+        pages_miscount += int(num_pred != num_gt)
+        for k in range(min(num_gt, num_pred)):
+            similarities.append(
+                _similarity(stave_tokens[k], tokens[k].cpu(), config.noter.max_chords)
+            )
+
+    if not similarities:
+        print("No matched staves to evaluate.")
+        return
+    print(f"\nEvaluated {n} pages from '{name}':")
+    print(f"  staves: {total_pred} predicted / {total_gt} GT")
+    print(f"  pages with miscount: {pages_miscount} / {n}")
+    print(f"  matched-stave similarity  min {min(similarities):.1%}")
+    print(
+        f"                            avg {sum(similarities) / len(similarities):.1%}"
+    )
+    print(f"                            max {max(similarities):.1%}")
+
+
 cli.add_command(check)
 cli.add_command(train)
 cli.add_command(logs)
+cli.add_command(predict)
+cli.add_command(run_eval, name="eval")
 
 
 def main() -> None:

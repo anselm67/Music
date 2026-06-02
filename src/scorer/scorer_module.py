@@ -65,6 +65,30 @@ def mean_stave_l1(
     return torch.stack(errors).mean()
 
 
+def active_grouping(
+    stave_tb: Tensor,  # (M, 2) — top, bottom
+    stave_logits: Tensor,  # (M, 1) — stave objectness
+    boundary_logits: Tensor,  # (M, 1) — >0 ⇒ starts a new system
+    num_systems: int,
+) -> tuple[Tensor, Tensor]:
+    """Inference-time stave→system grouping for one page (no ground truth).
+
+    Mirrors ``staffer predict``: the active queries (objectness > 0), sorted
+    top-to-bottom, *are* the detected staves; the boundary cumsum over them recovers
+    each one's system. Returns (sel, owners) — the active query indices and the system
+    index each inherits (left, right) from — ready for ``build_stave_boxes``.
+    """
+    logit = stave_logits.squeeze(-1)
+    active = (logit > 0).nonzero(as_tuple=True)[0]
+    if active.numel() == 0:
+        return active, active
+    active = active[stave_tb[active, 0].argsort()]  # top-to-bottom
+    boundary = (boundary_logits.squeeze(-1)[active] > 0).long()
+    boundary[0] = 1  # the first detected stave always opens system 0
+    owners = (boundary.cumsum(0) - 1).clamp(0, num_systems - 1)
+    return active, owners
+
+
 class ScorerModule(L.LightningModule):
     _causal_mask_buf: Tensor
 
@@ -187,6 +211,57 @@ class ScorerModule(L.LightningModule):
 
     def validation_step(self, batch: tuple, batch_idx: int) -> None:
         self._step(batch, "val")
+
+    @torch.no_grad()
+    def predict(self, image: Tensor) -> tuple[Tensor, Tensor]:
+        """End-to-end inference for a single page: detect → crop → transcribe.
+
+        ``image``: ``(1, 1, H, W)``. Returns ``(boxes, tokens)``:
+          ``boxes`` ``(K, 5)`` — ``[batch_idx, left, top, right, bot]`` px, active
+          staves top-to-bottom; ``tokens`` ``(K, T, max_chords)`` — generated ids,
+          SOS stripped. ``K`` is the detected stave count (0 if none fired).
+        """
+        stave_tb, stave_logits, boundary_logits, sys_lr, _ = self.model.detect(image)
+        sel, owners = active_grouping(
+            stave_tb[0], stave_logits[0], boundary_logits[0], sys_lr.shape[1]
+        )
+        hw = (int(image.shape[-2]), int(image.shape[-1]))
+        boxes = build_stave_boxes(stave_tb, sys_lr, [sel], [owners], hw)
+        if boxes.shape[0] == 0:
+            tokens = image.new_zeros(
+                (0, self.config.noter.max_seqlen - 1, self.config.noter.max_chords),
+                dtype=torch.long,
+            )
+            return boxes, tokens
+        crops, widths = self.model.crop(image, boxes)
+        return boxes, self._generate(crops, widths)
+
+    @torch.no_grad()
+    def _generate(self, crops: Tensor, widths: Tensor) -> Tensor:
+        """Autoregressively decode token sequences for K staff crops (greedy)."""
+        c = self.config.noter
+        K = crops.shape[0]
+        generated = torch.full(
+            (K, 1, c.max_chords), Vocab.SOS, dtype=torch.long, device=crops.device
+        )
+        memory, src_pad = self.model.noter.encode(crops, widths)
+        done = torch.zeros(K, dtype=torch.bool, device=crops.device)
+        for _ in range(c.max_seqlen - 1):
+            tgt_pad = (generated == Vocab.SIL).all(dim=-1)
+            logits = self.model.noter.decode(
+                generated,
+                memory,
+                self._causal_mask(generated.shape[1]),
+                tgt_pad,
+                src_pad,
+            )
+            next_tokens = logits[:, -1, :, :].argmax(dim=-1)  # (K, max_chords)
+            next_tokens[done] = Vocab.EOS
+            done = done | (next_tokens[:, 0] == Vocab.EOS)
+            generated = torch.cat([generated, next_tokens.unsqueeze(1)], dim=1)
+            if bool(done.all()):
+                break
+        return generated[:, 1:]  # strip SOS
 
     @classmethod
     def load_from_checkpoints(
