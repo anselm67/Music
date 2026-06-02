@@ -213,13 +213,14 @@ class ScorerModule(L.LightningModule):
         self._step(batch, "val")
 
     @torch.no_grad()
-    def predict(self, image: Tensor) -> tuple[Tensor, Tensor]:
+    def predict(self, image: Tensor) -> tuple[Tensor, Tensor, Tensor]:
         """End-to-end inference for a single page: detect → crop → transcribe.
 
-        ``image``: ``(1, 1, H, W)``. Returns ``(boxes, tokens)``:
+        ``image``: ``(1, 1, H, W)``. Returns ``(boxes, tokens, owners)``:
           ``boxes`` ``(K, 5)`` — ``[batch_idx, left, top, right, bot]`` px, active
           staves top-to-bottom; ``tokens`` ``(K, T, max_chords)`` — generated ids,
-          SOS stripped. ``K`` is the detected stave count (0 if none fired).
+          SOS stripped; ``owners`` ``(K,)`` — system index per stave.
+          ``K`` is the detected stave count (0 if none fired).
         """
         stave_tb, stave_logits, boundary_logits, sys_lr, _ = self.model.detect(image)
         sel, owners = active_grouping(
@@ -232,9 +233,9 @@ class ScorerModule(L.LightningModule):
                 (0, self.config.noter.max_seqlen - 1, self.config.noter.max_chords),
                 dtype=torch.long,
             )
-            return boxes, tokens
+            return boxes, tokens, torch.empty(0, dtype=torch.long, device=image.device)
         crops, widths = self.model.crop(image, boxes)
-        return boxes, self._generate(crops, widths)
+        return boxes, self._generate(crops, widths), owners
 
     @torch.no_grad()
     def _generate(self, crops: Tensor, widths: Tensor) -> Tensor:

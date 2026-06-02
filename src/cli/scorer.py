@@ -18,6 +18,7 @@ from lightning.pytorch.callbacks import Callback, EarlyStopping, ModelCheckpoint
 from lightning.pytorch.callbacks.early_stopping import EarlyStoppingReason
 from lightning.pytorch.loggers import CSVLogger
 from matplotlib.backend_bases import Event, KeyEvent
+from torchvision.io import decode_image
 from tqdm import tqdm
 
 from noter import NoterConfig, Vocab
@@ -31,7 +32,7 @@ from scorer import (
     build_stave_boxes,
 )
 from staffer import StafferConfig
-from utils import format_sequence_columns, sequence_edit_distance, strip_eos
+from utils import sequence_edit_distance, strip_eos
 
 # STAFFER_NORM = (mean, std) page normalisation; unpacked to denormalise for display.
 PAGE_MEAN, PAGE_STD = STAFFER_NORM
@@ -462,6 +463,45 @@ def logs(
     print("Bye!")
 
 
+def _format_system(gt_seqs: list[list[str]], pred_seqs: list[list[str]]) -> str:
+    """Token-parallel multi-stave side-by-side display for one system."""
+    _RED = "\033[31m"
+    _RESET = "\033[0m"
+    n_gt, n_pred = len(gt_seqs), len(pred_seqs)
+    gt_widths = [
+        max(max((len(t) for t in seq), default=0), len(f"GT[{i}]")) + 2
+        for i, seq in enumerate(gt_seqs)
+    ]
+    pred_widths = [
+        max(max((len(t) for t in seq), default=0), len(f"Pred[{i}]")) + 2
+        for i, seq in enumerate(pred_seqs)
+    ]
+    all_seqs = gt_seqs + pred_seqs
+    max_len = max((len(s) for s in all_seqs), default=0)
+    header_gt = "".join(f"{'GT[' + str(i) + ']':<{gt_widths[i]}}" for i in range(n_gt))
+    header_pred = "".join(
+        f"{'Pred[' + str(i) + ']':<{pred_widths[i]}}" for i in range(n_pred)
+    )
+    rows = [f"{header_gt}| {header_pred}"]
+    for t in range(max_len):
+        gt_parts = [
+            f"{(seq[t] if t < len(seq) else ''):<{w}}"
+            for seq, w in zip(gt_seqs, gt_widths)
+        ]
+        pred_parts = []
+        for i, (seq, w) in enumerate(zip(pred_seqs, pred_widths)):
+            tok = seq[t] if t < len(seq) else ""
+            gt_tok = gt_seqs[i][t] if i < n_gt and t < len(gt_seqs[i]) else None
+            is_mismatch = gt_tok is not None and tok != gt_tok
+            # Pad by raw length before adding ANSI codes (escape chars are invisible).
+            padded = f"{tok:<{w}}"
+            if is_mismatch:
+                padded = f"{_RED}{tok}{_RESET}" + " " * (w - len(tok))
+            pred_parts.append(padded)
+        rows.append("".join(gt_parts) + "| " + "".join(pred_parts))
+    return "\n".join(rows)
+
+
 def _similarity(gt_seq: torch.Tensor, pred_seq: torch.Tensor, max_chords: int) -> float:
     """Edit-distance similarity between a GT (SOS-led) and predicted token sequence."""
     gt_content = strip_eos(gt_seq[1:], Vocab.EOS)  # drop SOS, cut at EOS
@@ -483,46 +523,111 @@ def _load_for_inference(name: str) -> tuple[ScorerConfig, ScorerModule]:
     return config, module
 
 
+def _to_display(image: torch.Tensor) -> np.ndarray:  # type: ignore[type-arg]
+    arr = image.squeeze(0).cpu().numpy() * PAGE_STD + PAGE_MEAN
+    return np.stack([(np.clip(arr, 0.0, 1.0) * 255).astype(np.uint8)] * 3, axis=-1)
+
+
+def _draw_boxes(img: np.ndarray, boxes: torch.Tensor) -> None:  # type: ignore[type-arg]
+    for k in range(boxes.shape[0]):
+        _, left, top, right, bot = boxes[k].tolist()
+        cv2.rectangle(
+            img, (int(left), int(top)), (int(right), int(bot)), (0, 255, 0), 1
+        )
+
+
+def _group_by_system(owners: torch.Tensor, count: int) -> dict[int, list[int]]:
+    by_sys: dict[int, list[int]] = {}
+    for k in range(count):
+        by_sys.setdefault(int(owners[k].item()), []).append(k)
+    return by_sys
+
+
+def predict_from_images(
+    module: ScorerModule,
+    dataset: ScorerDataset,
+    img_paths: tuple[Path, ...],
+) -> None:
+    for path in img_paths:
+        image = dataset.transform(decode_image(path.as_posix())).to(module.device)
+        boxes, tokens, owners = module.predict(image.unsqueeze(0))
+        img = _to_display(image)
+        _draw_boxes(img, boxes)
+        pred_by_sys = _group_by_system(owners, boxes.shape[0])
+        click.clear()
+        print(f"{path}: detected {boxes.shape[0]} staves")
+        for sys_id in range(max(pred_by_sys.keys(), default=-1) + 1):
+            pred_seqs = [
+                dataset.vocab.i2tok(tokens[k].cpu())
+                for k in pred_by_sys.get(sys_id, [])
+            ]
+            print(f"\n── system[{sys_id}] ──")
+            for i, seq in enumerate(pred_seqs):
+                print(f"  [{i}] {' '.join(seq)}")
+        cv2.imshow("Page", img)
+        if cv2.waitKey(0) == ord("q"):
+            break
+
+
+def predict_from_dataset(
+    module: ScorerModule,
+    dataset: ScorerDataset,
+) -> None:
+    indices = list(range(len(dataset)))
+    random.shuffle(indices)
+    for idx in indices:
+        image, _gt_sys, _gt_stave, gt_assign, stave_tokens = dataset[idx]
+        boxes, tokens, owners = module.predict(image.unsqueeze(0).to(module.device))
+        num_gt = int((gt_assign != -1).sum())
+        img = _to_display(image)
+        _draw_boxes(img, boxes)
+        gt_by_sys = _group_by_system(gt_assign, num_gt)
+        pred_by_sys = _group_by_system(owners, boxes.shape[0])
+        num_systems = (
+            max(max(gt_by_sys.keys(), default=-1), max(pred_by_sys.keys(), default=-1))
+            + 1
+        )
+        click.clear()
+        print(f"Item {idx}: detected {boxes.shape[0]} staves (GT {num_gt})")
+        for sys_id in range(num_systems):
+            gt_seqs = [
+                dataset.vocab.i2tok(stave_tokens[k][1:])
+                for k in gt_by_sys.get(sys_id, [])
+            ]
+            pred_seqs = [
+                dataset.vocab.i2tok(tokens[k].cpu())
+                for k in pred_by_sys.get(sys_id, [])
+            ]
+            print(f"\n── system[{sys_id}] ──")
+            print(_format_system(gt_seqs, pred_seqs))
+        cv2.imshow("Page", img)
+        if cv2.waitKey(0) == ord("q"):
+            break
+
+
 @click.command()
 @click.argument("name", type=str)
+@click.argument(
+    "img_paths",
+    nargs=-1,
+    type=click.Path(file_okay=True, exists=True, readable=True, path_type=Path),
+)
 @click.pass_obj
-def predict(ctx: ClickContext, name: str) -> None:
-    """Detects, crops, and transcribes every stave on random pages.
+def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
+    """Detects, crops, and transcribes staves on a list of images or random pages.
 
     NAME: The model version to use to make the predictions.
+    IMG_PATHS: Images to process. When omitted, picks random pages from the
+    PDMX dataset (with GT comparison).
     """
     config, module = _load_for_inference(name)
     vocab = Vocab.load(ctx.home / "build/vocab.json")
     dataset = ScorerDataset(config, ctx.source, vocab)
-    indices = list(range(len(dataset)))
-    random.shuffle(indices)
-
     cv2.namedWindow("Page")
-    for idx in indices:
-        image, _gt_sys, _gt_stave, gt_assign, stave_tokens = dataset[idx]
-        boxes, tokens = module.predict(image.unsqueeze(0).to(module.device))
-        num_gt = int((gt_assign != -1).sum())
-
-        img = image.squeeze(0).cpu().numpy() * PAGE_STD + PAGE_MEAN
-        img = np.stack([(np.clip(img, 0.0, 1.0) * 255).astype(np.uint8)] * 3, axis=-1)
-
-        click.clear()
-        print(f"Item {idx}: detected {boxes.shape[0]} staves (GT {num_gt})")
-        for k in range(boxes.shape[0]):
-            _, left, top, right, bot = boxes[k].tolist()
-            cv2.rectangle(
-                img, (int(left), int(top)), (int(right), int(bot)), (0, 255, 0), 1
-            )
-            pred_tokens = dataset.vocab.i2tok(tokens[k].cpu())
-            print(f"\n── stave[{k}] ──")
-            if k < num_gt:
-                gt_tokens = dataset.vocab.i2tok(stave_tokens[k][1:])  # skip SOS
-                print(format_sequence_columns(gt_tokens, pred_tokens))
-            else:
-                print(" ".join(pred_tokens))  # spurious stave — no GT to compare
-        cv2.imshow("Page", img)
-        if cv2.waitKey(0) == ord("q"):
-            break
+    if img_paths:
+        predict_from_images(module, dataset, img_paths)
+    else:
+        predict_from_dataset(module, dataset)
     cv2.destroyAllWindows()
 
 
@@ -555,7 +660,7 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
     for idx in tqdm(indices, desc="Evaluating"):
         image, _gt_sys, _gt_stave, gt_assign, stave_tokens = dataset[idx]
         num_gt = int((gt_assign != -1).sum())
-        _boxes, tokens = module.predict(image.unsqueeze(0).to(module.device))
+        _boxes, tokens, _owners = module.predict(image.unsqueeze(0).to(module.device))
         num_pred = tokens.shape[0]
         total_gt += num_gt
         total_pred += num_pred
