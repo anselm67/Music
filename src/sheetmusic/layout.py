@@ -110,8 +110,10 @@ class System:
     """
 
     bar_numbers: list[int]
-    svg_bar_numbers: list[int | None]
     staves: list[Staff]
+    # PDMX/Verovio-only: bar numbers scraped from the SVG, used to validate the
+    # render against the computed numbering. KernSheet has no SVG, so it omits this.
+    svg_bar_numbers: list[int | None] = field(default_factory=list)
     box: Box = field(init=False)
 
     def __post_init__(self) -> None:
@@ -158,9 +160,9 @@ class System:
 
     def scale(self, w_scale: float, h_scale: float) -> "System":
         return System(
-            self.bar_numbers,
-            self.svg_bar_numbers,
+            bar_numbers=self.bar_numbers,
             staves=[s.scale(w_scale, h_scale) for s in self.staves],
+            svg_bar_numbers=self.svg_bar_numbers,
         )
 
 

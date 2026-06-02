@@ -139,7 +139,7 @@ class LayoutExtractor:
             raise ValueError(
                 f"{self.svg_file}: svg bar numbers disagrees with stave bars."
             )
-        return bar_number + bar_count, System(bar_numbers, svg_bar_numbers, staves)
+        return bar_number + bar_count, System(bar_numbers, staves, svg_bar_numbers)
 
     def parse(self, page_number: int = 1, bar_number: int = 1) -> Page:
         root = self.tree.getroot()
