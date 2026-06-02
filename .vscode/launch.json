@@ -177,7 +177,7 @@
                 "testing"
             ]
         },
-        // noter debug configs.
+        // noter cli
         {
             "name": "noter show",
             "type": "debugpy",
@@ -218,6 +218,19 @@
                 "250",
                 "predict",
                 "basic"
+            ]
+        },
+        // scorer cli
+        {
+            "name": "scorer train",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "cli.scorer",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "args": [
+                "train",
+                "testing"
             ]
         }
     ]
