@@ -21,7 +21,7 @@ from matplotlib.backend_bases import Event, KeyEvent
 from tqdm import tqdm
 
 from noter import NoterConfig, Vocab
-from pdmx import PDMX
+from pdmx import PDMX, PdmxSource
 from scorer import (
     STAFFER_NORM,
     ScorerConfig,
@@ -42,7 +42,7 @@ HOME = Path("/home/anselm/datasets/PDMX")
 @dataclass
 class ClickContext:
     home: Path
-    pdmx: PDMX
+    source: PdmxSource
     config: ScorerConfig
 
 
@@ -113,7 +113,7 @@ def cli(
         )
     logging.info("Running: %s", " ".join(sys.argv))
     pdmx = PDMX(home, csv, offset, count)
-    ctx.obj = ClickContext(home, pdmx, ScorerConfig())
+    ctx.obj = ClickContext(home, PdmxSource(pdmx), ScorerConfig())
 
 
 def config_from_checkpoint(checkpoint_path: Path) -> ScorerConfig:
@@ -133,7 +133,7 @@ def config_from_checkpoint(checkpoint_path: Path) -> ScorerConfig:
 def check(ctx: ClickContext) -> None:
     """Wires the model on synthetic data and prints the bridge shapes."""
     config = ScorerConfig()
-    config.use_vocab(Vocab.load(ctx.pdmx.home / "build/vocab.json"))
+    config.use_vocab(Vocab.load(ctx.home / "build/vocab.json"))
     module = ScorerModule(config)
     model = module.model
     staffer_params = sum(p.numel() for p in model.staffer.parameters())
@@ -223,6 +223,7 @@ def train(
     """
     VAL_CHECK_INTERVAL = 250
 
+    vocab = Vocab.load(ctx.home / "build" / "vocab.json")
     ckpt_path: Path | None = None
     candidate = Path("checkpoints") / "scorer" / name / "last.ckpt"
     if candidate.exists():
@@ -232,7 +233,7 @@ def train(
         module = ScorerModule(config)
     else:
         config = replace(ctx.config, id_name=name)
-        config.use_vocab(Vocab.load(ctx.pdmx.home / "build" / "vocab.json"))
+        config.use_vocab(vocab)
         staffer_ckpt = Path("checkpoints") / "staffer" / staffer / "last.ckpt"
         noter_ckpt = Path("checkpoints") / "noter" / noter / "last.ckpt"
         for label, path in [("staffer", staffer_ckpt), ("noter", noter_ckpt)]:
@@ -305,7 +306,7 @@ def train(
 
     trainer.fit(
         module,
-        ScorerDataModule(config, ctx.pdmx, num_workers=num_workers),
+        ScorerDataModule(config, ctx.source, vocab, num_workers=num_workers),
         ckpt_path=ckpt_path,
     )
 
@@ -491,7 +492,8 @@ def predict(ctx: ClickContext, name: str) -> None:
     NAME: The model version to use to make the predictions.
     """
     config, module = _load_for_inference(name)
-    dataset = ScorerDataset(config, ctx.pdmx)
+    vocab = Vocab.load(ctx.home / "build/vocab.json")
+    dataset = ScorerDataset(config, ctx.source, vocab)
     indices = list(range(len(dataset)))
     random.shuffle(indices)
 
@@ -543,7 +545,8 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
     NAME: The model version to evaluate.
     """
     config, module = _load_for_inference(name)
-    dataset = ScorerDataset(config, ctx.pdmx)
+    vocab = Vocab.load(ctx.home / "build/vocab.json")
+    dataset = ScorerDataset(config, ctx.source, vocab)
     n = min(size, len(dataset))
     indices = random.sample(range(len(dataset)), n)
 

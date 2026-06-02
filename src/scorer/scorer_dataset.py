@@ -6,20 +6,15 @@ same top-to-bottom enumeration order as the stave boxes. Restricted to ≤2-staf
 systems (use ``System2.csv``) so the spine ordering and token coverage are well defined.
 """
 
-import json
 import logging
-from pathlib import Path
 
 import torch
 from torch import Tensor
 from torch.utils.data import Dataset
-from torchvision.io import decode_image
 from torchvision.transforms import v2
 from tqdm import tqdm
 
-from kern.kern_reader import KernReader
-from pdmx import PDMX
-from sheetmusic import Score
+from sheetmusic import Source
 
 from noter import Vocab
 
@@ -29,14 +24,16 @@ Sample = tuple[Tensor, Tensor, Tensor, Tensor, Tensor]
 
 
 class ScorerDataset(Dataset[Sample]):
-    pdmx: PDMX
-    items: list[tuple[Path, Path, int]]  # mxl_file, png_file, page_number
+    source: Source
+    items: list[tuple[str, int]]  # score_id, page_number
     transform: v2.Transform
 
-    def __init__(self, config: ScorerConfig, pdmx: PDMX, count: int = -1) -> None:
+    def __init__(
+        self, config: ScorerConfig, source: Source, vocab: Vocab, count: int = -1
+    ) -> None:
         self.config = config
-        self.pdmx = pdmx
-        self.vocab = Vocab.load(pdmx.home / "build/vocab.json")
+        self.source = source
+        self.vocab = vocab
         # Same page normalisation as the staffer (the page is the staffer's input);
         # the noter branch recolours crops to its own space inside ScorerModel.crop.
         self.transform = v2.Compose(
@@ -56,18 +53,9 @@ class ScorerDataset(Dataset[Sample]):
 
         logging.info("Initializing ScorerDataset...")
         self.items = []
-        for _, row in tqdm(
-            pdmx.df.iterrows(), total=len(pdmx.df), desc="Loading scorer dataset"
-        ):
-            mxl_file = pdmx.home / row["mxl"]
-            layout_file = pdmx.get_path(mxl_file, "layout")
-            score = Score.from_json(json.loads(layout_file.read_text()))
+        for score in tqdm(source.scores(), desc="Loading scorer dataset"):
             for page in score.pages:
-                if score.page_count > 1:
-                    png_file = pdmx.get_page_path(mxl_file, "png", page.page_number)
-                else:
-                    png_file = pdmx.get_path(mxl_file, "png")
-                self.items.append((mxl_file, png_file, page.page_number))
+                self.items.append((score.id, page.page_number))
             if count >= 0 and len(self.items) >= count:
                 self.items = self.items[:count]
                 break
@@ -77,22 +65,20 @@ class ScorerDataset(Dataset[Sample]):
         return len(self.items)
 
     def _load_sequence(
-        self, mxl_file: Path, spine_number: int, first_bar: int, last_bar: int
+        self, score_id: str, spine_number: int, first_bar: int, last_bar: int
     ) -> Tensor | None:
         """Token sequence for one stave (SOS … EOS), shape (max_seqlen, max_chords)."""
-        kern_path = self.pdmx.get_path(mxl_file, "tokens")
         try:
-            reader = KernReader(kern_path)
+            records = self.source.records(score_id, first_bar, last_bar)
         except Exception as e:
-            logging.error(f"{kern_path}: {e}")
+            logging.error(f"{score_id}: {e}")
             return None
-        records = reader.get_text(first_bar, last_bar)
         if records is None:
-            logging.error(f"{mxl_file}: bars {first_bar}:{last_bar} not found.")
+            logging.error(f"{score_id}: bars {first_bar}:{last_bar} not found.")
             return None
         if len(records) + 2 > self.config.noter.max_seqlen:
             logging.error(
-                f"{mxl_file}: bars {first_bar}:{last_bar}, sequence too long "
+                f"{score_id}: bars {first_bar}:{last_bar}, sequence too long "
                 f"{len(records)} (max {self.config.noter.max_seqlen - 2})"
             )
             return None
@@ -107,7 +93,7 @@ class ScorerDataset(Dataset[Sample]):
                     str_tok.strip().split(), max_chords=self.config.noter.max_chords
                 )
             except Exception as e:
-                logging.error(f"{mxl_file}: {e}")
+                logging.error(f"{score_id}: {e}")
                 return None
         body[len(records), :] = self.s_eos
         return torch.cat([self.s_sos, body])
@@ -115,17 +101,15 @@ class ScorerDataset(Dataset[Sample]):
     def __getitem__(self, idx: int) -> Sample:
         c = self.config.staffer
         while True:
-            mxl_file, png_file, page_number = self.items[idx]
+            score_id, page_number = self.items[idx]
             try:
-                image = self.transform(decode_image(png_file.as_posix()))
+                image = self.transform(self.source.image(score_id, page_number))
             except Exception as e:
-                logging.error(f"{mxl_file}: {e}")
+                logging.error(f"{score_id}: {e}")
                 idx = (idx + 1) % len(self)
                 continue
 
-            score = Score.from_json(
-                json.loads(self.pdmx.get_path(mxl_file, "layout").read_text())
-            )
+            score = self.source.score(score_id)
             page = score.pages[page_number - 1]
             W, H = page.image_width, page.image_height
 
@@ -163,7 +147,7 @@ class ScorerDataset(Dataset[Sample]):
                         is_ok = False
                         break
                     seq = self._load_sequence(
-                        mxl_file,
+                        score_id,
                         spine_numbers[i],
                         system.first_bar_number,
                         system.last_bar_number,
