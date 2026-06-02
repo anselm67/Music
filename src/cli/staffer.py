@@ -26,7 +26,7 @@ from torchinfo import summary as model_summary
 from torchvision.io import decode_image
 from tqdm import tqdm
 
-from pdmx import PDMX
+from pdmx import PDMX, PdmxSource
 from sheetmusic import Box
 from staffer import (
     StafferConfig,
@@ -44,7 +44,7 @@ HOME = Path("/home/anselm/datasets/PDMX")
 class ClickContext:
     config: StafferConfig
     home: Path
-    pdmx: PDMX
+    source: PdmxSource
 
 
 @click.group()
@@ -114,7 +114,7 @@ def cli(
         )
     logging.info("Running: %s", " ".join(sys.argv))
     pdmx = PDMX(home, csv, offset, count)
-    ctx.obj = ClickContext(StafferConfig(), home, pdmx)
+    ctx.obj = ClickContext(StafferConfig(), home, PdmxSource(pdmx))
 
 
 @click.command()
@@ -151,7 +151,7 @@ def check() -> None:
 @click.pass_obj
 def show(ctx: ClickContext) -> None:
     """Displays random samples from the dataset."""
-    dataset = StafferDataset(ctx.config, ctx.pdmx)
+    dataset = StafferDataset(ctx.config, ctx.source)
     cv2.namedWindow("Page")
     while True:
         index = random.randint(0, len(dataset) - 1)
@@ -187,7 +187,7 @@ def show(ctx: ClickContext) -> None:
 @click.pass_obj
 def stats(ctx: ClickContext, num_workers: int) -> None:
     """Computes the mean and std of a subset of images from the dataset.."""
-    ds = StafferDataset(ctx.config, ctx.pdmx)
+    ds = StafferDataset(ctx.config, ctx.source)
     loader = DataLoader[tuple[Tensor, Tensor, Tensor, Tensor]](
         ds, num_workers=num_workers, batch_size=ctx.config.batch_size
     )
@@ -337,7 +337,7 @@ def train(
 
     trainer.fit(
         StafferModule(config),
-        StafferDataModule(config, ctx.pdmx, use_sampler, num_workers=num_workers),
+        StafferDataModule(config, ctx.source, use_sampler, num_workers=num_workers),
         ckpt_path=ckpt_path,
     )
 
@@ -527,22 +527,26 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
     """
     ckpt_path = Path("checkpoints") / "staffer" / name / "last.ckpt"
     config = config_from_checkpoint(ckpt_path)
-    dataset = StafferDataset(config, ctx.pdmx)
+    dataset = StafferDataset(config, ctx.source)
     model = StafferModule.load_from_checkpoint(
         ckpt_path, config=config, weights_only=False
     )
     model.eval()
     if img_paths:
-        source: Iterable[Path] = img_paths
+        images: Iterable[tuple[str, Tensor]] = (
+            (p.as_posix(), decode_image(p.as_posix())) for p in img_paths
+        )
     else:
         shuffled = list(dataset.items)
         random.shuffle(shuffled)
-        source = (item[1] for item in shuffled)
+        images = (
+            (f"{score_id} p{page_number}", dataset.source.image(score_id, page_number))
+            for score_id, page_number, _, _ in shuffled
+        )
     cv2.namedWindow("Page")
-    for img_path in source:
-        print(f"Path: {img_path.as_posix()}")
-        img = decode_image(img_path.as_posix())
-        img = dataset.transform(img).cuda()
+    for label, raw in images:
+        print(f"Path: {label}")
+        img = dataset.transform(raw).cuda()
         with torch.no_grad():
             (
                 pred_stave_tb,
@@ -618,7 +622,7 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
     H = config.image_shape[0]
     bin_size = H / NUM_BINS
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    dataset = StafferDataset(config, ctx.pdmx)
+    dataset = StafferDataset(config, ctx.source)
     model = StafferModule.load_from_checkpoint(
         ckpt_path, config=config, weights_only=False, map_location=device
     )

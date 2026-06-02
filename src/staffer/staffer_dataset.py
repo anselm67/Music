@@ -1,35 +1,32 @@
-"""Torch Dataset for training models against the PDMX dataset."""
+"""Torch Dataset for training models against a Source (PDMX or KernSheet)."""
 
-import json
 import logging
 import math
 from collections import Counter
-from pathlib import Path
 from typing import cast
 
 import torch
 from torch import Tensor
 from torch.utils.data import Dataset, Subset, WeightedRandomSampler
-from torchvision.io import decode_image
 from torchvision.transforms import v2
 from tqdm import tqdm
 
-from pdmx import PDMX
-from sheetmusic import Score
+from sheetmusic import Source
+
 from .staffer_model import StafferConfig
 
 
 class StafferDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]]):
-    pdmx: PDMX
-    # layout path, png path, page number, part_count, max_sys_bottom
+    source: Source
+    # score id, page number, part_count, max_sys_bottom
     # The last two items are used when use_sampler is enabled.
-    items: list[tuple[Path, Path, int, int, float]]
+    items: list[tuple[str, int, int, float]]
 
     transform: v2.Transform
 
-    def __init__(self, config: StafferConfig, pdmx: PDMX, count: int = -1):
+    def __init__(self, config: StafferConfig, source: Source, count: int = -1):
         self.config = config
-        self.pdmx = pdmx
+        self.source = source
         self.transform = v2.Compose(
             [
                 v2.Grayscale(),
@@ -43,21 +40,12 @@ class StafferDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]]):
                 v2.Normalize(mean=[0.9563435316085815], std=[0.16557540870879858]),
             ]
         )
-        # Build flat list of (mxl_path, page_number) pairs
+        # Build flat list of (score id, page_number) pairs
         logging.info("Initializing StafferDataset...")
         self.items = []
-        for _, row in tqdm(
-            pdmx.df.iterrows(), total=len(pdmx.df), desc="Loading dataset"
-        ):
-            mxl_file = pdmx.home / row["mxl"]
-            layout_file = pdmx.get_path(mxl_file, "layout")
-            score = Score.from_json(json.loads(layout_file.read_text()))
+        for score in tqdm(source.scores(), desc="Loading dataset"):
             part_count = max(score.staff_count, 1) // max(score.system_count, 1)
             for page in score.pages:
-                if score.page_count > 1:
-                    png_file = pdmx.get_page_path(mxl_file, "png", page.page_number)
-                else:
-                    png_file = pdmx.get_path(mxl_file, "png")
                 raw = max(
                     (s.box.bottom / page.image_height for s in page.systems),
                     default=0.0,
@@ -65,15 +53,14 @@ class StafferDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]]):
                 if raw > 1.0:
                     logging.warning(
                         "%s page %d: max_sys_bottom=%.3f > 1.0, clamping",
-                        layout_file,
+                        score.id,
                         page.page_number,
                         raw,
                     )
                 max_sys_bottom = min(raw, 1.0)
                 self.items.append(
                     (
-                        layout_file,
-                        png_file,
+                        score.id,
                         page.page_number,
                         part_count,
                         max_sys_bottom,
@@ -89,20 +76,18 @@ class StafferDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]]):
 
     def __getitem__(self, idx: int) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         while True:
-            layout_path, png_path, page_number, _, _ = self.items[idx]
+            score_id, page_number, _, _ = self.items[idx]
             # Attempts to decode this image, or next one when that fails.
             try:
-                image = decode_image(png_path.as_posix())
-                image = self.transform(image)
+                image = self.transform(self.source.image(score_id, page_number))
             except Exception as e:
-                mxl_path = self.pdmx.get_path(layout_path, "mxl")
-                logging.error(f"{mxl_path}: {e}")
+                logging.error(f"{score_id}: {e}")
                 idx += 1
                 continue
 
             # Converts the Score to expected ground truth tensors.
             is_ok = True
-            score = Score.from_json(json.loads(layout_path.read_text()))
+            score = self.source.score(score_id)
             page = score.pages[page_number - 1]
 
             sys_boxes = torch.zeros(self.config.num_system_queries, 4)
@@ -150,7 +135,7 @@ def build_sampler(
     part_histo: Counter[int] = Counter()
     dataset = cast(StafferDataset, ds.dataset)
     for i in ds.indices:
-        _, _, _, part_count, max_sys_bottom = dataset.items[i]
+        _, _, part_count, max_sys_bottom = dataset.items[i]
         part_counts.append(part_count)
         max_sys_bottoms.append(max_sys_bottom)
         part_histo[part_count] += 1

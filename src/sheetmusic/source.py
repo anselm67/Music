@@ -17,13 +17,21 @@ from .layout import Score
 
 class Source(Protocol):
     def scores(self) -> Iterable[Score]:
-        """Enumerate the dataset's scores (layout included)."""
+        """Enumerate the dataset's scores (layout included). Frugal: yield lazily."""
         ...
 
-    def image(self, score: Score, page_number: int) -> Tensor:
+    def score(self, id: str) -> Score:
+        """(Re)load one score's layout by its ``Score.id`` key.
+
+        Used per ``__getitem__`` so datasets can keep only lightweight keys in memory
+        rather than holding every parsed ``Score``.
+        """
+        ...
+
+    def image(self, id: str, page_number: int) -> Tensor:
         """Raw page image ``(C, H, W)`` in original pixels; the dataset transforms."""
         ...
 
-    def records(self, score: Score, first_bar: int, last_bar: int) -> list[str] | None:
+    def records(self, id: str, first_bar: int, last_bar: int) -> list[str] | None:
         """Kern rows for the bar range, spines tab-separated; None if unavailable."""
         ...

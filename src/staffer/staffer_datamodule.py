@@ -1,34 +1,40 @@
-"""Lightning dataset module for PDMX."""
+"""Lightning dataset module wrapping StafferDataset over a Source."""
 
 import logging
 
 import lightning as L
 from torch.utils.data import DataLoader, random_split
 
-from .staffer_model import StafferConfig
+from sheetmusic import Source
 
-from pdmx import PDMX
 from .staffer_dataset import StafferDataset, build_sampler
+from .staffer_model import StafferConfig
 
 
 class StafferDataModule(L.LightningDataModule):
     config: StafferConfig
-    pdmx: PDMX
+    source: Source
     use_sampler: bool
     num_workers: int
 
     def __init__(
-        self, config: StafferConfig, pdmx: PDMX, use_sampler: bool, num_workers: int = 8
+        self,
+        config: StafferConfig,
+        source: Source,
+        use_sampler: bool,
+        num_workers: int = 8,
     ):
         super().__init__()
         self.config = config
-        self.pdmx = pdmx.slice(0, self.config.train_len + self.config.valid_len)
+        self.source = source
         self.use_sampler = use_sampler
         self.num_workers = num_workers
 
     def setup(self, stage: str | None = None) -> None:
         full = StafferDataset(
-            self.config, self.pdmx, count=self.config.train_len + self.config.valid_len
+            self.config,
+            self.source,
+            count=self.config.train_len + self.config.valid_len,
         )
         self.train_ds, self.val_ds = random_split(
             full, [self.config.train_len, self.config.valid_len]
