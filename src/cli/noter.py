@@ -25,7 +25,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from noter import NoterConfig, NoterDataModule, NoterDataset, NoterModule, Vocab
-from pdmx import PDMX
+from pdmx import PDMX, PdmxSource
 from utils import (
     format_sequence_columns,
     print_histogram,
@@ -39,7 +39,7 @@ HOME = Path("/home/anselm/datasets/PDMX")
 @dataclass
 class ClickContext:
     home: Path
-    pdmx: PDMX
+    source: PdmxSource
     config: NoterConfig
 
 
@@ -105,14 +105,14 @@ def cli(
     )
     logging.info("Running: %s", " ".join(sys.argv))
     pdmx = PDMX(home, csv, offset, count)
-    ctx.obj = ClickContext(home, pdmx, NoterConfig())
+    ctx.obj = ClickContext(home, PdmxSource(pdmx), NoterConfig())
 
 
 @click.command()
 @click.pass_obj
 def vocab(ctx: ClickContext) -> None:
     """Generates the vocab pickle file from PDMX token files."""
-    vocab = Vocab.from_pdmx(ctx.pdmx)
+    vocab = Vocab.from_pdmx(ctx.source.pdmx)
     vocab.save(ctx.home / "build" / "vocab.json")
 
 
@@ -120,7 +120,8 @@ def vocab(ctx: ClickContext) -> None:
 @click.pass_obj
 def show(ctx: ClickContext) -> None:
     """Displays random samples from the dataset."""
-    dataset = NoterDataset(ctx.config, ctx.pdmx)
+    vocab = Vocab.load(ctx.home / "build/vocab.json")
+    dataset = NoterDataset(ctx.config, ctx.source, vocab)
     cv2.namedWindow("Staff")
     while True:
         index = random.randint(0, len(dataset) - 1)
@@ -145,7 +146,8 @@ def show(ctx: ClickContext) -> None:
 def stats(ctx: ClickContext, num_workers: int) -> None:
     """Computes stats for images from the dataset."""
     # We can't use DataLoader just yet, because the image size isn't padded.
-    dataset = NoterDataset(ctx.config, ctx.pdmx)
+    vocab = Vocab.load(ctx.home / "build/vocab.json")
+    dataset = NoterDataset(ctx.config, ctx.source, vocab)
     max_height, max_width, max_seqlen = 0, 0, 0
     seqlen_histo: Counter[int] = Counter()
     for idx in tqdm(range(0, len(dataset)), desc="Computing stats"):
@@ -174,7 +176,8 @@ def stats(ctx: ClickContext, num_workers: int) -> None:
 @click.pass_obj
 def image_stats(ctx: ClickContext, num_workers: int) -> None:
     """Computes the mean and std of a subset of images from the dataset.."""
-    ds = NoterDataset(ctx.config, ctx.pdmx)
+    vocab = Vocab.load(ctx.home / "build/vocab.json")
+    ds = NoterDataset(ctx.config, ctx.source, vocab)
     loader = DataLoader[tuple[Tensor, Tensor]](
         ds, num_workers=num_workers, batch_size=ctx.config.batch_size
     )
@@ -199,7 +202,7 @@ def image_stats(ctx: ClickContext, num_workers: int) -> None:
 def summary(ctx: ClickContext) -> None:
     """Displays a nice summary of the underlying NoterModel model."""
     config = NoterConfig()
-    config.use_vocab(Vocab.load(ctx.pdmx.home / "build/vocab.json"))
+    config.use_vocab(Vocab.load(ctx.home / "build/vocab.json"))
     B = config.batch_size
     T = config.max_seqlen
     H = config.max_chords
@@ -266,6 +269,7 @@ def train(
     """
     VAL_CHECK_INTERVAL = 250
 
+    vocab = Vocab.load(ctx.home / "build" / "vocab.json")
     ckpt_path: Path | None = None
     ckpt_path = Path("checkpoints") / "noter" / name / "last.ckpt"
     if ckpt_path.exists():
@@ -274,7 +278,6 @@ def train(
     else:
         ckpt_path = None
         config = replace(ctx.config, id_name=name)
-        vocab = Vocab.load(ctx.pdmx.home / "build" / "vocab.json")
         config.use_vocab(vocab)
 
     config.max_steps = epochs * (config.train_len // config.batch_size)
@@ -341,7 +344,7 @@ def train(
 
     trainer.fit(
         NoterModule(config),
-        NoterDataModule(config, ctx.pdmx, num_workers=num_workers),
+        NoterDataModule(config, ctx.source, vocab, num_workers=num_workers),
         ckpt_path=ckpt_path,
     )
 
@@ -501,7 +504,8 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
     """
     ckpt_path = Path("checkpoints") / "noter" / name / "last.ckpt"
     config = config_from_checkpoint(ckpt_path)
-    dataset = NoterDataset(config, ctx.pdmx)
+    vocab = Vocab.load(ctx.home / "build/vocab.json")
+    dataset = NoterDataset(config, ctx.source, vocab)
     module = NoterModule.load_from_checkpoint(
         ckpt_path, config=config, weights_only=False
     )
@@ -545,7 +549,8 @@ def predict(ctx: ClickContext, name: str) -> None:
     """
     ckpt_path = Path("checkpoints") / "noter" / name / "last.ckpt"
     config = config_from_checkpoint(ckpt_path)
-    dataset = NoterDataset(config, ctx.pdmx)
+    vocab = Vocab.load(ctx.home / "build/vocab.json")
+    dataset = NoterDataset(config, ctx.source, vocab)
     module = NoterModule.load_from_checkpoint(
         ckpt_path, config=config, weights_only=False
     )
