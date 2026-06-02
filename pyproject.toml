@@ -14,6 +14,7 @@ dependencies = [
     "numpy>=2.4.6",
     "opencv-python>=4.13.0.92",
     "pandas>=3.0.3",
+    "pdf2image>=1.17.0",
     "pillow>=12.2.0",
     "pytest-asyncio>=1.3.0",
     "pytest-cov>=7.1.0",
@@ -28,7 +29,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/cli", "src/kern", "src/midi", "src/noter", "src/pdmx", "src/scorer", "src/sheetmusic", "src/staffer", "src/utils", "src/verovio"]
+packages = ["src/cli", "src/kern", "src/kernsheet", "src/midi", "src/noter", "src/pdmx", "src/scorer", "src/sheetmusic", "src/staffer", "src/utils", "src/verovio"]
 
 [dependency-groups]
 dev = [
@@ -58,6 +59,7 @@ asyncio_mode = "auto"
 [project.scripts]
 kern = "cli.kern:main"
 pdmx = "cli.pdmx:main"
+kernsheet = "cli.kernsheet:main"
 staffer = "cli.staffer:main"
 noter = "cli.noter:main"
 scorer = "cli.scorer:main"
