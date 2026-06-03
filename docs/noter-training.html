@@ -147,10 +147,10 @@
         <td><span class="badge badge-green">PDMX best</span></td>
       </tr>
       <tr>
-        <td><span class="tag">enhanced3-kernsheet</span></td><td>2026-06-03</td><td>12 (cap)</td>
-        <td>pending</td><td>pending</td>
+        <td><span class="tag">enhanced3-kernsheet</span></td><td>2026-06-03</td><td>12</td>
+        <td>96.78%</td><td>0.135</td>
         <td>Fine-tune of <span class="tag">enhanced3</span> on <strong>KernSheet</strong> (real scanned scores); vocab grown 4,784 → 5,543</td>
-        <td><span class="badge badge-amber">in progress</span></td>
+        <td><span class="badge badge-green">KernSheet best</span></td>
       </tr>
     </tbody>
   </table>
@@ -310,7 +310,7 @@
   <div class="session">
     <div class="session-header">
       <h2><span class="tag">enhanced3-kernsheet</span></h2>
-      <span class="session-meta">2026-06-03 · fine-tune · D=256 · <span class="badge badge-amber">in progress</span></span>
+      <span class="session-meta">2026-06-03 · fine-tune · 12 epochs · D=256</span>
     </div>
     <p>First fine-tune on <strong>KernSheet</strong> — real published/scanned piano scores with
     manually-reviewed layout — starting from the <span class="tag">enhanced3</span> PDMX checkpoint.
@@ -326,13 +326,31 @@
     <code>.pdf</code> and a Humdrum <code>.krn</code>). It is exposed to the model through the same
     <code>Source</code> protocol PDMX uses, so the dataset/datamodule code is dataset-agnostic. The
     pipeline (all already run; details in <code>docs/kernsheet-plan.html</code>):</p>
-    <div class="changes">
-      <div class="change-item"><span class="change-sym add">+</span> <strong>Layout migration.</strong> The legacy envelope layout (one <code>rh_top</code>/<code>lh_bot</code> per grand-staff system) was migrated once into native <code>Score</code> JSON at <code>KernSheet/layout/&lt;id&gt;.json</code> — non-destructive (<code>.krn</code>/<code>.pdf</code> untouched). <strong>581</strong> scores migrated clean.</div>
-      <div class="change-item"><span class="change-sym add">+</span> <strong>Stave split (thirds).</strong> A piano grand staff is always RH treble + LH bass: with <code>delta = (lh_bot − rh_top) // 3</code>, RH = <code>[rh_top, rh_top+delta]</code>, LH = <code>[lh_bot−delta, lh_bot]</code>, middle third is the inter-staff gap.</div>
-      <div class="change-item"><span class="change-sym add">+</span> <strong>Bar alignment.</strong> Per-system <code>first_bar</code>/<code>last_bar</code> are set by walking the kern's <code>=N</code> sequence in reading order; a count-match guard excludes pickups / repeats / malformed scores rather than silently misaligning tokens to crops.</div>
-      <div class="change-item"><span class="change-sym add">+</span> <strong>Derived assets.</strong> PDF→PNG cached under <code>build/png/</code> (rendered into annotation space: resized to <code>image_width</code>, then rotated); tokens via Music's <code>kern.tokenize</code> under <code>build/tokens/</code> (numbered <code>=N</code> barlines).</div>
-      <div class="change-item"><span class="change-sym mod">~</span> <strong>Unmigrated-score guard.</strong> <code>KernSheetSource.scores()</code> now filters on <code>layout_path.is_file()</code> (not <code>.exists()</code>): the 31 unmigrated entries have an empty <code>json_path</code> whose path resolves to the <code>layout/</code> directory, which exists — the old guard yielded them and then crashed reading a directory. Only surfaced once we iterated most of the dataset.</div>
-    </div>
+    <table class="summary-table">
+      <thead><tr><th style="width:11rem;">Stage</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Layout migration</strong></td>
+          <td>The legacy envelope layout (one <code>rh_top</code>/<code>lh_bot</code> per grand-staff system) was migrated once into native <code>Score</code> JSON at <code>KernSheet/layout/&lt;id&gt;.json</code> — non-destructive (<code>.krn</code>/<code>.pdf</code> untouched). <strong>581</strong> scores migrated clean.</td>
+        </tr>
+        <tr>
+          <td><strong>Stave split (thirds)</strong></td>
+          <td>A piano grand staff is always RH treble + LH bass: with <code>delta = (lh_bot − rh_top) // 3</code>, RH = <code>[rh_top, rh_top+delta]</code>, LH = <code>[lh_bot−delta, lh_bot]</code>, middle third is the inter-staff gap.</td>
+        </tr>
+        <tr>
+          <td><strong>Bar alignment</strong></td>
+          <td>Per-system <code>first_bar</code>/<code>last_bar</code> are set by walking the kern's <code>=N</code> sequence in reading order; a count-match guard excludes pickups / repeats / malformed scores rather than silently misaligning tokens to crops.</td>
+        </tr>
+        <tr>
+          <td><strong>Derived assets</strong></td>
+          <td>PDF→PNG cached under <code>build/png/</code> (rendered into annotation space: resized to <code>image_width</code>, then rotated); tokens via Music's <code>kern.tokenize</code> under <code>build/tokens/</code> (numbered <code>=N</code> barlines).</td>
+        </tr>
+        <tr>
+          <td><strong>Unmigrated-score guard</strong></td>
+          <td><code>KernSheetSource.scores()</code> filters on <code>layout_path.is_file()</code> (not <code>.exists()</code>): the 31 unmigrated entries have an empty <code>json_path</code> whose path resolves to the <code>layout/</code> directory, which exists — the old guard yielded them and then crashed reading a directory. Only surfaced once we iterated most of the dataset.</td>
+        </tr>
+      </tbody>
+    </table>
     <p>Each sample is one cropped staff image paired with the Kern token sequence for its bar range
     (spine order <code>[1, 0]</code> for treble/bass). The full dataset is
     <strong>26,166 staff-items across 582 scores</strong>; this run uses 26,000 of them
@@ -395,7 +413,14 @@
     </table>
     <p style="font-size:0.85rem;color:var(--muted);">Defaults left untouched: batch size 16, AdamW (<code>weight_decay</code> 1e-2, default eps), <code>val_check_interval</code> 250 steps (≈ 6 validations/epoch), <code>bf16-mixed</code> precision, 8 dataloader workers, checkpoint keeps top-3 by <code>val/loss</code> + <code>last.ckpt</code>.</p>
 
-    <div class="result-box neutral">In progress — training launched 2026-06-03. Curves, best <code>val/loss</code> / <code>val/accuracy</code>, convergence epoch, and an edit-distance eval on the best checkpoint will be filled in on completion.</div>
+    <h3>Training curves</h3>
+    <p style="font-size:0.85rem;color:var(--muted);">KernSheet validation set (end-of-epoch values). Shown standalone — <em>not</em> on the same axes as the PDMX runs above, since the data is different and harder.</p>
+    <div class="charts">
+      <div class="chart-card"><h4>Val accuracy — KernSheet</h4><canvas id="c-e3ks-acc"></canvas></div>
+      <div class="chart-card"><h4>Val loss — KernSheet</h4><canvas id="c-e3ks-loss"></canvas></div>
+    </div>
+
+    <div class="result-box positive">Best result: <strong>96.78 % val token accuracy</strong> (<code>val/loss</code> 0.135) at epoch 11. Steady, monotonic improvement across all 12 epochs (no early stop): from a 90.8 % first validation up through 93.8 % (ep 0) → 95.8 % (ep 2) → 96.8 % (ep 9–11), where it flattened. Free-running greedy-decode edit-distance similarity on 1,000 random KernSheet staves: <strong>87.2 % average</strong> (min 17.2 %, max 100 %) — lower than the teacher-forced token accuracy, as expected, since autoregressive decoding compounds errors across the sequence. This is the model's first exposure to real engraving — the 99.58 % figure above is synthetic PDMX, a much easier domain, so the right comparison is the grown checkpoint's ~92 % cold-start on KernSheet.</div>
   </div>
 
 </main>
@@ -410,7 +435,7 @@
 
 <script>
 const ep12 = [0,1,2,3,4,5,6,7,8,9,10,11];
-const C = { basic: '#64748b', enh: '#7c3aed', e2: '#2563eb', e3: '#059669' };
+const C = { basic: '#64748b', enh: '#7c3aed', e2: '#2563eb', e3: '#059669', e3ks: '#d97706' };
 
 const basic = {
   acc:  [0.853,0.893,0.906,0.903,0.920,0.917,0.928,0.930,0.941,0.950,0.955,0.957],
@@ -427,6 +452,11 @@ const e2 = {
 const e3 = {
   acc:  [0.856,0.957,0.982,0.987,0.990,0.992,0.993,0.994,0.995,0.995,0.996,0.996],
   loss: [0.938,0.164,0.070,0.049,0.038,0.032,0.027,0.023,0.021,0.019,0.018,0.018],
+};
+// enhanced3-kernsheet — KernSheet val (end-of-epoch); different/harder data than the runs above.
+const e3ks = {
+  acc:  [0.938,0.9531,0.9582,0.9612,0.9636,0.965,0.9659,0.9668,0.9673,0.9678,0.9678,0.9678],
+  loss: [0.2634,0.1999,0.1759,0.1629,0.1525,0.1464,0.1425,0.1389,0.1363,0.1354,0.135,0.1349],
 };
 
 function line(label, data, color, opts={}) {
@@ -509,6 +539,10 @@ makeChart('c-e2-loss', [line('enhanced',enh.loss,C.enh,{dashed:true}), line('enh
 // enhanced3 vs enhanced2
 makeChart('c-e3-acc',  [line('enhanced2',e2.acc, C.e2,{dashed:true}), line('enhanced3',e3.acc, C.e3,{fill:true})], {min:0,max:1});
 makeChart('c-e3-loss', [line('enhanced2',e2.loss,C.e2,{dashed:true}), line('enhanced3',e3.loss,C.e3,{fill:true})]);
+
+// enhanced3-kernsheet solo (KernSheet val — not comparable to the PDMX runs above)
+makeChart('c-e3ks-acc',  [line('enhanced3-kernsheet',e3ks.acc, C.e3ks,{fill:true})], {min:0,max:1});
+makeChart('c-e3ks-loss', [line('enhanced3-kernsheet',e3ks.loss,C.e3ks,{fill:true})]);
 
 // ── Modal close wiring: backdrop click, close button, Esc.
 document.querySelector('.chart-modal-close').addEventListener('click', closeChartModal);
