@@ -120,26 +120,28 @@ class LayoutExtractor:
             bar_numbers.append(bar_number + bar_count)
             bar_count += measure_bar_count
 
-        # Transform bars bounding boxes into a list of staves.
+        # Transform bar bounding boxes into a list of staves and a shared bars list.
         staves: list[Staff] = list()
-        for _, bars in sorted(boxes.items()):
+        all_bars: list[list[int]] = list()
+        for _, bar_boxes in sorted(boxes.items()):
             staves.append(
-                Staff(
-                    box=Box(bars[0].top_left, bars[-1].bot_right),
-                    bars=[bars[0].left, bars[0].right, *[x.right for x in bars[1:]]],
-                )
+                Staff(box=Box(bar_boxes[0].top_left, bar_boxes[-1].bot_right))
             )
-        # TODO Move bars[] for the system into the System and out of the Staff.
+            all_bars.append(
+                [bar_boxes[0].left, *(x.right for x in bar_boxes)]
+            )
         if not staves:
             raise ValueError(f"{self.svg_file} has a system with no staff.")
-        first_bars = staves[0].bars
-        if not all(staff.bars == first_bars for staff in staves):
+        system_bars = all_bars[0]
+        if not all(b == system_bars for b in all_bars):
             raise ValueError(f"{self.svg_file}: system has incompatible bar values.")
-        if len(svg_bar_numbers) != len(first_bars) - 1:
+        if len(svg_bar_numbers) != len(system_bars) - 1:
             raise ValueError(
                 f"{self.svg_file}: svg bar numbers disagrees with stave bars."
             )
-        return bar_number + bar_count, System(bar_numbers, staves, svg_bar_numbers)
+        return bar_number + bar_count, System(
+            bar_numbers, system_bars, staves, svg_bar_numbers
+        )
 
     def parse(self, page_number: int = 1, bar_number: int = 1) -> Page:
         root = self.tree.getroot()

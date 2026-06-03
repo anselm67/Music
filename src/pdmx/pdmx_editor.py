@@ -80,8 +80,8 @@ class MxlEditor:
                     if staff.box.contains(point):
                         bar_count = 0
                         while (
-                            bar_count + 1 < len(staff.bars)
-                            and staff.bars[bar_count + 1] < point[0]
+                            bar_count + 1 < len(system.bars)
+                            and system.bars[bar_count + 1] < point[0]
                         ):
                             bar_count += 1
                         print(
@@ -120,14 +120,14 @@ class MxlEditor:
                         cv2.rectangle(
                             img, staff.box.top_left, staff.box.bot_right, staff_color, 2
                         )
-                        for bar in staff.bars:
-                            cv2.line(
-                                img,
-                                (bar, staff.box.top),
-                                (bar, staff.box.bottom),
-                                bar_color,
-                                1,
-                            )
+                    for bar in system.bars:
+                        cv2.line(
+                            img,
+                            (bar, system.top),
+                            (bar, system.bottom),
+                            bar_color,
+                            1,
+                        )
             cv2.imshow("layout", img)
             cv2.setMouseCallback(
                 "layout",

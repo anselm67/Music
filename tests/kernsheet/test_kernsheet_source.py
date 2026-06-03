@@ -23,7 +23,8 @@ def _page(page_number: int, width: int = 40) -> Page:
         systems=[
             System(
                 bar_numbers=[1],
-                staves=[Staff(box=Box((0, 0), (10, 10)), bars=[0, 10])],
+                bars=[0, 10],
+                staves=[Staff(box=Box((0, 0), (10, 10)))],
             )
         ],
         validated=True,

@@ -6,8 +6,9 @@ class TestScore:
     def test_save(self) -> None:
         system = System(
             bar_numbers=[1],
+            bars=[1, 2],
             svg_bar_numbers=[],
-            staves=[Staff(box=Box((0, 0), (10, 10)), bars=[1, 2])],
+            staves=[Staff(box=Box((0, 0), (10, 10)))],
         )
         page = Page(
             page_number=1,
@@ -25,10 +26,11 @@ class TestScore:
     def test_computed_properties(self) -> None:
         system = System(
             bar_numbers=[1],
+            bars=[1, 2],
             svg_bar_numbers=[],
             staves=[
-                Staff(box=Box((0, 0), (10, 10)), bars=[1, 2]),
-                Staff(box=Box((10, 0), (20, 10)), bars=[1, 2]),
+                Staff(box=Box((0, 0), (10, 10))),
+                Staff(box=Box((10, 0), (20, 10))),
             ],
         )
         assert system.box == Box((0, 0), (20, 10))
@@ -47,8 +49,9 @@ class TestScale:
     def test_scale(self) -> None:
         system = System(
             bar_numbers=[1],
+            bars=[1, 2],
             svg_bar_numbers=[],
-            staves=[Staff(box=Box((0, 0), (10, 10)), bars=[1, 2])],
+            staves=[Staff(box=Box((0, 0), (10, 10)))],
         )
         page = Page(
             page_number=1,
@@ -67,5 +70,4 @@ class TestScale:
             for ps, ss in zip(p.systems, s.systems):
                 assert ps.bar_count == ss.bar_count
                 assert ss.box == Box((0, 0), (20, 20))
-                for pss, sss in zip(ps.staves, ss.staves):
-                    assert sss.bars == [x * 2 for x in pss.bars]
+                assert ss.bars == [x * 2 for x in ps.bars]

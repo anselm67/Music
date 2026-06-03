@@ -80,24 +80,18 @@ class StaffEditor:
         assert 0 <= self.staff_index < len(self.system.staves)
         return self.system.staves[self.staff_index]
 
-    def replace_system_bars(self, bars: list[int]) -> None:
-        for idx, staff in enumerate(self.system.staves):
-            self.system.staves[idx] = replace(staff, bars=bars)
-
     def move_bar(self, delta: int) -> None:
         if self.system.bar_count > 0:
-            bars = self.system.staves[0].bars.copy()
+            bars = self.system.bars.copy()
             assert 0 <= self.bar_index < len(bars)
             bars[self.bar_index] += delta
-            self.replace_system_bars(bars)
+            self.replace_system(bars=bars)
 
     @property
     def bar_number(self) -> int:
         bar_number = self.bar_offset
         for system in self.page.systems[: self.system_index]:
-            # Reads only from first staff of the system as they should all be equal.
-            if system.staff_count > 0:
-                bar_number += max(len(system.staves[0].bars) - 1, 0)
+            bar_number += max(len(system.bars) - 1, 0)
         return bar_number + self.bar_index
 
     def _tokens_path(self) -> Path:
@@ -122,7 +116,7 @@ class StaffEditor:
         elif self.system.staff_count <= 0:
             self.staff_index = -1
             self.bar_index = -1
-        elif len(self.staff.bars) <= 0:
+        elif len(self.system.bars) <= 0:
             self.bar_index = -1
         self.update_bar_offset()
         cv2.namedWindow(self.STAFFER_WINDOW)
@@ -167,7 +161,7 @@ class StaffEditor:
             )
 
         for system_index, system in enumerate(page.systems):
-            if system.staff_count == 0 or len(system.staves[0].bars) == 0:
+            if len(system.bars) == 0:
                 width = rgb_image.shape[1]
                 color, thickness = (
                     selected_style if (system_index == selected_system) else style
@@ -188,8 +182,7 @@ class StaffEditor:
                     thickness,
                 )
                 continue
-            # Draws the bars, assumes all system stave bars are the same.
-            bars = system.staves[0].bars if system.staff_count > 0 else []
+            bars = system.bars
             for barno, bar in enumerate(bars):
                 color, thickness = (
                     selected_style
@@ -290,10 +283,10 @@ class StaffEditor:
             bars_len = 0
         elif select_last:
             self.system_index = system_count - 1
-            bars_len = len(self.system.staves[0].bars)
+            bars_len = len(self.system.bars)
         else:
             self.system_index = 0
-            bars_len = len(self.system.staves[self.staff_index].bars)
+            bars_len = len(self.system.bars)
         if self.system_index < 0 or bars_len == 0:
             self.bar_index = -1
         else:
@@ -305,9 +298,7 @@ class StaffEditor:
         else:
             self.system_index = self.system_index - 1
             self.bar_index = 0
-            bar_count = (
-                len(self.system.staves[0].bars) if self.system.staff_count > 0 else 0
-            )
+            bar_count = len(self.system.bars)
             if bar_count <= 0:
                 self.bar_index = -1
             elif select_last:
@@ -319,13 +310,13 @@ class StaffEditor:
         else:
             self.system_index = self.system_index + 1
             self.bar_index = 0
-            if self.system.staff_count <= 0 or len(self.system.staves[0].bars) <= 0:
+            if len(self.system.bars) <= 0:
                 self.bar_index = -1
 
     def select_next_bar(self) -> None:
         bar_count = 0
         if self.system_index >= 0 and self.system.staff_count >= 0:
-            bar_count = len(self.system.staves[self.staff_index].bars)
+            bar_count = len(self.system.bars)
         if self.bar_index + 1 >= bar_count:
             self.select_next_system()
         else:
@@ -351,9 +342,10 @@ class StaffEditor:
         left, right = 10, 500
         return System(
             bar_numbers=[],
+            bars=[],
             staves=[
-                Staff(Box((top, left), (top + height, right)), bars=[]),
-                Staff(Box((bottom - height, left), (bottom, right)), bars=[]),
+                Staff(Box((top, left), (top + height, right))),
+                Staff(Box((bottom - height, left), (bottom, right))),
             ],
         )
 
@@ -371,27 +363,28 @@ class StaffEditor:
             self.system_index += 1
 
     def add_bar(self, offset: int = -1) -> None:
-        bars = self.staff.bars.copy()
+        bars = self.system.bars.copy()
         if offset < 0:
             # Adds a bar after the selected one.
             if self.bar_index < 0:
                 offset = 10
                 bars.append(offset)
             else:
-                offset = self.staff.bars[self.bar_index] + 10
+                offset = self.system.bars[self.bar_index] + 10
                 bars.insert(self.bar_index + 1, offset)
         else:
             bars.append(offset)
         bars = sorted(bars)
-        self.replace_system_bars(bars)
+        self.replace_system(bars=bars)
         self.bar_index = bars.index(offset)
         self.check_bar_count()
 
     def delete_selected_bar(self) -> None:
         if self.bar_index < 0:
             return
-        for staff in self.system.staves:
-            del staff.bars[self.bar_index]
+        bars = self.system.bars.copy()
+        del bars[self.bar_index]
+        self.replace_system(bars=bars)
         self.bar_index = max(0, self.bar_index - 1)
         self.check_bar_count()
 
@@ -425,35 +418,29 @@ class StaffEditor:
         # Finds the left and right bars.
         min_offset, max_offset = self.image.shape[1], 0
         for system in self.page.systems:
-            for staff in system.staves:
-                for bar in staff.bars:
-                    min_offset = min(min_offset, bar)
-                    max_offset = max(max_offset, bar)
+            for bar in system.bars:
+                min_offset = min(min_offset, bar)
+                max_offset = max(max_offset, bar)
         if min_offset == self.image.shape[1] or max_offset == 0:
             print("No left and right side defined,not doing anything.")
             return
-        # Ensure that each staff has them both within margin.
+        # Ensure that each system has them both within margin.
         margin = 25
         for idx, system in enumerate(self.page.systems):
-            bars = None
-            # We're only looking at the first staff of the system, if any.
-            if system.staff_count > 0:
-                first_bars = system.staves[0].bars
-                if len(first_bars) > 0:
-                    if abs(first_bars[0] - min_offset) >= margin:
-                        if bars is None:
-                            bars = first_bars.copy()
-                        bars.insert(0, min_offset)
-                    if abs(first_bars[-1] - max_offset) >= margin:
-                        if bars is None:
-                            bars = first_bars.copy()
-                        bars.append(max_offset)
-                else:
-                    bars = [min_offset, max_offset]
+            bars: list[int] | None = None
+            if len(system.bars) > 0:
+                if abs(system.bars[0] - min_offset) >= margin:
+                    bars = system.bars.copy()
+                    bars.insert(0, min_offset)
+                if abs(system.bars[-1] - max_offset) >= margin:
+                    if bars is None:
+                        bars = system.bars.copy()
+                    bars.append(max_offset)
+            else:
+                bars = [min_offset, max_offset]
             if bars is not None:
                 print(f"Fixed staff {idx + 1}")
-                for staff_index, staff in enumerate(system.staves):
-                    system.staves[staff_index] = replace(staff, bars=bars)
+                self.page.systems[idx] = replace(system, bars=bars)
 
     def update_ui(self) -> None:
         image = self.draw_page(

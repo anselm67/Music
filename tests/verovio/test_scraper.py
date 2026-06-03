@@ -253,9 +253,9 @@ class TestStaffParsing:
     def test_staff_left_right_bars(self, tmp_path: Path) -> None:
         # left_x=100 → 10, right_x=5000 → 500
         svg = write_svg(tmp_path, make_svg(one_staff_system()))
-        staff = LayoutExtractor(svg).parse().systems[0].staves[0]
-        assert staff.bars[0] == 10
-        assert staff.bars[-1] == 500
+        system = LayoutExtractor(svg).parse().systems[0]
+        assert system.bars[0] == 10
+        assert system.bars[-1] == 500
 
     def test_staff_with_margin_offset(self, tmp_path: Path) -> None:
         svg = write_svg(

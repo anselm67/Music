@@ -72,7 +72,6 @@ class Box:
 @dataclass(frozen=True)
 class Staff:
     box: Box
-    bars: list[int]
 
     @property
     def top(self) -> int:
@@ -91,10 +90,7 @@ class Staff:
         return self.box.right
 
     def scale(self, w_scale: float, h_scale: float) -> "Staff":
-        return Staff(
-            box=self.box.scale(w_scale, h_scale),
-            bars=[int(b * w_scale) for b in self.bars],
-        )
+        return Staff(box=self.box.scale(w_scale, h_scale))
 
 
 @dataclass(frozen=True)
@@ -110,6 +106,7 @@ class System:
     """
 
     bar_numbers: list[int]
+    bars: list[int]
     staves: list[Staff]
     # PDMX/Verovio-only: bar numbers scraped from the SVG, used to validate the
     # render against the computed numbering. KernSheet has no SVG, so it omits this.
@@ -143,7 +140,7 @@ class System:
 
     @property
     def bar_count(self) -> int:
-        return len(self.staves[0].bars) - 1
+        return len(self.bars) - 1
 
     @property
     def first_bar_number(self) -> int:
@@ -161,6 +158,7 @@ class System:
     def scale(self, w_scale: float, h_scale: float) -> "System":
         return System(
             bar_numbers=self.bar_numbers,
+            bars=[int(b * w_scale) for b in self.bars],
             staves=[s.scale(w_scale, h_scale) for s in self.staves],
             svg_bar_numbers=self.svg_bar_numbers,
         )

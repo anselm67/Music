@@ -44,8 +44,8 @@ def split_envelope(rh_top: int, lh_bot: int, bars: list[int]) -> list[Staff]:
     """Thirds split of a grand-staff envelope into [treble, bass] Staff boxes."""
     delta = (lh_bot - rh_top) // 3
     left, right = bars[0], bars[-1]
-    treble = Staff(box=Box((left, rh_top), (right, rh_top + delta)), bars=bars)
-    bass = Staff(box=Box((left, lh_bot - delta), (right, lh_bot)), bars=bars)
+    treble = Staff(box=Box((left, rh_top), (right, rh_top + delta)))
+    bass = Staff(box=Box((left, lh_bot - delta), (right, lh_bot)))
     return [treble, bass]
 
 
@@ -66,6 +66,7 @@ def build_score(score_id: str, legacy: dict, kr: KernReader) -> Score:
             systems.append(
                 System(
                     bar_numbers=bar_numbers,
+                    bars=bars,
                     staves=split_envelope(staff["rh_top"], staff["lh_bot"], bars),
                 )
             )
