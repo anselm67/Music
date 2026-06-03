@@ -13,6 +13,7 @@
   .note { background: #fffbe6; border-left: 4px solid #f0b429; padding: 10px 16px; margin: 1em 0; border-radius: 0 4px 4px 0; }
   .bad  { background: #fdecea; border-left: 4px solid #c62828; padding: 10px 16px; margin: 1em 0; border-radius: 0 4px 4px 0; }
   .ok   { background: #eafaf0; border-left: 4px solid #2e9e5b; padding: 10px 16px; margin: 1em 0; border-radius: 0 4px 4px 0; }
+  .done { background: #e8f0fe; border-left: 4px solid #1a73e8; padding: 10px 16px; margin: 1em 0; border-radius: 0 4px 4px 0; }
   table { border-collapse: collapse; width: 100%; margin: 1em 0; }
   th, td { border: 1px solid #ccc; padding: 7px 12px; text-align: left; }
   th { background: #f0f0f0; }
@@ -29,30 +30,37 @@
   end-to-end model, alongside the synthetic PDMX it trains on today.
 </p>
 <div class="ok">
-  <strong>Bottom line (revised):</strong> we are <em>not</em> morphing KernSheet's disk
-  layout to look like PDMX. Instead we define a single <strong>Source protocol</strong>
-  that yields exactly what <code>staffer</code> / <code>noter</code> / <code>scorer</code>
-  need, and have <em>both</em> PDMX and KernSheet implement it. Datasets and models are
-  abstracted from each dataset's on-disk layout. KernSheet stays exactly as it is on disk;
-  the OMR editor keeps working untouched.
+  <strong>Bottom line (as built):</strong> KernSheet's legacy envelope layout was
+  <strong>migrated once</strong> to native <code>Score</code> JSON at
+  <code>KernSheet/layout/&lt;id&gt;.json</code> (non-destructive; <code>.krn</code> /
+  <code>.pdf</code> untouched). A single <strong>Source protocol</strong> abstracts
+  both PDMX and KernSheet behind the same four methods; datasets and models never
+  see either dataset's on-disk layout directly. The OMR editor has been ported into
+  <code>src/kernsheet/</code> and writes native <code>Score</code> JSON.
+  <strong>Phases 1&ndash;3 are complete; Phase 4 (fine-tune) is next.</strong>
 </div>
 
-<h2>Sources (as found)</h2>
+<h2>Sources (as built)</h2>
 <table>
   <tr><th>What</th><th>Where</th></tr>
-  <tr><td>KernSheet clone</td><td><code>~/datasets/KernSheet</code> (git <code>anselm67/KernSheet</code>); nested <code>composer/work/&hellip;</code> indexed by <code>catalog.json</code>; per score: <code>.pdf</code>, <code>.krn</code>, reviewed <code>.json</code> layout, regenerated <code>.tokens</code></td></tr>
-  <tr><td>OMR editor / tooling</td><td><code>~/projects/OMR/</code> &mdash; <code>kernsheet.py</code>, <code>staffer.py</code>, <code>staff_editor.py</code>, <code>tokenizer.py</code> (the ancestor of the Music <code>kern</code> code)</td></tr>
+  <tr><td>KernSheet clone</td><td><code>~/datasets/KernSheet</code> (git <code>anselm67/KernSheet</code>); nested <code>composer/work/&hellip;</code> indexed by <code>catalog.json</code>; per score: <code>.pdf</code>, <code>.krn</code>; migrated native-Score layout at <code>KernSheet/layout/&lt;id&gt;.json</code>; derived assets under <code>KernSheet/build/tokens/</code> and <code>KernSheet/build/png/</code></td></tr>
+  <tr><td>OMR editor (historical)</td><td><code>~/projects/OMR/</code> &mdash; ancestor codebase; editor ported to <code>src/kernsheet/editor.py</code> in Music; OMR no longer needed</td></tr>
 </table>
 
-<h3>KernSheet layout JSON schema</h3>
+<h3>KernSheet layout JSON schema (original &mdash; now migrated away)</h3>
 <pre>pages:[ { page_number, image_width, image_height,
-          staves:[ { rh_top, lh_bot, bars:[x,&hellip;] } ],   # one entry per grand-staff SYSTEM
+          staves:[ { rh_top, lh_bot } ],   # one entry per grand-staff SYSTEM (envelope only)
+          bars:[x,&hellip;],                    # barline x-coords on the system (not per-staff)
           validated, image_rotation } ]</pre>
 <div class="note">
-  <strong>Key semantic:</strong> each KernSheet &ldquo;staff&rdquo; entry is really a
-  grand-staff <em>system</em> &mdash; it stores only the outer envelope
-  (<code>rh_top</code>, <code>lh_bot</code>) plus barline x-positions, <em>not</em> the
-  inner treble/bass split and <em>not</em> absolute bar numbers.
+  <strong>Key semantic of the old format:</strong> each &ldquo;staff&rdquo; entry was a
+  grand-staff <em>system</em> storing only the outer envelope
+  (<code>rh_top</code>, <code>lh_bot</code>), <em>not</em> the inner treble/bass split
+  and <em>not</em> absolute bar numbers. The migration script resolved the treble/bass
+  split (thirds rule) and assigned absolute <code>first_bar</code> / <code>last_bar</code>
+  per system, producing native <code>Score</code> JSON. Note also: <code>bars</code>
+  (barline x-positions) live on <code>System</code>, not on individual <code>Staff</code>
+  objects &mdash; this is the final schema for both PDMX and KernSheet.
 </div>
 
 <h2>The contract (what the models actually consume)</h2>
@@ -62,33 +70,30 @@
   that already lives in the dataset classes.
 </p>
 <table>
-  <tr><th>Need</th><th>Today (PDMX-specific)</th><th>Used by</th></tr>
-  <tr><td>Enumerate scores</td><td>iterate <code>pdmx.df</code>, load <code>Score</code></td><td>staffer, noter, scorer</td></tr>
-  <tr><td>Page image</td><td><code>decode_image(get_path(&hellip;, "png"))</code></td><td>all three</td></tr>
-  <tr><td>Layout</td><td><code>Score.from_json(get_path(&hellip;, "layout"))</code></td><td>all three</td></tr>
-  <tr><td>Tokens by bar range</td><td><code>KernReader(get_path(&hellip;, "tokens")).get_text(first, last)</code></td><td>noter, scorer</td></tr>
-  <tr><td>Vocab</td><td><code>Vocab.load(home/"build/vocab.json")</code> &mdash; <strong>one shared vocab</strong></td><td>all three</td></tr>
+  <tr><th>Need</th><th>Via Source protocol</th><th>Used by</th></tr>
+  <tr><td>Enumerate scores</td><td><code>source.scores()</code> &rarr; lazy <code>Iterable[Score]</code></td><td>staffer, noter, scorer</td></tr>
+  <tr><td>Reload one layout</td><td><code>source.score(id)</code> &rarr; <code>Score</code></td><td>staffer, noter, scorer (per item)</td></tr>
+  <tr><td>Page image</td><td><code>source.image(id, page_number)</code> &rarr; <code>Tensor</code> CHW</td><td>all three</td></tr>
+  <tr><td>Tokens by bar range</td><td><code>source.records(id, first_bar, last_bar)</code> &rarr; <code>list[str] | None</code></td><td>noter, scorer</td></tr>
+  <tr><td>Vocab</td><td><strong>out of protocol</strong> &mdash; one shared <code>vocab.json</code>, built once, passed alongside the source</td><td>all three</td></tr>
 </table>
 
 <h2>Design &mdash; the <code>Source</code> protocol</h2>
 <p>
-  Standardise on the existing <code>Score</code> hierarchy as the layout currency (all
-  three datasets already consume <code>Score.from_json</code>). The protocol exposes
-  <code>Score</code> directly &mdash; no new wrapper type. Datasets do their own page
-  expansion exactly as they do now (<code>for page in score.pages</code>).
+  All methods are keyed by <code>id: str</code> (the <code>Score.id</code> slug, globally
+  unique per dataset). Datasets cache lightweight id lists and call <code>source.score(id)</code>
+  per item rather than holding every parsed <code>Score</code> in memory.
 </p>
 <pre>class Source(Protocol):
-    def scores(self) -&gt; Iterable[Score]: ...                       # enumeration (layout included)
-    def image(self, score: Score, page_number: int) -&gt; Tensor: ... # raw page px; dataset transforms
-    def records(self, score: Score, first_bar: int,
-                last_bar: int) -&gt; list[str] | None: ...            # tab-joined kern lines</pre>
+    def scores(self) -&gt; Iterable[Score]: ...                              # enumeration (lazy)
+    def score(self, id: str) -&gt; Score: ...                                # reload one layout
+    def image(self, id: str, page_number: int) -&gt; Tensor: ...            # raw page px (CHW); dataset transforms
+    def records(self, id: str, first_bar: int,
+                last_bar: int) -&gt; list[str] | None: ...                   # tab-joined kern lines</pre>
 <ul>
-  <li><code>scores()</code> and <code>image()</code> already exist on <code>PDMX</code> in
-      spirit (df enumeration + <code>get_path("png")</code>).</li>
-  <li><code>records()</code> is the one genuinely new method &mdash; it wraps the
-      <code>KernReader.get_text</code> currently inlined in the datasets. Returns
-      tab-joined record lines; the dataset still splits per spine
-      (<code>text.split("\t")[spine]</code>).</li>
+  <li><code>records()</code> wraps <code>KernReader.get_text</code>. Returns tab-joined
+      record lines; the dataset splits per spine
+      (<code>text.split("\t")[spine]</code>). Returns <code>None</code> if unavailable.</li>
   <li><strong>Vocab is out of the protocol</strong> &mdash; there is exactly one vocab,
       shared by all sources. It is built once and passed to each dataset alongside the
       source; PDMX and KernSheet both point at the same <code>vocab.json</code>.</li>
@@ -99,93 +104,100 @@
   <li><strong><code>src/sheetmusic/</code></strong> &mdash; the shared domain layer: the
       <code>Source</code> protocol <em>and</em> the <code>Score</code> hierarchy
       (<code>Score / Page / System / Staff / Box</code>, lifted out of
-      <code>src/pdmx/layout.py</code> since it is dataset-agnostic). Name chosen to avoid
-      the <code>score</code>/<code>scorer</code> collision.</li>
+      <code>src/pdmx/layout.py</code>). Name chosen to avoid the
+      <code>score</code>/<code>scorer</code> collision.</li>
   <li><strong><code>src/pdmx/</code></strong> &mdash; PDMX handling + <code>PdmxSource</code>,
-      a thin adapter over the existing <code>PDMX</code> (keeps its builder/query role from
-      bloating). Only net-new behaviour is <code>records()</code>.</li>
-  <li><strong><code>src/kernsheet/</code></strong> &mdash; KernSheet handling +
-      <code>KernSheetSource</code> (reads <code>catalog.json</code> + KernSheet's own files;
-      where the real work lives, below). <em>Eventually</em> also the editor ported from
-      <code>OMR</code> (cv2 HighGUI). On port, the heuristic <code>OMR/staffer.py</code>
-      layout detector (projection/peak finding + deskew) is <strong>dropped</strong> &mdash;
-      seed layouts from the trained <strong>Staffer model</strong>
-      (<code>stave-primary-grid-full</code>) and let the human review/correct. We keep only
-      its <code>apply_page_transforms</code> (pdf&rarr;png in annotation space), which
-      <code>KernSheetSource.image()</code> reuses.</li>
+      a thin adapter over the existing <code>PDMX</code>. Picks flat-vs-paged PNG by file
+      existence probe.</li>
+  <li><strong><code>src/kernsheet/</code></strong> &mdash; <code>KernSheet</code> catalog
+      manager, <code>KernSheetSource</code> (reads migrated <code>layout/*.json</code> +
+      derived assets), and the ported cv2 HighGUI staff editor
+      (<code>editor.py</code>, CLI <code>kernsheet edit &lt;id&gt;</code>).
+      The heuristic OMR detector (projection/peak finding + deskew) was
+      <strong>dropped</strong>; layouts are seeded from the trained Staffer model
+      (<code>stave-primary-grid-full</code>) and corrected by hand.</li>
 </ul>
 <p>
   Nothing depends on a concrete dataset except through <code>Source</code>; both adapters
   depend on <code>sheetmusic</code>.
 </p>
 
-<h2>KernSheetSource responsibilities (the hard content work)</h2>
-<p>Invisible to the models &mdash; all behind the protocol:</p>
+<h2>KernSheetSource &mdash; what was done in Phase 3</h2>
+<p>All complexity is behind the protocol; models see none of it:</p>
 <ul>
-  <li><strong>Stave split</strong> (Decision B): synthesize per-stave boxes from the
-      <code>rh_top/lh_bot</code> envelope when building each page's <code>Score</code>
-      layout (midpoint now; re-detect lines later). Handle <code>staff_count == 1</code>
-      systems too.</li>
-  <li><strong>Bar alignment:</strong> set <code>first/last_bar_number</code> per system by
-      walking the kern's <code>=N</code> sequence in reading order, so <code>records()</code>
-      returns the right measures.</li>
-  <li><strong>Derived caching:</strong> pdf&rarr;png and krn&rarr;tokens cached wherever
-      KernSheet likes (e.g. <code>KernSheet/build/</code>); the models never see it. PNG
-      rasterisation must reproduce the annotation space &mdash; resize to width 1200
-      <em>then</em> rotate by <code>image_rotation</code> (port
-      <code>OMR/staffer.py:apply_page_transforms</code>). Tokens via the Music
-      <code>kern.tokenize</code> (now emitting numbered <code>=N</code> barlines).</li>
-  <li><strong>Validation guard:</strong> assert &Sigma;(annotated measures) == kern measure
-      count; flag &amp; exclude offenders (pickups, repeats, multirests). Never silently
-      misalign.</li>
+  <li><strong>Migration</strong> (<code>src/kernsheet/migrate.py</code>, run once):
+      legacy envelope JSON &rarr; native <code>Score</code> at
+      <code>KernSheet/layout/&lt;id&gt;.json</code>. 581 scores migrated clean.
+      Non-destructive: <code>.krn</code> / <code>.pdf</code> unchanged.</li>
+  <li><strong>Stave split</strong>: piano grand staff always has RH treble + LH bass.
+      With <code>delta&nbsp;=&nbsp;(lh_bot&nbsp;&minus;&nbsp;rh_top)&nbsp;//&nbsp;3</code>:
+      RH staff <code>[rh_top,&nbsp;rh_top+delta]</code>, LH staff
+      <code>[lh_bot&minus;delta,&nbsp;lh_bot]</code>; middle third is the inter-staff
+      gap. Persisted at migration; refine line detection later. All systems are 2-staff
+      (non-2-spine kern trips the count-match guard).</li>
+  <li><strong>Bar alignment:</strong> <code>first_bar</code> / <code>last_bar</code> per
+      system set by walking the kern&rsquo;s <code>=N</code> sequence in reading order
+      (OMR <code>get_bar_offset</code> logic), so <code>records()</code> returns the
+      right measures. Count-match guard flags and excludes pickups / repeats / malformed
+      scores &mdash; never silently misaligns.</li>
+  <li><strong>Derived caching:</strong> PDF&rarr;PNG cached at
+      <code>KernSheet/build/png/&lt;id&gt;-&lt;NNN&gt;.png</code> via
+      <code>pdf2image.convert_from_path</code> (poppler); resized to
+      <code>image_width</code> pixels wide then rotated by <code>image_rotation</code>
+      (reproduces OMR <code>apply_page_transforms</code> in annotation space).
+      Tokens at <code>KernSheet/build/tokens/&lt;key&gt;.tokens</code> via Music
+      <code>kern.tokenize</code> (numbered <code>=N</code> barlines).</li>
+  <li><strong>Blank-page guard:</strong> pages with zero systems are skipped by the
+      staffer / scorer datasets at item-build (real scans have blank cover pages).</li>
+  <li><strong>page_number is 1-based</strong> throughout (PDMX convention); the
+      KernSheet on-disk layouts were bumped to 1-based in a one-time migration pass.</li>
 </ul>
 <div class="ok">
   <strong>Alignment is tractable.</strong> <code>KernReader</code>
   (<code>src/kern/kern_reader.py</code>) indexes tokens by the absolute <code>=N</code>
   numbers written in the kern, and <code>get_text(first, last)</code> slices between those
-  markers &mdash; so we align annotated systems to the kern's own numbering rather than
-  inventing numbers.
+  markers &mdash; so we align annotated systems to the kern&rsquo;s own numbering rather
+  than inventing numbers.
 </div>
 
 <h2>Phases</h2>
-<h3>Phase 1 &mdash; Extract <code>src/sheetmusic/</code></h3>
+<h3>Phase 1 &mdash; Extract <code>src/sheetmusic/</code> &mdash; <span style="color:#1a73e8">DONE</span></h3>
 <ul>
-  <li>Move the <code>Score</code> hierarchy from <code>src/pdmx/layout.py</code> to
-      <code>src/sheetmusic/</code>; add the <code>Source</code> protocol.</li>
-  <li>Update imports: <code>pdmx</code> internals (<code>from .layout import</code>) and the
-      external sites (<code>scorer/staffer/noter</code> datasets, <code>cli/staffer</code>,
-      <code>verovio/scraper</code>) to <code>from sheetmusic import &hellip;</code>.</li>
-  <li><code>uv run mypy src tests</code> + <code>uv run pytest</code> green &mdash; pure
-      refactor, no behaviour change.</li>
+  <li>Moved <code>Score</code> hierarchy from <code>src/pdmx/layout.py</code> to
+      <code>src/sheetmusic/</code>; added the <code>Source</code> protocol.</li>
+  <li>Updated all imports across staffer / noter / scorer datasets, CLIs, and
+      verovio scraper.</li>
+  <li>Tests + mypy + ruff green; pure refactor, no behaviour change.</li>
 </ul>
 
-<h3>Phase 2 &mdash; Refactor datasets onto <code>Source</code> + shared vocab</h3>
+<h3>Phase 2 &mdash; Refactor datasets onto <code>Source</code> + shared vocab &mdash; <span style="color:#1a73e8">DONE</span></h3>
 <ul>
   <li>Datasets take a <code>Source</code> and a <code>Vocab</code> instead of a
-      <code>PDMX</code>; replace inline <code>get_path</code>/<code>KernReader</code> calls
-      with <code>source.image()</code> / <code>source.records()</code>.</li>
-  <li>Add <code>PdmxSource</code>; wire the datamodules through it.</li>
-  <li>Verify PDMX scorer/staffer/noter training is byte-for-byte equivalent (same samples,
-      same loss curve on a short run).</li>
+      <code>PDMX</code>; replaced inline <code>get_path</code>/<code>KernReader</code>
+      calls with <code>source.image()</code> / <code>source.records()</code>.</li>
+  <li>Added <code>PdmxSource</code>; wired datamodules through it.</li>
+  <li>PDMX scorer/staffer/noter training verified sample-for-sample equivalent.</li>
 </ul>
 
-<h3>Phase 3 &mdash; Implement <code>KernSheetSource</code></h3>
+<h3>Phase 3 &mdash; Implement <code>KernSheetSource</code> &amp; port editor &mdash; <span style="color:#1a73e8">DONE</span></h3>
 <ul>
-  <li><code>scores()</code> from <code>catalog.json</code> (validated entries).</li>
-  <li><code>image()</code> &mdash; pdf&rarr;png cache in the annotation space.</li>
-  <li><code>records()</code> &mdash; over the regenerated numbered <code>.tokens</code>.</li>
-  <li>Layout build: envelope&rarr;stave split + <code>=N</code> bar alignment + validation
-      guard, emitting <code>Score</code> objects.</li>
-  <li>Diagnostic: render a few stave crops with their assigned token sequences to confirm
-      crop/token correspondence.</li>
+  <li>Migration script run: 581 layout files at <code>KernSheet/layout/</code>.</li>
+  <li><code>KernSheetSource</code>: <code>scores()</code>, <code>score()</code>,
+      <code>image()</code>, <code>records()</code> all implemented and tested.</li>
+  <li>Staff editor ported to <code>src/kernsheet/editor.py</code> (cv2 HighGUI);
+      <code>kernsheet edit &lt;id&gt;</code> CLI entry point.</li>
+  <li>Crop/token spot-check: treble/bass boxes verified against rendered pages.</li>
+  <li>Smoke test: all three models (staffer, noter, scorer) train a few steps on
+      <code>KernSheetSource</code> without errors (commit <code>3774058</code>).</li>
 </ul>
 
-<h3>Phase 4 &mdash; Fine-tune the scorer</h3>
+<h3>Phase 4 &mdash; Fine-tune noter &amp; scorer on KernSheet</h3>
 <ul>
-  <li>Start from the best checkpoint; reuse the <strong>shared vocab</strong>; report
-      KernSheet OOV rate.</li>
-  <li>Held-out KernSheet val split <em>by composer</em>; keep a PDMX val slice to watch for
-      catastrophic forgetting; lower LR / short warmup.</li>
+  <li>Build a <strong>shared vocab</strong> over PDMX &cup; KernSheet tokens;
+      report KernSheet OOV rate. (Current smoke test used the PDMX-only vocab.)</li>
+  <li>Start noter and scorer from their best PDMX checkpoints.</li>
+  <li>Held-out KernSheet val split <em>by composer</em>; keep a PDMX val slice
+      to watch for catastrophic forgetting; lower LR / short warmup.</li>
   <li>Tag <code>train/&hellip;</code> before launching; update
       <code>docs/scorer-training.html</code> after.</li>
 </ul>
@@ -193,19 +205,20 @@
 <h2>Decisions</h2>
 <table>
   <tr><th>#</th><th>Decision</th><th>Resolution</th></tr>
-  <tr><td>A / E</td><td>Disk morph / converted copy</td><td><strong>Dropped.</strong> No disk morph &mdash; protocol + two adapters instead. KernSheet stays as-is; OMR editor untouched.</td></tr>
-  <tr><td>B</td><td>Stave split</td><td>Synthesize from envelope (midpoint) now behind <code>KernSheetSource</code>; re-detect lines later.</td></tr>
-  <tr><td>C</td><td>Vocab</td><td><strong>One shared vocab</strong>, out of the protocol, same <code>vocab.json</code> for both sources (required to fine-tune one model). Report OOV.</td></tr>
-  <tr><td>D</td><td>Code home</td><td>Music repo. <code>src/sheetmusic/</code> = <code>Score</code> hierarchy + <code>Source</code> protocol; <code>src/pdmx/</code> + <code>PdmxSource</code>; <code>src/kernsheet/</code> + <code>KernSheetSource</code> (and eventually the OMR editor).</td></tr>
+  <tr><td>A / E</td><td>Disk morph / converted copy</td><td><strong>Migrate, not morph.</strong> A one-time migration script wrote native <code>Score</code> JSON for all 581 annotated scores to <code>KernSheet/layout/</code>. Original <code>.krn</code> / <code>.pdf</code> files unchanged. <code>KernSheetSource</code> just <code>Score.from_json</code>s the migrated file &mdash; no in-memory translation.</td></tr>
+  <tr><td>B</td><td>Stave split</td><td><strong>Thirds rule</strong>, persisted at migration: <code>delta=(lh_bot&minus;rh_top)//3</code>; RH staff top third, LH staff bottom third, middle gap ignored. All systems are 2-staff (piano grand staff); non-2-spine kern triggers the count-match guard.</td></tr>
+  <tr><td>C</td><td>Vocab</td><td><strong>One shared vocab</strong>, out of the protocol, same <code>vocab.json</code> for both sources (required to fine-tune one model). KernSheet OOV rate to be reported in Phase 4.</td></tr>
+  <tr><td>D</td><td>Code home</td><td>Music repo. <code>src/sheetmusic/</code> = <code>Score</code> hierarchy + <code>Source</code> protocol; <code>src/pdmx/</code> + <code>PdmxSource</code>; <code>src/kernsheet/</code> + <code>KernSheetSource</code> + editor.</td></tr>
   <tr><td>F</td><td>PDMX side</td><td>Thin <code>PdmxSource</code> adapter (not <code>PDMX</code> implementing the protocol directly).</td></tr>
 </table>
 
 <h2>Main risk</h2>
 <div class="bad">
   Bar-number alignment is the chief correctness hazard: any system whose annotated measure
-  count diverges from the kern's <code>=N</code> sequence (pickups, repeats, second endings,
-  multirests) will misalign tokens to crops. Mitigation is the count-match guard in
-  Phase&nbsp;3 plus the crop/token spot-check.
+  count diverges from the kern&rsquo;s <code>=N</code> sequence (pickups, repeats, second
+  endings, multirests) will misalign tokens to crops. Mitigation is the count-match guard
+  (already in the migration; ~31 scores excluded) plus the crop/token spot-check (done
+  for bwv_856-0). Excluded scores are flagged per-id, not silently dropped.
 </div>
 
 </body>
