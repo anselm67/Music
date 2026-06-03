@@ -223,22 +223,35 @@ class StaffEditor:
                         thickness=thickness,
                     )
             bar_offset += len(bars) - 1
-            # Draws the top most and bottom most staff lines:
+            # Draws the top and bottom staves:
             color, thickness = (
                 selected_style if (system_index == selected_system) else style
             )
-            cv2.line(
+            cv2.line(  # Right hand.
                 rgb_image,
                 (bars[0], system.top),
                 (bars[-1], system.top),
                 color,
                 thickness,
             )
-            # Left hand staff
             cv2.line(
+                rgb_image,
+                (bars[0], system.staves[0].bottom),
+                (bars[-1], system.staves[0].bottom),
+                color,
+                thickness,
+            )
+            cv2.line(  # Left hand.
                 rgb_image,
                 (bars[0], system.bottom),
                 (bars[-1], system.bottom),
+                color,
+                thickness,
+            )
+            cv2.line(  # Left hand.
+                rgb_image,
+                (bars[0], system.staves[-1].top),
+                (bars[-1], system.staves[-1].top),
                 color,
                 thickness,
             )
