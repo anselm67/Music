@@ -32,7 +32,9 @@ from noter import (
     Vocab,
     grow_state_dict,
 )
+from kernsheet import KernSheet, KernSheetSource
 from pdmx import PDMX, PdmxSource
+from sheetmusic import Source
 from utils import (
     format_sequence_columns,
     print_histogram,
@@ -46,7 +48,7 @@ HOME = Path("/home/anselm/datasets/PDMX")
 @dataclass
 class ClickContext:
     home: Path
-    source: PdmxSource
+    source: Source
     config: NoterConfig
 
 
@@ -63,14 +65,20 @@ class ClickContext:
     help="Name of staffer's log file.",
 )
 @click.option(
-    "--home",
-    "-h",
+    "--pdmx-home",
     type=click.Path(
         dir_okay=True, file_okay=False, exists=True, readable=True, path_type=Path
     ),
-    default=HOME,
-    show_default=True,
-    help="Root directory of the PDMX dataset.",
+    default=None,
+    help=f"PDMX dataset root (default: {HOME}). Mutually exclusive with --kern-home.",
+)
+@click.option(
+    "--kern-home",
+    type=click.Path(
+        dir_okay=True, file_okay=False, exists=True, readable=True, path_type=Path
+    ),
+    default=None,
+    help="KernSheet dataset root. Selects KernSheet; exclusive with --pdmx-home.",
 )
 @click.option(
     "--csv",
@@ -99,7 +107,8 @@ def cli(
     ctx: click.Context,
     log_level: str,
     log_file: None | Path,
-    home: Path,
+    pdmx_home: Path | None,
+    kern_home: Path | None,
     csv: str,
     offset: int,
     count: int,
@@ -111,14 +120,25 @@ def cli(
         datefmt="%Y-%m-%d %H:%M:%S",
     )
     logging.info("Running: %s", " ".join(sys.argv))
-    pdmx = PDMX(home, csv, offset, count)
-    ctx.obj = ClickContext(home, PdmxSource(pdmx), NoterConfig())
+    if pdmx_home is not None and kern_home is not None:
+        raise click.UsageError("--pdmx-home and --kern-home are mutually exclusive.")
+    if kern_home is not None:
+        home: Path = kern_home
+        source: Source = KernSheetSource(KernSheet(home))
+    else:
+        home = pdmx_home or HOME
+        if not home.exists():
+            raise click.UsageError(f"PDMX dataset root does not exist: {home}")
+        source = PdmxSource(PDMX(home, csv, offset, count))
+    ctx.obj = ClickContext(home, source, NoterConfig())
 
 
 @click.command()
 @click.pass_obj
 def vocab(ctx: ClickContext) -> None:
     """Generates the vocab pickle file from PDMX token files."""
+    if not isinstance(ctx.source, PdmxSource):
+        raise click.ClickException("vocab builds from PDMX; drop --kern-home")
     vocab = Vocab.from_pdmx(ctx.source.pdmx)
     vocab.save(ctx.home / "build" / "vocab.json")
 
@@ -331,6 +351,26 @@ def grow_checkpoint(src_ckpt: Path, out_ckpt: Path, vocab_path: Path) -> None:
     default=8,
     help="Number of workers for the dataset loader.",
 )
+@click.option(
+    "--init-from",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Initialise weights from a (grown) checkpoint, then train with a fresh "
+    "optimizer. Ignored when resuming an existing run.",
+)
+@click.option(
+    "--train-len",
+    type=int,
+    default=-1,
+    help="Override the number of training samples (needed for small datasets "
+    "like KernSheet, whose total is far below the PDMX default).",
+)
+@click.option(
+    "--valid-len",
+    type=int,
+    default=-1,
+    help="Override the number of validation samples.",
+)
 @click.pass_obj
 def train(
     ctx: ClickContext,
@@ -339,6 +379,9 @@ def train(
     early_stopping: float,
     epochs: int,
     num_workers: int,
+    init_from: Path | None,
+    train_len: int,
+    valid_len: int,
 ) -> None:
     """Trains and/or resumes training of a Noter model instance.
 
@@ -352,10 +395,18 @@ def train(
     if ckpt_path.exists():
         logging.info(f"Resuming training from {ckpt_path}")
         config = config_from_checkpoint(ckpt_path)
+        if train_len > 0 or valid_len > 0:
+            logging.warning(
+                "Resuming from checkpoint; --train-len/--valid-len ignored."
+            )
     else:
         ckpt_path = None
         config = replace(ctx.config, id_name=name)
         config.use_vocab(vocab)
+        if train_len > 0:
+            config.train_len = train_len
+        if valid_len > 0:
+            config.valid_len = valid_len
 
     config.max_steps = epochs * (config.train_len // config.batch_size)
     logging.info(
@@ -419,8 +470,21 @@ def train(
         enable_progress_bar=not hide_progress,
     )
 
+    module = NoterModule(config)
+    if init_from is not None:
+        if ckpt_path is not None:
+            logging.warning(f"Resuming from {ckpt_path}; ignoring --init-from")
+        else:
+            try:
+                module.load_state_dict(torch.load(init_from, weights_only=True))
+            except RuntimeError as e:
+                raise click.ClickException(
+                    f"--init-from state dict mismatch: {e}"
+                ) from e
+            logging.info(f"Initialized weights from {init_from}")
+
     trainer.fit(
-        NoterModule(config),
+        module,
         NoterDataModule(config, ctx.source, vocab, num_workers=num_workers),
         ckpt_path=ckpt_path,
     )
