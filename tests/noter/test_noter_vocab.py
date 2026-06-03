@@ -132,6 +132,37 @@ class TestVocab:
             }
             assert vocab._tok2i == expected_tok2i
 
+    def test_extend_from_files_preserves_ids_and_appends(self) -> None:
+        base = Vocab({"PAD": 0, "UNK": 1, "SOS": 2, "EOS": 3, "SIL": 4, "old": 5})
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tokens_file = Path(temp_dir) / "ks.tokens"
+            # "new" twice (kept), "rare" once (dropped to UNK), "old" already known
+            tokens_file.write_text("old new rare\nnew old\n")
+            extended = base.extend_from_files([tokens_file])
+        # every base id is preserved verbatim
+        for tok, idx in base._tok2i.items():
+            assert extended.encode(tok) == idx
+        # kept token appended at the tail; rare singleton stays OOV -> UNK
+        assert extended.encode("new") == 6
+        assert extended.encode("rare") == Vocab.UNK
+        assert len(extended) == len(base) + 1
+
+    def test_extend_from_files_min_count(self) -> None:
+        base = Vocab({"PAD": 0, "UNK": 1, "SOS": 2, "EOS": 3, "SIL": 4})
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tokens_file = Path(temp_dir) / "ks.tokens"
+            tokens_file.write_text("a a a b b c\n")
+            extended = base.extend_from_files([tokens_file], min_count=3)
+        assert extended.encode("a") == 5  # count 3 >= 3
+        assert extended.encode("b") == Vocab.UNK  # count 2 < 3
+        assert extended.encode("c") == Vocab.UNK  # count 1 < 3
+        assert len(extended) == len(base) + 1
+
+    def test_extend_from_files_no_files(self) -> None:
+        base = Vocab({"PAD": 0, "UNK": 1, "SOS": 2, "EOS": 3, "SIL": 4})
+        extended = base.extend_from_files([])  # must not ZeroDivisionError
+        assert extended._tok2i == base._tok2i
+
     def test_from_files_no_files(self) -> None:
         vocab = Vocab.from_files([])
         assert vocab._tok2i == {"EOS": 3, "PAD": 0, "SIL": 4, "SOS": 2, "UNK": 1}

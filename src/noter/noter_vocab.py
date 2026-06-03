@@ -92,6 +92,45 @@ class Vocab:
         logging.info(f"\t{len(vocab):,} tokens created.")
         return vocab
 
+    def extend_from_files(self, files: list[Path], min_count: int = 2) -> "Vocab":
+        """Return a copy of this vocab with new tokens from ``files`` appended.
+
+        Existing token->id mappings are preserved verbatim; new tokens (seen at
+        least ``min_count`` times and not already known) are assigned fresh ids at
+        the tail. This keeps a pretrained checkpoint's embedding/output rows valid
+        so it can be fine-tuned on a new corpus after growing those two tensors.
+        """
+        counts: dict[str, int] = defaultdict(int)
+        logging.info(f"Parsing {len(files):,} .tokens files to extend vocab...")
+        for tokens_file in files:
+            with open(tokens_file, "r") as f:
+                for record in f:
+                    for token in record.strip().split():
+                        counts[Vocab._strip_bar_number(token)] += 1
+
+        oov = {t: c for t, c in counts.items() if t not in self._tok2i}
+        tok2i = dict(self._tok2i)
+        # Sort so appended ids are content-determined, not file-scan order: a
+        # changed file set must not shift the ids of tokens a checkpoint already
+        # learned during a prior extend.
+        for key in sorted(oov):
+            if oov[key] >= min_count:
+                tok2i[key] = len(tok2i)
+
+        added = len(tok2i) - len(self._tok2i)
+        dropped = len(oov) - added
+        total = sum(counts.values())
+        oov_occ = sum(oov.values())
+        pct = (100 * oov_occ / total) if total else 0.0
+        logging.info(
+            f"\tOOV {len(oov):,} unique / {oov_occ:,} occ "
+            f"({pct:.4f}% weighted); "
+            f"{added:,} added (count>={min_count}), "
+            f"{dropped:,} rare dropped to UNK; "
+            f"vocab {len(self._tok2i):,} -> {len(tok2i):,}."
+        )
+        return Vocab(tok2i)
+
     @staticmethod
     def from_pdmx(pdmx: PDMX) -> "Vocab":
         files: list[Path] = []

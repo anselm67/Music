@@ -117,6 +117,33 @@ def vocab(ctx: ClickContext) -> None:
 
 
 @click.command()
+@click.argument(
+    "kernsheet_home",
+    type=click.Path(
+        dir_okay=True, file_okay=False, exists=True, readable=True, path_type=Path
+    ),
+)
+@click.pass_obj
+def extend_vocab(ctx: ClickContext, kernsheet_home: Path) -> None:
+    """Extends the PDMX vocab with KernSheet tokens for fine-tuning.
+
+    Loads the frozen PDMX vocab (which the noter checkpoint was trained on),
+    appends KernSheet tokens seen at least twice at the tail (preserving every
+    PDMX id so the checkpoint stays loadable), and writes the combined vocab to
+    KERNSHEET_HOME/build/vocab.json.
+    """
+    base = Vocab.load(ctx.home / "build" / "vocab.json")
+    tokens_dir = kernsheet_home / "build" / "tokens"
+    files = sorted(tokens_dir.rglob("*.tokens"))
+    if not files:
+        raise click.ClickException(f"No .tokens files found under {tokens_dir}")
+    combined = base.extend_from_files(files)
+    out = kernsheet_home / "build" / "vocab.json"
+    combined.save(out)
+    logging.info(f"Wrote combined vocab ({len(combined):,} tokens) -> {out}")
+
+
+@click.command()
 @click.pass_obj
 def show(ctx: ClickContext) -> None:
     """Displays random samples from the dataset."""
@@ -602,6 +629,7 @@ def predict(ctx: ClickContext, name: str) -> None:
 
 
 cli.add_command(vocab)
+cli.add_command(extend_vocab, name="extend-vocab")
 cli.add_command(show)
 cli.add_command(stats)
 cli.add_command(image_stats)
