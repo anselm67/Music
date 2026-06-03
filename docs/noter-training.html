@@ -144,7 +144,13 @@
         <td><span class="tag">enhanced3</span></td><td>2026-05-23</td><td>12</td>
         <td>99.58%</td><td>0.018</td>
         <td>AdamW eps 1e-4 → default 1e-8</td>
-        <td><span class="badge badge-green">current best</span></td>
+        <td><span class="badge badge-green">PDMX best</span></td>
+      </tr>
+      <tr>
+        <td><span class="tag">enhanced3-kernsheet</span></td><td>2026-06-03</td><td>12 (cap)</td>
+        <td>pending</td><td>pending</td>
+        <td>Fine-tune of <span class="tag">enhanced3</span> on <strong>KernSheet</strong> (real scanned scores); vocab grown 4,784 → 5,543</td>
+        <td><span class="badge badge-amber">in progress</span></td>
       </tr>
     </tbody>
   </table>
@@ -298,6 +304,98 @@
       <div class="chart-card"><h4>Val loss — vs enhanced2</h4><canvas id="c-e3-loss"></canvas></div>
     </div>
     <div class="result-box positive">Best result: 99.58% token accuracy. Converges faster (epoch 2 already at 98.15% vs 92.56% for enhanced2). The non-standard eps was meaningfully hurting training.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ enhanced3-kernsheet -->
+  <div class="session">
+    <div class="session-header">
+      <h2><span class="tag">enhanced3-kernsheet</span></h2>
+      <span class="session-meta">2026-06-03 · fine-tune · D=256 · <span class="badge badge-amber">in progress</span></span>
+    </div>
+    <p>First fine-tune on <strong>KernSheet</strong> — real published/scanned piano scores with
+    manually-reviewed layout — starting from the <span class="tag">enhanced3</span> PDMX checkpoint.
+    Every previous run trained on synthetic Verovio-rendered PDMX; this is the first time the model
+    sees real engraving. Train and validation are <em>both</em> drawn from KernSheet (a random 90/10
+    split); no PDMX is mixed in for now. Because the domain is harder, the honest reference point is
+    the grown checkpoint's cold-start on KernSheet (~92% val token accuracy before any fine-tuning),
+    not the 99.58% PDMX number.</p>
+
+    <h3>How the KernSheet dataset is built</h3>
+    <p>KernSheet lives at <code>~/datasets/KernSheet</code> (a git repo of nested
+    <code>composer/work/…</code> scores indexed by <code>catalog.json</code>; each score ships a
+    <code>.pdf</code> and a Humdrum <code>.krn</code>). It is exposed to the model through the same
+    <code>Source</code> protocol PDMX uses, so the dataset/datamodule code is dataset-agnostic. The
+    pipeline (all already run; details in <code>docs/kernsheet-plan.html</code>):</p>
+    <div class="changes">
+      <div class="change-item"><span class="change-sym add">+</span> <strong>Layout migration.</strong> The legacy envelope layout (one <code>rh_top</code>/<code>lh_bot</code> per grand-staff system) was migrated once into native <code>Score</code> JSON at <code>KernSheet/layout/&lt;id&gt;.json</code> — non-destructive (<code>.krn</code>/<code>.pdf</code> untouched). <strong>581</strong> scores migrated clean.</div>
+      <div class="change-item"><span class="change-sym add">+</span> <strong>Stave split (thirds).</strong> A piano grand staff is always RH treble + LH bass: with <code>delta = (lh_bot − rh_top) // 3</code>, RH = <code>[rh_top, rh_top+delta]</code>, LH = <code>[lh_bot−delta, lh_bot]</code>, middle third is the inter-staff gap.</div>
+      <div class="change-item"><span class="change-sym add">+</span> <strong>Bar alignment.</strong> Per-system <code>first_bar</code>/<code>last_bar</code> are set by walking the kern's <code>=N</code> sequence in reading order; a count-match guard excludes pickups / repeats / malformed scores rather than silently misaligning tokens to crops.</div>
+      <div class="change-item"><span class="change-sym add">+</span> <strong>Derived assets.</strong> PDF→PNG cached under <code>build/png/</code> (rendered into annotation space: resized to <code>image_width</code>, then rotated); tokens via Music's <code>kern.tokenize</code> under <code>build/tokens/</code> (numbered <code>=N</code> barlines).</div>
+      <div class="change-item"><span class="change-sym mod">~</span> <strong>Unmigrated-score guard.</strong> <code>KernSheetSource.scores()</code> now filters on <code>layout_path.is_file()</code> (not <code>.exists()</code>): the 31 unmigrated entries have an empty <code>json_path</code> whose path resolves to the <code>layout/</code> directory, which exists — the old guard yielded them and then crashed reading a directory. Only surfaced once we iterated most of the dataset.</div>
+    </div>
+    <p>Each sample is one cropped staff image paired with the Kern token sequence for its bar range
+    (spine order <code>[1, 0]</code> for treble/bass). The full dataset is
+    <strong>26,166 staff-items across 582 scores</strong>; this run uses 26,000 of them
+    (<code>--train-len 23400</code> + <code>--valid-len 2600</code>, ~99%).</p>
+
+    <h3>Shared vocabulary (4,784 → 5,543)</h3>
+    <p>Fine-tuning reuses <span class="tag">enhanced3</span>'s embedding/output rows, so the vocab must
+    <em>preserve every PDMX token id</em> and only append new KernSheet tokens at the tail (a from-scratch
+    rebuild would reorder ids and invalidate the checkpoint). The <code>noter extend-vocab</code> command
+    loads the frozen PDMX vocab and appends KernSheet tokens seen ≥ 2×:</p>
+    <pre><code>noter extend-vocab /home/anselm/datasets/KernSheet</code></pre>
+    <p>KernSheet's out-of-vocabulary rate against the PDMX vocab is only <strong>0.26 % occurrence-weighted</strong>,
+    but spread over a long tail of 1,415 distinct tokens (extreme registers like <code>eeee#/64</code>,
+    rich tuplets <code>/24 /72 /96</code>, grace notes <code>/q</code>). Keeping the 759 that appear ≥ 2×
+    (656 singletons fall to UNK) grows the vocab to <strong>5,543</strong>.</p>
+
+    <h3>Checkpoint surgery (grow to the new vocab)</h3>
+    <p>Two tensors depend on vocab size and must be resized while keeping every learned row in place:
+    the token embedding <code>(V, D)</code> (a plain row append) and the output head
+    <code>mlp.weight (max_chords·V, D)</code> / <code>mlp.bias</code>. The head is slot-major /
+    vocab-minor (the forward does <code>view(B, T, max_chords, −1)</code>), so old rows are spliced
+    <em>per chord slot</em> via <code>view(8, V′, ·)[:, :V]</code>, not copied as a flat prefix. New
+    rows start from a fresh initialisation.</p>
+    <pre><code>noter grow-checkpoint \
+    checkpoints/noter/enhanced3/last.ckpt \
+    checkpoints/noter/enhanced3-kernsheet-init.ckpt \
+    /home/anselm/datasets/KernSheet/build/vocab.json</code></pre>
+    <p>Verified: the grown checkpoint loads <code>strict=True</code> into a fresh 5,543-vocab module and
+    produces <strong>bit-identical logits</strong> on the original 4,784 tokens — so old-token behaviour
+    is exactly preserved and only the 759 new rows are unlearned.</p>
+
+    <h3>Exact training command</h3>
+    <pre><code>noter --kern-home /home/anselm/datasets/KernSheet \
+      --log-file logs/noter/enhanced3-kernsheet.log \
+      train \
+      --init-from checkpoints/noter/enhanced3-kernsheet-init.ckpt \
+      --train-len 23400 --valid-len 2600 \
+      --lr 1e-4 --warmup-steps 200 \
+      -e 12 -s 2.0 \
+      enhanced3-kernsheet</code></pre>
+    <p>Launched from the tag <span class="tag">train/enhanced3-kernsheet</span>. <code>--init-from</code> loads
+    weights only and trains with a <em>fresh</em> optimiser (it is <strong>not</strong> a Lightning resume —
+    the by-name resume path would restore the spent optimiser, cosine LR ≈ 0, and step counter).</p>
+
+    <h4 style="font-size:0.9rem; margin:1rem 0 0.4rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em;">Every flag</h4>
+    <table class="summary-table">
+      <thead><tr><th>Flag</th><th>Value</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>--kern-home</code></td><td><code>…/KernSheet</code></td><td>Group option: select the KernSheet dataset (build a <code>KernSheetSource</code>) for both train and val. Mutually exclusive with <code>--pdmx-home</code>; also makes the vocab path <code>&lt;home&gt;/build/vocab.json</code>.</td></tr>
+        <tr><td><code>--log-file</code></td><td><code>logs/noter/enhanced3-kernsheet.log</code></td><td>Group option: destination for the INFO log (training metrics also go to <code>logs/noter/enhanced3-kernsheet/metrics.csv</code>).</td></tr>
+        <tr><td><code>NAME</code> (positional)</td><td><code>enhanced3-kernsheet</code></td><td>Model id: names the checkpoint dir <code>checkpoints/noter/&lt;NAME&gt;/</code> and the metrics version. If <code>&lt;NAME&gt;/last.ckpt</code> exists the run resumes instead of init-from.</td></tr>
+        <tr><td><code>--init-from</code></td><td><code>…/enhanced3-kernsheet-init.ckpt</code></td><td>Load these (grown) weights, then train with a fresh optimiser. Ignored, with a warning, on resume.</td></tr>
+        <tr><td><code>--train-len</code></td><td><code>23400</code></td><td>Number of training samples. Required for KernSheet: the default (12,500·batch) far exceeds the dataset, which would break the train/val <code>random_split</code>.</td></tr>
+        <tr><td><code>--valid-len</code></td><td><code>2600</code></td><td>Number of validation samples (≈ 10 %). <code>train-len + valid-len = 26,000</code> ≤ the 26,166 available.</td></tr>
+        <tr><td><code>--lr</code></td><td><code>1e-4</code></td><td>Learning rate, below the 3e-4 default — gentle on the pretrained weights while the 759 new random-init rows learn.</td></tr>
+        <tr><td><code>--warmup-steps</code></td><td><code>200</code></td><td>Linear LR warmup steps before the cosine decay (short, for a warm start).</td></tr>
+        <tr><td><code>-e</code> / <code>--epochs</code></td><td><code>12</code></td><td>Epoch cap (~1,462 steps/epoch ⇒ <code>max_steps</code> ≈ 17,544; the cosine schedule decays over this).</td></tr>
+        <tr><td><code>-s</code> / <code>--early-stopping</code></td><td><code>2.0</code></td><td>Early-stop patience expressed in epochs (≈ 2 epochs of validation checks on <code>val/loss</code>).</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.85rem;color:var(--muted);">Defaults left untouched: batch size 16, AdamW (<code>weight_decay</code> 1e-2, default eps), <code>val_check_interval</code> 250 steps (≈ 6 validations/epoch), <code>bf16-mixed</code> precision, 8 dataloader workers, checkpoint keeps top-3 by <code>val/loss</code> + <code>last.ckpt</code>.</p>
+
+    <div class="result-box neutral">In progress — training launched 2026-06-03. Curves, best <code>val/loss</code> / <code>val/accuracy</code>, convergence epoch, and an edit-distance eval on the best checkpoint will be filled in on completion.</div>
   </div>
 
 </main>
