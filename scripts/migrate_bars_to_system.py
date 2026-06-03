@@ -92,7 +92,8 @@ def _migrate_file_worker(path_str: str) -> tuple[str, int]:
         _, n = migrate_file(path)
         return str(path), n
     except Exception as e:
-        return str(path), -1  # sentinel for errors
+        print(f"ERROR {path}: {e}", file=sys.stderr)
+        return str(path), -1
 
 
 def run(roots: list[Path], write: bool) -> None:

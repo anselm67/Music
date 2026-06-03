@@ -140,7 +140,7 @@ class System:
 
     @property
     def bar_count(self) -> int:
-        return len(self.bars) - 1
+        return max(len(self.bars) - 1, 0)
 
     @property
     def first_bar_number(self) -> int:
