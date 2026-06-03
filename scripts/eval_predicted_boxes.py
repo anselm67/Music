@@ -19,6 +19,12 @@ a running training on the GPU):
   uv run python scripts/eval_predicted_boxes.py \
       --noter enhanced3 --staffer stave-primary-grid \
       --csv System2.csv --pages 300 --device cuda
+
+  # KernSheet (real scans) — real-scan jitter spec for the noter retrain:
+  uv run python scripts/eval_predicted_boxes.py \
+      --kern-home /home/anselm/datasets/KernSheet \
+      --noter enhanced3-kernsheet --staffer stave-primary-grid-full-kernsheet \
+      --pages 300 --device cuda
 """
 
 from __future__ import annotations
@@ -34,9 +40,10 @@ from scipy.optimize import linear_sum_assignment
 from torchvision.transforms import v2
 from tqdm import tqdm
 
+from kernsheet import KernSheet, KernSheetSource
 from noter import NoterConfig, NoterDataset, NoterModule, Vocab
 from pdmx import PDMX, PdmxSource
-from sheetmusic import Box
+from sheetmusic import Box, Source
 from staffer import StafferConfig, StafferModule
 from utils import sequence_edit_distance, strip_eos
 
@@ -102,7 +109,20 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--noter", default="enhanced3")
     ap.add_argument("--staffer", default="stave-primary-grid")
-    ap.add_argument("--home", type=Path, default=Path("/home/anselm/datasets/PDMX"))
+    ap.add_argument(
+        "--home",
+        type=Path,
+        default=Path("/home/anselm/datasets/PDMX"),
+        help="PDMX dataset root (used unless --kern-home is given).",
+    )
+    ap.add_argument(
+        "--kern-home",
+        type=Path,
+        default=None,
+        help="KernSheet dataset root; selects KernSheet instead of PDMX. "
+        "Use the KernSheet-fine-tuned models, e.g. --noter enhanced3-kernsheet "
+        "--staffer stave-primary-grid-full-kernsheet.",
+    )
     ap.add_argument("--csv", default="System2.csv")
     ap.add_argument("--pages", type=int, default=300, help="random pages to evaluate")
     ap.add_argument("--limit", type=int, default=-1, help="PDMX rows to load (-1=all)")
@@ -116,9 +136,13 @@ def main() -> None:
         args.device if (args.device != "cuda" or torch.cuda.is_available()) else "cpu"
     )
 
-    pdmx = PDMX(args.home, args.csv, -1, args.limit)
-    source = PdmxSource(pdmx)
-    vocab = Vocab.load(pdmx.home / "build/vocab.json")
+    if args.kern_home is not None:
+        source: Source = KernSheetSource(KernSheet(args.kern_home))
+        vocab_home: Path = args.kern_home
+    else:
+        source = PdmxSource(PDMX(args.home, args.csv, -1, args.limit))
+        vocab_home = args.home
+    vocab = Vocab.load(vocab_home / "build/vocab.json")
 
     # noter
     n_ckpt = Path("checkpoints") / "noter" / args.noter / "last.ckpt"
