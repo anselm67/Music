@@ -242,8 +242,15 @@
         <td>Full-size (D=256/H=8/mlp=1024) retrain of the grid variant — merge-required model</td>
         <td><span class="badge badge-green">new best</span></td>
       </tr>
+      <tr>
+        <td><a class="run-link" href="#run-stave-primary-grid-full-kernsheet"><span class="tag">stave-primary-grid-full-kernsheet</span></a></td><td>2026-06-03</td><td>256</td><td>16</td>
+        <td>0.346</td><td>0.930</td><td>eval ~3.2/3.1 px · val/stave_err_px 3.96</td>
+        <td>Fine-tune of <span class="tag">stave-primary-grid-full</span> on KernSheet (real scans)</td>
+        <td><span class="badge badge-green">KernSheet best</span></td>
+      </tr>
     </tbody>
   </table>
+  <p style="font-size:0.82rem;color:var(--muted)"><span class="tag">stave-primary-grid-full-kernsheet</span> is evaluated on KernSheet (real scans), not PDMX — its <code>sys IoU</code> 0.930 / stave error are <em>not</em> comparable to the synthetic-domain rows above; the meaningful comparison is its own before/after on KernSheet (see card). <code>sys IoU</code> shown as actual (1 − stored).</p>
   <p style="font-size:0.82rem;color:var(--muted)">† stave L1 not comparable to prior runs: enhanced2-ltrb stave head outputs (top, bottom) directly; prior runs output (cy, h). ‡ <span class="tag">stave-primary</span>'s <code>val/stave_l1</code> is not a clean metric (logging-key collision, see its card), so its stave column reports the eval table's bottom-of-page error instead — directly comparable to the anchor's bins 12–14 (~12–13 px).</p>
   <div class="result-box neutral" style="font-size:0.84rem"><strong>Model size note.</strong> <span class="tag">basic</span>–<span class="tag">enhanced2-vflip</span> ran at <strong>D=256 · H=8 · mlp=1024</strong>. From <span class="tag">enhanced2-sampler</span> onward the <code>StafferConfig</code> default had silently shrunk to <strong>D=128 · H=4 · mlp=512</strong> (the small-model config, never restored; <code>train</code> has no override flag) — so <span class="tag">enhanced2-sampler</span>, <span class="tag">enhanced2-ltrb</span>, <span class="tag">enhanced2-ltrb-anchor</span>, <span class="tag">enhanced2-ltrb-anchor-iter</span>, <span class="tag">stave-primary</span> and <span class="tag">stave-primary-grid</span> are all <strong>half-size</strong>. The D column above is corrected to reflect the saved <code>hparams.yaml</code>. <em>Consequence:</em> the sys-IoU gap of the ltrb line vs <span class="tag">enhanced2</span> (0.914 vs 0.919) is largely <strong>capacity</strong>, not the ltrb formulation being "harder" — the like-for-like comparisons within the ltrb line (all D=128) remain valid. <span class="tag">stave-primary-grid</span> validated as the best architecture at this budget (sys IoU 0.971; bottom drift flattened to ~2.5 px); the full-size retrain <span class="tag">stave-primary-grid-full</span> (D=256/H=8/mlp=1024) has since landed as the new best — the gain compounds with capacity (sys IoU 0.985; bottom bins down to ~1 px).</div>
 
@@ -1093,6 +1100,56 @@
     <div class="result-box neutral">This unblocks the end-to-end track: rerun the predicted-box tolerance diagnostic against this detector for the real box-jitter spec → noter jitter retrain (<span class="tag">enhanced4</span>) → shared-embedding merge.</div>
   </div>
 
+  <!-- ════════════════════════════════════════════ stave-primary-grid-full-kernsheet -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-stave-primary-grid-full-kernsheet"><span class="tag">stave-primary-grid-full-kernsheet</span></h2>
+      <span class="session-meta">2026-06-03 · tag: <code>train/stave-primary-grid-full-kernsheet</code> · 30 epochs · D=256 H=8</span>
+      <span class="badge badge-green">KernSheet best</span>
+    </div>
+    <p><strong>First fine-tune on real scanned scores.</strong> Every staffer run to date trained purely on Verovio-rendered PDMX synthetic pages. <span class="tag">stave-primary-grid-full</span> is the best of them (sys IoU 0.985, sub-px stave error <em>in-domain</em>) — but run zero-shot against <strong>KernSheet</strong> (581 published/scanned piano scores, hand-corrected layout) it shows a real domain gap. This run initialises from that checkpoint (<code>--init-from</code>, fresh optimiser) and fine-tunes on the KernSheet source.</p>
+    <p>The model is unchanged — same D=256 grid architecture, anchors, routing and losses. Only the <em>data</em> and the <em>optimiser schedule</em> change: a small LR and short warmup so the synthetic-learned structure adapts to scan statistics (engraving fonts, scan noise, page geometry) rather than being overwritten.</p>
+    <h3>Changes from stave-primary-grid-full</h3>
+    <div class="changes">
+      <div class="change-item"><span class="change-sym mod">~</span> Source: <strong>KernSheet</strong> (<code>--kern-home</code>), 2,321 page samples → split <strong>2000 train / 300 val</strong></div>
+      <div class="change-item"><span class="change-sym mod">~</span> Weights initialised from <code>stave-primary-grid-full/last.ckpt</code> (<code>--init-from</code>); fresh optimiser, new checkpoint dir — the source model is untouched (revert-safe)</div>
+      <div class="change-item"><span class="change-sym mod">~</span> <code>lr=1e-5</code> (10× below the 1e-4 default), <code>warmup-steps=200</code>, 30 epochs, bottom-bias sampler</div>
+      <div class="change-item"><span class="change-sym slate">·</span> CLI gained <code>--kern-home</code> / <code>--init-from</code> / <code>--lr</code> / <code>--warmup-steps</code> / <code>--train-len</code> / <code>--valid-len</code>; <code>val_check_interval</code> capped at one epoch's batches (small dataset)</div>
+    </div>
+    <h3>Training curves</h3>
+    <div class="charts">
+      <div class="chart-card"><h4>Val loss</h4><canvas id="c-spgfk-loss"></canvas></div>
+      <div class="chart-card"><h4>Val sys IoU (actual = 1 − stored)</h4><canvas id="c-spgfk-iou"></canvas></div>
+      <div class="chart-card"><h4>Val stave_err_px (clean, px)</h4><canvas id="c-spgfk-l1"></canvas></div>
+    </div>
+    <p style="font-size:0.82rem;color:var(--muted)">Converged by ~epoch 22, flat thereafter: <code>val/loss</code> 1.02 → <strong>0.346</strong>, <code>sys IoU</code> 0.867 → <strong>0.930</strong>, in-training <code>val/stave_err_px</code> 6.04 → <strong>3.96&nbsp;px</strong>. These are the model's own per-step validation metrics on the KernSheet val split — <em>not</em> the same quantity as the per-bin eval below, which is run separately via <code>staffer eval</code>.</p>
+    <h3>Stave coordinate error — before vs after fine-tune</h3>
+    <p style="font-size:0.82rem;color:var(--muted)">Both columns: <code>staffer --kern-home … eval &lt;model&gt; --size 500</code> on KernSheet (H=960&nbsp;px). <strong>before</strong> = source <span class="tag">stave-primary-grid-full</span> run zero-shot; <strong>after</strong> = this fine-tune. Stave top/bottom-edge error by vertical position (each eval draws its own random 500 samples, so per-bin n differs slightly).</p>
+    <table class="eval-table">
+      <thead><tr><th>Bin</th><th>Y range</th><th>top before</th><th>top after</th><th>bot before</th><th>bot after</th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td>0–60</td><td style="color:var(--muted)">2.8</td><td>2.7</td><td style="color:var(--muted)">6.6</td><td>6.2</td></tr>
+        <tr><td>1</td><td>60–120</td><td style="color:var(--muted)">5.5</td><td>2.5</td><td style="color:var(--muted)">5.9</td><td>3.3</td></tr>
+        <tr><td>2</td><td>120–180</td><td style="color:var(--muted)">12.8</td><td>3.9</td><td style="color:var(--muted)">8.7</td><td>2.7</td></tr>
+        <tr><td>3</td><td>180–240</td><td style="color:var(--muted)">12.7</td><td>2.7</td><td style="color:var(--muted)">10.8</td><td>3.8</td></tr>
+        <tr><td>4</td><td>240–300</td><td style="color:var(--muted)">8.8</td><td>3.7</td><td style="color:var(--muted)">6.1</td><td>3.0</td></tr>
+        <tr><td>5</td><td>300–360</td><td style="color:var(--muted)">9.0</td><td>3.6</td><td style="color:var(--muted)">7.5</td><td>3.0</td></tr>
+        <tr><td>6</td><td>360–420</td><td style="color:var(--muted)">6.9</td><td>2.6</td><td style="color:var(--muted)">5.6</td><td>2.8</td></tr>
+        <tr><td>7</td><td>420–480</td><td style="color:var(--muted)">6.8</td><td>3.1</td><td style="color:var(--muted)">5.5</td><td>2.9</td></tr>
+        <tr><td>8</td><td>480–540</td><td style="color:var(--muted)">5.3</td><td>2.8</td><td style="color:var(--muted)">5.6</td><td>2.8</td></tr>
+        <tr><td>9</td><td>540–600</td><td style="color:var(--muted)">7.9</td><td>2.7</td><td style="color:var(--muted)">5.1</td><td>2.5</td></tr>
+        <tr><td>10</td><td>600–660</td><td style="color:var(--muted)">6.6</td><td>3.0</td><td style="color:var(--muted)">7.6</td><td>3.8</td></tr>
+        <tr><td>11</td><td>660–720</td><td style="color:var(--muted)">5.3</td><td>3.3</td><td style="color:var(--muted)">4.6</td><td>2.8</td></tr>
+        <tr><td>12</td><td>720–780</td><td style="color:var(--muted)">8.1</td><td>4.0</td><td style="color:var(--muted)">6.9</td><td>2.9</td></tr>
+        <tr><td>13</td><td>780–840</td><td style="color:var(--muted)">3.7</td><td>2.5</td><td style="color:var(--muted)">5.8</td><td>4.5</td></tr>
+        <tr><td>14</td><td>840–900</td><td style="color:var(--muted)">6.2</td><td>4.4</td><td style="color:var(--muted)">3.9</td><td>2.1</td></tr>
+        <tr><td>15</td><td>900–960</td><td style="color:var(--muted)">1.9</td><td>3.8</td><td style="color:var(--muted)">3.3</td><td>4.4</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">n-weighted mean (bins 0–15): top_err <strong>7.4 → 3.2&nbsp;px</strong>, bot_err <strong>6.3 → 3.1&nbsp;px</strong> (~2×). The big offenders — bins 2–3, where zero-shot drifted ~12–13&nbsp;px — fall to ~2.7–3.9&nbsp;px, so the error profile is now roughly uniform top-to-bottom instead of spiking in the upper third. <strong>Caveat:</strong> this metric matches <code>num_gt</code> staves to nearest anchors and scores only their y top/bottom — it does <em>not</em> capture system left/right extent or missed/spurious detections.</p>
+    <div class="result-box positive"><strong>Fine-tune works — the domain gap roughly halves.</strong> Stave y-error drops ~2× across the board (top 7.4 → 3.2&nbsp;px, bot 6.3 → 3.1&nbsp;px) and the upper-third drift that zero-shot showed is gone. This is now the staffer to feed <span class="tag">scorer</span> on KernSheet. Residual ~3&nbsp;px is still ~8× the PDMX in-domain ~0.4&nbsp;px, and this metric is blind to x-extent / missed detections — so the next lever is an x/objectness diagnostic (and likely more than 581 scores / line-level stave splits) rather than more y-tuning.</div>
+  </div>
+
 </main>
 
 <div id="chart-modal" class="chart-modal" role="dialog" aria-modal="true">
@@ -1124,6 +1181,7 @@ const C = {
   sp:      '#4338ca',
   spg:     '#65a30d',
   spgf:    '#15803d',
+  spgfk:   '#b45309',
 };
 
 const basic = {
@@ -1209,6 +1267,14 @@ const spgf = {
   iou:  [0.9197,0.9382,0.9644,0.9745,0.9804,0.9835,0.9852],
   l1:   [2.1274,1.5124,0.9218,0.6506,0.5029,0.4434,0.4127],
 };
+// stave-primary-grid-full-kernsheet — KernSheet fine-tune, 30 epochs (complete).
+// iou is ACTUAL (1 − stored val/sys_iou); l1 is the clean val/stave_err_px (px).
+const spgfk = {
+  loss: [1.0228,0.7025,0.5740,0.5115,0.4776,0.4527,0.4289,0.4105,0.4021,0.3877,0.3815,0.3743,0.3684,0.3659,0.3676,0.3612,0.3558,0.3543,0.3536,0.3552,0.3526,0.3486,0.3475,0.3473,0.3470,0.3466,0.3460,0.3464,0.3463,0.3462],
+  iou:  [0.8666,0.8870,0.8998,0.9068,0.9115,0.9145,0.9171,0.9190,0.9210,0.9231,0.9238,0.9250,0.9257,0.9265,0.9268,0.9276,0.9283,0.9284,0.9288,0.9290,0.9296,0.9298,0.9300,0.9301,0.9303,0.9304,0.9305,0.9306,0.9305,0.9305],
+  l1:   [6.0414,5.4659,5.2225,5.0674,4.9325,4.8020,4.6718,4.5308,4.4685,4.3638,4.3150,4.2589,4.2333,4.1901,4.1612,4.1370,4.0820,4.0837,4.0608,4.0238,4.0047,3.9846,3.9704,3.9694,3.9658,3.9565,3.9524,3.9547,3.9534,3.9581],
+};
+const epK = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29];
 
 function line(label, data, color, opts={}) {
   return { label, data, borderColor: color, backgroundColor: color+'18',
@@ -1377,6 +1443,12 @@ makeChart('c-spg-l1',   ep7.slice(0,spg.l1.length   || ep7.length), [line('stave
 makeChart('c-spgf-loss', ep7, [line('stave-primary-grid',spg.loss,C.spg,{dashed:true}), line('stave-primary-grid-full',spgf.loss,C.spgf,{fill:true})]);
 makeChart('c-spgf-iou',  ep7, [line('stave-primary-grid',spg.iou, C.spg,{dashed:true}), line('stave-primary-grid-full',spgf.iou, C.spgf,{fill:true})], {min:0,max:1});
 makeChart('c-spgf-l1',   ep7, [line('stave-primary-grid',spg.l1,  C.spg,{dashed:true}), line('stave-primary-grid-full',spgf.l1,  C.spgf,{fill:true})]);
+
+// stave-primary-grid-full-kernsheet — KernSheet fine-tune, standalone (different
+// dataset/eval than the PDMX runs, so no comparison line). Live, epochs 0–14 of 30.
+makeChart('c-spgfk-loss', epK, [line('stave-primary-grid-full-kernsheet',spgfk.loss,C.spgfk,{fill:true})]);
+makeChart('c-spgfk-iou',  epK, [line('stave-primary-grid-full-kernsheet',spgfk.iou, C.spgfk,{fill:true})], {min:0,max:1});
+makeChart('c-spgfk-l1',   epK, [line('stave-primary-grid-full-kernsheet',spgfk.l1,  C.spgfk,{fill:true})]);
 
 // ── Modal close wiring: backdrop click, close button, Esc.
 document.querySelector('.chart-modal-close').addEventListener('click', closeChartModal);
