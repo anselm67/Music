@@ -24,7 +24,14 @@ from torch import Tensor
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from noter import NoterConfig, NoterDataModule, NoterDataset, NoterModule, Vocab
+from noter import (
+    NoterConfig,
+    NoterDataModule,
+    NoterDataset,
+    NoterModule,
+    Vocab,
+    grow_state_dict,
+)
 from pdmx import PDMX, PdmxSource
 from utils import (
     format_sequence_columns,
@@ -253,6 +260,49 @@ def config_from_checkpoint(checkpoint_path: Path) -> NoterConfig:
     hyper_params = checkpoint["hyper_parameters"]
     hyper_params.pop("max_steps", None)
     return NoterConfig(**hyper_params)
+
+
+@click.command()
+@click.argument(
+    "src_ckpt", type=click.Path(exists=True, dir_okay=False, path_type=Path)
+)
+@click.argument("out_ckpt", type=click.Path(dir_okay=False, path_type=Path))
+@click.argument(
+    "vocab_path", type=click.Path(exists=True, dir_okay=False, path_type=Path)
+)
+def grow_checkpoint(src_ckpt: Path, out_ckpt: Path, vocab_path: Path) -> None:
+    """Grow a noter checkpoint's vocab for fine-tuning.
+
+    Reads SRC_CKPT (a trained Lightning checkpoint), grows its token embedding
+    and output head to the size of VOCAB_PATH, and writes a weights-only state
+    dict to OUT_CKPT. Learned rows for the original tokens are kept verbatim;
+    appended rows start from a fresh initialisation. The result is a plain state
+    dict (not a resumable Lightning checkpoint) meant to initialise a fine-tune.
+    """
+    from torchvision.transforms.functional import InterpolationMode
+
+    torch.serialization.add_safe_globals([InterpolationMode])
+    checkpoint = torch.load(src_ckpt, weights_only=False)
+    old_sd = checkpoint["state_dict"]
+    hyper_params = dict(checkpoint["hyper_parameters"])
+    hyper_params.pop("max_steps", None)
+
+    src_config = NoterConfig(**hyper_params)
+    new_config = NoterConfig(**hyper_params)
+    new_config.use_vocab(Vocab.load(vocab_path))
+    if new_config.vocab_size < src_config.vocab_size:
+        raise click.ClickException(
+            f"target vocab ({new_config.vocab_size}) is smaller than the "
+            f"checkpoint vocab ({src_config.vocab_size})"
+        )
+
+    new_sd = NoterModule(new_config).state_dict()
+    grown = grow_state_dict(old_sd, new_sd, max_chords=new_config.max_chords)
+    torch.save(grown, out_ckpt)
+    logging.info(
+        f"Grew checkpoint vocab {src_config.vocab_size} -> "
+        f"{new_config.vocab_size}; wrote weights to {out_ckpt}"
+    )
 
 
 @click.command()
@@ -629,7 +679,8 @@ def predict(ctx: ClickContext, name: str) -> None:
 
 
 cli.add_command(vocab)
-cli.add_command(extend_vocab, name="extend-vocab")
+cli.add_command(extend_vocab)
+cli.add_command(grow_checkpoint)
 cli.add_command(show)
 cli.add_command(stats)
 cli.add_command(image_stats)

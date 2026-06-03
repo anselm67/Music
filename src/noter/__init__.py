@@ -1,3 +1,4 @@
+from .grow_checkpoint import grow_state_dict
 from .noter_datamodule import NoterDataModule
 from .noter_dataset import NoterDataset
 from .noter_model import NoterConfig, NoterModel
@@ -11,4 +12,5 @@ __all__ = [
     "NoterConfig",
     "NoterModel",
     "NoterModule",
+    "grow_state_dict",
 ]
