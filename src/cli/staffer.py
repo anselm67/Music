@@ -306,8 +306,6 @@ def train(
 
     NAME: sets id/name of the model being trained.
     """
-    VAL_CHECK_INTERVAL = 250
-
     # Resume training if we have an existing checkpoint.
     ckpt_path: Path | None = None
     ckpt_path = Path("checkpoints") / "staffer" / name / "last.ckpt"
@@ -334,6 +332,9 @@ def train(
         if warmup_steps >= 0:
             config.warmup_steps = warmup_steps
     config.max_steps = epochs * (config.train_len // config.batch_size)
+    # Cap at one epoch's batches: small datasets (e.g. KernSheet) have fewer
+    # than the default 250 training batches per epoch, which Lightning rejects.
+    VAL_CHECK_INTERVAL = min(250, config.train_len // config.batch_size)
     logging.info(
         f"Training for {epochs} epochs, "
         f"or {config.max_steps} steps of {config.batch_size}."
