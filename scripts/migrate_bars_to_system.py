@@ -81,7 +81,7 @@ def migrate_file(path: Path) -> tuple[Path, int]:
         page["systems"] = new_systems
 
     if changed_total:
-        path.write_text(json.dumps(obj))
+        path.write_text(json.dumps(obj, indent=2))
 
     return path, changed_total
 
