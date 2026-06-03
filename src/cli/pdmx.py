@@ -13,7 +13,7 @@ from pathlib import Path
 import click
 
 from pdmx import PDMX, MxlEditor
-from utils import print_histogram
+from utils import log_uncaught_exceptions, print_histogram
 from verovio import mxl_to_kern
 from verovio import render as verovio_render
 
@@ -40,6 +40,13 @@ class ClickContext:
     "--log-file",
     type=click.Path(file_okay=True, writable=True, path_type=Path),
     help="Name of pdmx's log file.",
+)
+@click.option(
+    "--no-excepthook",
+    is_flag=True,
+    default=False,
+    help="Don't route uncaught exceptions through the logger; print the "
+    "default traceback to stderr instead.",
 )
 @click.option(
     "--csv", default="PDMX.csv", show_default=True, help="Name of the .csv master file."
@@ -72,9 +79,12 @@ def cli(
     csv: str,
     log_file: None | Path,
     log_level: str,
+    no_excepthook: bool,
     offset: int,
     count: int,
 ) -> None:
+    if not no_excepthook:
+        log_uncaught_exceptions()
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
         filename=log_file,

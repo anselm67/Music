@@ -9,6 +9,7 @@ from .utils import (
     current_commit,
     from_json,
     iterable_from_file,
+    log_uncaught_exceptions,
     path_substract,
     print_histogram,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "path_substract",
     "from_json",
     "print_histogram",
+    "log_uncaught_exceptions",
     "Walker",
     "compile_query",
     "compile_filter",

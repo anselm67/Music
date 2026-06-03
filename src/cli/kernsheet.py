@@ -16,7 +16,7 @@ import click
 
 from kernsheet import KernSheet
 from kernsheet import migrate as run_migrate
-from utils import print_histogram
+from utils import log_uncaught_exceptions, print_histogram
 
 HOME = Path("/home/anselm/datasets/KernSheet")
 
@@ -47,8 +47,23 @@ class ClickContext:
     default="INFO",
     type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"], case_sensitive=False),
 )
+@click.option(
+    "--no-excepthook",
+    is_flag=True,
+    default=False,
+    help="Don't route uncaught exceptions through the logger; print the "
+    "default traceback to stderr instead.",
+)
 @click.pass_context
-def cli(ctx: click.Context, home: Path, log_file: None | Path, log_level: str) -> None:
+def cli(
+    ctx: click.Context,
+    home: Path,
+    log_file: None | Path,
+    log_level: str,
+    no_excepthook: bool,
+) -> None:
+    if not no_excepthook:
+        log_uncaught_exceptions()
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
         filename=log_file,

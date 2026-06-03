@@ -32,7 +32,7 @@ from scorer import (
     build_stave_boxes,
 )
 from staffer import StafferConfig
-from utils import sequence_edit_distance, strip_eos
+from utils import log_uncaught_exceptions, sequence_edit_distance, strip_eos
 
 # STAFFER_NORM = (mean, std) page normalisation; unpacked to denormalise for display.
 PAGE_MEAN, PAGE_STD = STAFFER_NORM
@@ -58,6 +58,13 @@ class ClickContext:
     "--log-file",
     type=click.Path(file_okay=True, writable=True, path_type=Path),
     help="Name of scorer's log file.",
+)
+@click.option(
+    "--no-excepthook",
+    is_flag=True,
+    default=False,
+    help="Don't route uncaught exceptions through the logger; print the "
+    "default traceback to stderr instead.",
 )
 @click.option(
     "--home",
@@ -96,11 +103,14 @@ def cli(
     ctx: click.Context,
     log_level: str,
     log_file: None | Path,
+    no_excepthook: bool,
     home: Path,
     csv: str,
     offset: int,
     count: int,
 ) -> None:
+    if not no_excepthook:
+        log_uncaught_exceptions()
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
         filename=log_file,

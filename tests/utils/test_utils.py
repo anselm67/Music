@@ -1,9 +1,16 @@
+import logging
+import sys
 import unittest
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from utils import from_json, iterable_from_file, path_substract
+from utils import (
+    from_json,
+    iterable_from_file,
+    log_uncaught_exceptions,
+    path_substract,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -43,8 +50,51 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(result.children[0].name, "A")
 
 
-if __name__ == "__main__":
-    unittest.main()
+class _ListHandler(logging.Handler):
+    def __init__(self, records: list[logging.LogRecord]) -> None:
+        super().__init__()
+        self.records = records
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+
+
+class TestLogUncaughtExceptions(unittest.TestCase):
+    def setUp(self) -> None:
+        self._saved_hook = sys.excepthook
+        self.records: list[logging.LogRecord] = []
+        self.handler = _ListHandler(self.records)
+        logging.getLogger().addHandler(self.handler)
+
+    def tearDown(self) -> None:
+        sys.excepthook = self._saved_hook
+        logging.getLogger().removeHandler(self.handler)
+
+    def test_routes_uncaught_through_logging(self) -> None:
+        log_uncaught_exceptions()
+        try:
+            raise ValueError("boom")
+        except ValueError:
+            sys.excepthook(*sys.exc_info())  # type: ignore[misc]
+        self.assertEqual(len(self.records), 1)
+        self.assertEqual(self.records[0].levelno, logging.CRITICAL)
+        self.assertEqual(self.records[0].exc_info[0], ValueError)  # type: ignore[index]
+
+    def test_keyboard_interrupt_is_delegated(self) -> None:
+        delegated: list[type[BaseException]] = []
+        original = sys.__excepthook__
+        sys.__excepthook__ = lambda t, v, tb: delegated.append(t)  # type: ignore[assignment]
+        try:
+            log_uncaught_exceptions()
+            try:
+                raise KeyboardInterrupt()
+            except KeyboardInterrupt:
+                sys.excepthook(*sys.exc_info())  # type: ignore[misc]
+        finally:
+            sys.__excepthook__ = original  # type: ignore[assignment]
+        self.assertEqual(delegated, [KeyboardInterrupt])
+        self.assertEqual(self.records, [])
+
 
 if __name__ == "__main__":
     unittest.main()

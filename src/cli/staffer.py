@@ -37,6 +37,7 @@ from staffer import (
     StafferModule,
     assign_staves,
 )
+from utils import log_uncaught_exceptions
 
 HOME = Path("/home/anselm/datasets/PDMX")
 
@@ -59,6 +60,13 @@ class ClickContext:
     "--log-file",
     type=click.Path(file_okay=True, writable=True, path_type=Path),
     help="Name of staffer's log file.",
+)
+@click.option(
+    "--no-excepthook",
+    is_flag=True,
+    default=False,
+    help="Don't route uncaught exceptions through the logger; print the "
+    "default traceback to stderr instead.",
 )
 @click.option(
     "--pdmx-home",
@@ -101,12 +109,15 @@ def cli(
     ctx: click.Context,
     log_level: str,
     log_file: None | Path,
+    no_excepthook: bool,
     pdmx_home: Path | None,
     kern_home: Path | None,
     csv: str,
     offset: int,
     count: int,
 ) -> None:
+    if not no_excepthook:
+        log_uncaught_exceptions()
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
         filename=log_file,

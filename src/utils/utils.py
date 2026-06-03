@@ -1,15 +1,42 @@
 """Misc utilities, too small to live in ther own module."""
 
+import logging
 import os
 import subprocess
+import sys
 from collections import Counter
 from dataclasses import fields, is_dataclass
 from pathlib import Path
+from types import TracebackType
 from typing import Any, Iterable, Union, cast, get_args, get_origin
 
 import torch
 
 DeviceType = Union[str, torch.device]
+
+
+def log_uncaught_exceptions() -> None:
+    """Route uncaught exceptions through ``logging`` instead of the default hook.
+
+    Without this, an unhandled exception is printed by Python's default
+    ``sys.excepthook`` to stderr, bypassing ``logging`` entirely — so it lands
+    in the terminal even when ``--log-file`` redirected logging to a file. This
+    hook logs the traceback as CRITICAL, so it follows the configured logging
+    destination. ``KeyboardInterrupt`` is left to the default hook so Ctrl-C
+    stays clean.
+    """
+
+    def handler(
+        exc_type: type[BaseException],
+        exc_value: BaseException,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_tb)
+            return
+        logging.critical("Uncaught exception", exc_info=(exc_type, exc_value, exc_tb))
+
+    sys.excepthook = handler
 
 
 def iterable_from_file(path: str | Path) -> Iterable[str]:

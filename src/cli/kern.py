@@ -9,6 +9,7 @@ import click
 
 from kern import EmptyHandler, Parser, to_midi
 from kern import tokenize as kern_tokenize
+from utils import log_uncaught_exceptions
 
 
 @dataclass
@@ -18,8 +19,17 @@ class ClickContext:
 
 @click.group()
 @click.option("--silent", "-s", is_flag=True, default=False)
+@click.option(
+    "--no-excepthook",
+    is_flag=True,
+    default=False,
+    help="Don't route uncaught exceptions through the logger; print the "
+    "default traceback to stderr instead.",
+)
 @click.pass_context
-def cli(ctx: click.Context, silent: bool) -> None:
+def cli(ctx: click.Context, silent: bool, no_excepthook: bool) -> None:
+    if not no_excepthook:
+        log_uncaught_exceptions()
     ctx.ensure_object(ClickContext)
     ctx.obj = ClickContext(silent=silent)
 
