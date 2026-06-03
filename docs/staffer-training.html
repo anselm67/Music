@@ -137,6 +137,11 @@
   <h1>Staffer Training Log</h1>
   <p class="subtitle">Architecture diagrams, training curves, and eval results for all layout detector runs.</p>
 
+  <h2>Dataset</h2>
+  <p>All staffer runs use <code>Staff16.csv</code> — PDMX scores where every page renders fewer than 16 staves,
+  filtered to entries with valid SVG, PNG, layout, krn, and token assets.</p>
+  <pre><code>pdmx query -o Staff16.csv 'index==index' --score 'pages.*.staff_count &lt; 16' --valid</code></pre>
+
   <h2>All runs</h2>
   <table class="summary-table">
     <thead>

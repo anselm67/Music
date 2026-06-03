@@ -106,6 +106,12 @@
 
   <p>The noter model is an encoder-decoder Transformer. The encoder reads a cropped staff image (64×768 px, grayscale) and produces patch embeddings; the decoder autoregressively generates a sequence of Kern tokens, each with up to 8 simultaneous chord notes. Dataset: PDMX subset with ≤2 staves/system (<code>System2.csv</code>). Metric: per-token accuracy (ignoring PAD).</p>
 
+  <h2>Dataset</h2>
+  <p>All noter runs use <code>System2.csv</code> — PDMX scores where the first system of the first page has ≤2 staves,
+  filtered to valid assets and entries where kern and SVG bar numbers agree on every system
+  (<code>--bar-match</code>, required for token-to-image alignment).</p>
+  <pre><code>pdmx query -o System2.csv 'index==index' --score 'pages.0.systems.0.staff_count &lt;= 2' --valid --bar-match</code></pre>
+
   <h2>All runs</h2>
   <table class="summary-table">
     <thead>
