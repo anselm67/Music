@@ -127,9 +127,7 @@ class LayoutExtractor:
             staves.append(
                 Staff(box=Box(bar_boxes[0].top_left, bar_boxes[-1].bot_right))
             )
-            all_bars.append(
-                [bar_boxes[0].left, *(x.right for x in bar_boxes)]
-            )
+            all_bars.append([bar_boxes[0].left, *(x.right for x in bar_boxes)])
         if not staves:
             raise ValueError(f"{self.svg_file} has a system with no staff.")
         system_bars = all_bars[0]
