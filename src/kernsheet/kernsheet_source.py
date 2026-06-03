@@ -67,8 +67,18 @@ class KernSheetSource:
     def records(self, id: str, first_bar: int, last_bar: int) -> list[str] | None:
         if id not in self._key:
             return None
-        tokens_file = self.tokens_dir / f"{self._key[id]}.tokens"
-        return KernReader(tokens_file).get_text(first_bar, last_bar)
+        return KernReader(self._tokens_path(id)).get_text(first_bar, last_bar)
+
+    def _tokens_path(self, id: str) -> Path:
+        return self.tokens_dir / f"{self._key[id]}.tokens"
+
+    def _kern_path(self, id: str) -> Path:
+        return self.home / f"{self._key[id]}.krn"
+
+    def _save_layout(self, score: Score) -> None:
+        path = self.home / "layout" / f"{score.id}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(score.asdict(), indent=2))
 
     def _render_pages(self, id: str) -> None:
         """Render every page of the score's PDF into the annotation pixel space, cached.

@@ -232,6 +232,19 @@
                 "train",
                 "testing"
             ]
-        }
+        },
+        // kernsheet cli
+        {
+            "name": "kernsheet edit",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "cli.kernsheet",
+            "console": "integratedTerminal",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "args": [
+                "edit",
+                "bach/inventions/inven01"
+            ]
+        },
     ]
 }

@@ -112,11 +112,10 @@ def make(ctx: ClickContext, id: str | None) -> None:
 def edit(ctx: ClickContext, id: str, fast: bool) -> None:
     """Open the interactive layout editor on score ID (press 'h' for help)."""
     from kernsheet.editor import StaffEditor
-    from kernsheet.editor_backend import EditorBackend
 
     if not (ctx.home / "layout" / f"{id}.json").exists():
         raise click.ClickException(f"no migrated layout for {id!r}")
-    StaffEditor(EditorBackend(ctx.home, id)).edit(fast_mode=fast)
+    StaffEditor(ctx.source, id).edit(fast_mode=fast)
 
 
 @click.command()
