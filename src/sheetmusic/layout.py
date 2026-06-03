@@ -169,7 +169,7 @@ class System:
 
 @dataclass(frozen=True)
 class Page:
-    # Page number in the pdf (counting from 0)
+    # Page number in the pdf (counting from 1)
     page_number: int
 
     # Image size for the coordinates in this Page

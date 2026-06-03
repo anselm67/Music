@@ -73,7 +73,9 @@ def build_score(score_id: str, legacy: dict, kr: KernReader) -> Score:
             cursor += n
         pages.append(
             Page(
-                page_number=p["page_number"],
+                # Legacy page index is 0-based; KernSheet layouts are 1-based to
+                # match PDMX and the staffer/scorer datasets (pages[page_number-1]).
+                page_number=p["page_number"] + 1,
                 image_width=p["image_width"],
                 image_height=p["image_height"],
                 systems=systems,

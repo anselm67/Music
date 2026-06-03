@@ -202,14 +202,14 @@ class KernSheet:
         pdf_path = self.pdf_path(kern_score)
         images = convert_from_path(pdf_path)
         for page in score.pages:
-            if page.page_number >= len(images):
+            if page.page_number > len(images):  # page_number is 1-based
                 logging.warning(
                     f"{kern_score.id}: score references page {page.page_number} "
                     f"but pdf has only {len(images)} page(s)"
                 )
                 continue
             image = self._transform(
-                np.array(images[page.page_number]),
+                np.array(images[page.page_number - 1]),
                 page.image_width,
                 page.image_rotation,
             )

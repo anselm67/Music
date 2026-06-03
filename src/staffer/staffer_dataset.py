@@ -46,6 +46,8 @@ class StafferDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]]):
         for score in tqdm(source.scores(), desc="Loading dataset"):
             part_count = max(score.staff_count, 1) // max(score.system_count, 1)
             for page in score.pages:
+                if not page.systems:  # skip blank/cover pages (no GT to supervise)
+                    continue
                 raw = max(
                     (s.box.bottom / page.image_height for s in page.systems),
                     default=0.0,

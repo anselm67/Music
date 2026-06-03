@@ -55,6 +55,8 @@ class ScorerDataset(Dataset[Sample]):
         self.items = []
         for score in tqdm(source.scores(), desc="Loading scorer dataset"):
             for page in score.pages:
+                if not page.systems:  # skip blank/cover pages (no GT to supervise)
+                    continue
                 self.items.append((score.id, page.page_number))
             if count >= 0 and len(self.items) >= count:
                 self.items = self.items[:count]

@@ -67,7 +67,7 @@ def test_id_is_json_stem_and_scores_filtered_by_layout(tmp_path: Path) -> None:
             )
         },
     )
-    _write_layout(tmp_path, "a/b/work-0", [_page(0)])  # only edition 0 migrated
+    _write_layout(tmp_path, "a/b/work-0", [_page(1)])  # only edition 0 migrated
     ks = KernSheet(tmp_path)
     src = KernSheetSource(ks)
 
@@ -102,7 +102,7 @@ def test_make_renders_pages_into_annotation_space(tmp_path: Path) -> None:
         tmp_path,
         {"a/b/work": _entry(_score("a/b/work.json", "a/b/work.pdf"))},
     )
-    _write_layout(tmp_path, "a/b/work", [_page(0, width=40)])
+    _write_layout(tmp_path, "a/b/work", [_page(1, width=40)])
     # A pre-existing tokens file makes make() skip tokenization and only render pngs.
     tokens = tmp_path / "build" / "tokens" / "a/b/work.tokens"
     tokens.parent.mkdir(parents=True, exist_ok=True)
@@ -116,9 +116,9 @@ def test_make_renders_pages_into_annotation_space(tmp_path: Path) -> None:
         ks.make()
 
     conv.assert_called_once_with(tmp_path / "a/b/work.pdf")
-    assert (tmp_path / "build" / "png" / "a/b/work-000.png").exists()
+    assert (tmp_path / "build" / "png" / "a/b/work-001.png").exists()
 
     # image() just decodes the cached png; width normalised to image_width=40,
     # height scaled by 40/60.
-    img = KernSheetSource(ks).image("a/b/work", 0)
+    img = KernSheetSource(ks).image("a/b/work", 1)
     assert img.shape == (3, int(50 * 40 / 60), 40)
