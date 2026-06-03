@@ -26,8 +26,9 @@ from torchinfo import summary as model_summary
 from torchvision.io import decode_image
 from tqdm import tqdm
 
+from kernsheet import KernSheet, KernSheetSource
 from pdmx import PDMX, PdmxSource
-from sheetmusic import Box
+from sheetmusic import Box, Source
 from staffer import (
     StafferConfig,
     StafferModel,
@@ -44,7 +45,7 @@ HOME = Path("/home/anselm/datasets/PDMX")
 class ClickContext:
     config: StafferConfig
     home: Path
-    source: PdmxSource
+    source: Source
 
 
 @click.group()
@@ -60,14 +61,18 @@ class ClickContext:
     help="Name of staffer's log file.",
 )
 @click.option(
-    "--home",
-    "-h",
+    "--pdmx-home",
+    type=click.Path(dir_okay=True, file_okay=False, path_type=Path),
+    default=None,
+    help="Root directory of the PDMX dataset. Selects PDMX (the default source).",
+)
+@click.option(
+    "--kern-home",
     type=click.Path(
         dir_okay=True, file_okay=False, exists=True, readable=True, path_type=Path
     ),
-    default=HOME,
-    show_default=True,
-    help="Root directory of the PDMX dataset.",
+    default=None,
+    help="KernSheet dataset root. Selects KernSheet; exclusive with --pdmx-home.",
 )
 @click.option(
     "--csv",
@@ -96,7 +101,8 @@ def cli(
     ctx: click.Context,
     log_level: str,
     log_file: None | Path,
-    home: Path,
+    pdmx_home: Path | None,
+    kern_home: Path | None,
     csv: str,
     offset: int,
     count: int,
@@ -113,8 +119,17 @@ def cli(
             logging.FileHandler(log_file.as_posix())
         )
     logging.info("Running: %s", " ".join(sys.argv))
-    pdmx = PDMX(home, csv, offset, count)
-    ctx.obj = ClickContext(StafferConfig(), home, PdmxSource(pdmx))
+    if pdmx_home is not None and kern_home is not None:
+        raise click.UsageError("--pdmx-home and --kern-home are mutually exclusive.")
+    if kern_home is not None:
+        home: Path = kern_home
+        source: Source = KernSheetSource(KernSheet(home))
+    else:
+        home = pdmx_home or HOME
+        if not home.exists():
+            raise click.UsageError(f"PDMX dataset root does not exist: {home}")
+        source = PdmxSource(PDMX(home, csv, offset, count))
+    ctx.obj = ClickContext(StafferConfig(), home, source)
 
 
 @click.command()
@@ -240,6 +255,38 @@ def stats(ctx: ClickContext, num_workers: int) -> None:
     default=8,
     help="Number of workers for the dataset loader.",
 )
+@click.option(
+    "--init-from",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Initialise weights from a checkpoint, then train with a fresh "
+    "optimizer. Ignored when resuming an existing run.",
+)
+@click.option(
+    "--train-len",
+    type=int,
+    default=-1,
+    help="Override the number of training samples (needed for small datasets "
+    "like KernSheet, whose total is far below the PDMX default).",
+)
+@click.option(
+    "--valid-len",
+    type=int,
+    default=-1,
+    help="Override the number of validation samples.",
+)
+@click.option(
+    "--lr",
+    type=float,
+    default=None,
+    help="Override the learning rate (fine-tuning wants below the 1e-4 default).",
+)
+@click.option(
+    "--warmup-steps",
+    type=int,
+    default=-1,
+    help="Override the number of warmup steps.",
+)
 @click.pass_obj
 def train(
     ctx: ClickContext,
@@ -249,6 +296,11 @@ def train(
     epochs: int,
     use_sampler: bool,
     num_workers: int,
+    init_from: Path | None,
+    train_len: int,
+    valid_len: int,
+    lr: float | None,
+    warmup_steps: int,
 ) -> None:
     """Trains and/or resume training of a Staffer model instance.
 
@@ -262,12 +314,25 @@ def train(
     if ckpt_path.exists():
         logging.info(f"Resuming training from {ckpt_path}")
         config = config_from_checkpoint(ckpt_path)
+        if train_len > 0 or valid_len > 0 or lr is not None or warmup_steps >= 0:
+            logging.warning(
+                "Resuming from checkpoint; "
+                "--train-len/--valid-len/--lr/--warmup-steps ignored."
+            )
     else:
         ckpt_path = None
         config = replace(
             ctx.config,
             id_name=name,
         )
+        if train_len > 0:
+            config.train_len = train_len
+        if valid_len > 0:
+            config.valid_len = valid_len
+        if lr is not None:
+            config.lr = lr
+        if warmup_steps >= 0:
+            config.warmup_steps = warmup_steps
     config.max_steps = epochs * (config.train_len // config.batch_size)
     logging.info(
         f"Training for {epochs} epochs, "
@@ -335,8 +400,22 @@ def train(
 
     torch.serialization.add_safe_globals([InterpolationMode])
 
+    module = StafferModule(config)
+    if init_from is not None:
+        if ckpt_path is not None:
+            logging.warning(f"Resuming from {ckpt_path}; ignoring --init-from")
+        else:
+            ckpt = torch.load(init_from, weights_only=False)
+            try:
+                module.load_state_dict(ckpt["state_dict"])
+            except RuntimeError as e:
+                raise click.ClickException(
+                    f"--init-from state dict mismatch: {e}"
+                ) from e
+            logging.info(f"Initialized weights from {init_from}")
+
     trainer.fit(
-        StafferModule(config),
+        module,
         StafferDataModule(config, ctx.source, use_sampler, num_workers=num_workers),
         ckpt_path=ckpt_path,
     )
