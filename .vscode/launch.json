@@ -223,7 +223,6 @@
         // scorer cli
         {
             "name": "scorer train",
-            "type": "debugpy",
             "request": "launch",
             "module": "cli.scorer",
             "console": "integratedTerminal",

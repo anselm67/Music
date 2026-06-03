@@ -14,7 +14,7 @@ from pathlib import Path
 
 import click
 
-from kernsheet import KernSheetSource
+from kernsheet import KernSheet
 from kernsheet import migrate as run_migrate
 from utils import print_histogram
 
@@ -24,7 +24,7 @@ HOME = Path("/home/anselm/datasets/KernSheet")
 @dataclass
 class ClickContext:
     home: Path
-    source: KernSheetSource
+    kern_sheet: KernSheet
 
 
 @click.group()
@@ -56,7 +56,8 @@ def cli(ctx: click.Context, home: Path, log_file: None | Path, log_level: str) -
         datefmt="%Y-%m-%d %H:%M:%S",
     )
     logging.info("Running: %s", " ".join(sys.argv))
-    ctx.obj = ClickContext(home=home, source=KernSheetSource(home))
+    kern_sheet = KernSheet(home)
+    ctx.obj = ClickContext(home=home, kern_sheet=kern_sheet)
 
 
 @click.command()
@@ -82,25 +83,14 @@ def migrate(ctx: ClickContext, write: bool, limit: int) -> None:
 
 
 @click.command()
-@click.argument("id", required=False, default=None)
 @click.pass_obj
-def make(ctx: ClickContext, id: str | None) -> None:
+def make(ctx: ClickContext) -> None:
     """Pre-render the page-image cache (build/png) for all scores, or one ID."""
-    source = ctx.source
-    scores = [source.score(id)] if id else source.scores()
-    rendered = 0
-    for score in scores:
-        for page in score.pages:
-            try:
-                source.image(score.id, page.page_number)
-                rendered += 1
-            except Exception as e:
-                logging.error("%s page %d: %s", score.id, page.page_number, e)
-    print(f"rendered {rendered} page image(s).")
+    ctx.kern_sheet.make()
 
 
 @click.command()
-@click.argument("id")
+@click.argument("key")
 @click.option(
     "--fast",
     "-f",
@@ -109,49 +99,76 @@ def make(ctx: ClickContext, id: str | None) -> None:
     help="Fast mode: auto-save and validate pages on jumps.",
 )
 @click.pass_obj
-def edit(ctx: ClickContext, id: str, fast: bool) -> None:
+def edit(ctx: ClickContext, key: str, fast: bool) -> None:
     """Open the interactive layout editor on score ID (press 'h' for help)."""
     from kernsheet.editor import StaffEditor
 
-    if not (ctx.home / "layout" / f"{id}.json").exists():
-        raise click.ClickException(f"no migrated layout for {id!r}")
-    StaffEditor(ctx.source, id).edit(fast_mode=fast)
+    if key not in ctx.kern_sheet.catalog.entries:
+        raise click.ClickException(f"no catalog entry for {key!r}")
+    ids = ctx.kern_sheet.get_kern_scores(key)
+    idx = 0
+    while ids:
+        if not StaffEditor(ctx.kern_sheet, key, ids[idx].id).edit(fast_mode=fast):
+            break
+        idx = (idx + 1) % len(ids)
 
 
 @click.command()
 @click.pass_obj
 def stats(ctx: ClickContext) -> None:
     """Layout statistics over the migrated KernSheet scores."""
-    scores = pages = systems = staves = bars = 0
+    score_count = page_count = system_count = stave_count = bar_count = 0
+    score_failed = 0
     systems_per_page: Counter = Counter()
     staves_per_system: Counter = Counter()
     bars_per_system: Counter = Counter()
-    for score in ctx.source.scores():
-        scores += 1
+    for _, kern_score in ctx.kern_sheet.items():
+        try:
+            score = ctx.kern_sheet.load_score(kern_score.id)
+        except Exception as e:
+            score_failed += 1
+            logging.error(f"Failed to load score {kern_score.id}: {e}")
+            continue
+        score_count += 1
         for page in score.pages:
-            pages += 1
+            page_count += 1
             systems_per_page[len(page.systems)] += 1
             for system in page.systems:
-                systems += 1
-                staves += len(system.staves)
+                system_count += 1
+                stave_count += len(system.staves)
                 staves_per_system[len(system.staves)] += 1
                 bars_per_system[len(system.bar_numbers)] += 1
-                bars += len(system.bar_numbers)
+                bar_count += len(system.bar_numbers)
 
-    print(f"{scores:,} scores:")
-    print(f"  Page count: {pages:,}")
-    print(f"System count: {systems:,}")
-    print(f" Staff count: {staves:,}")
-    print(f"   Bar count: {bars:,}")
+    print(f"{score_count:,} scores - {score_failed} didn't load:")
+    print(f"  Page count: {page_count:,}")
+    print(f"System count: {system_count:,}")
+    print(f" Staff count: {stave_count:,}")
+    print(f"   Bar count: {bar_count:,}")
     print_histogram(systems_per_page, title="Systems per page:")
     print_histogram(staves_per_system, title="Staves per system:")
     print_histogram(bars_per_system, title="Bars per system:")
+
+
+@click.command()
+@click.option(
+    "--verbose",
+    "-v",
+    is_flag=True,
+    default=False,
+    help="Print each issue as it is found.",
+)
+@click.pass_obj
+def check(ctx: ClickContext, verbose: bool) -> None:
+    """Validate catalog integrity against the filesystem."""
+    ctx.kern_sheet.check(verbose=verbose)
 
 
 cli.add_command(migrate)
 cli.add_command(make)
 cli.add_command(edit)
 cli.add_command(stats)
+cli.add_command(check)
 
 
 def main() -> None:

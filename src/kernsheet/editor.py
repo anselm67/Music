@@ -9,15 +9,14 @@ supplied by :class:`EditorBackend`, which persists it back as native ``Score`` J
 import logging
 import subprocess
 from dataclasses import replace
-from pathlib import Path
-from typing import Any, Callable, Tuple, cast
+from typing import Any, Callable, Tuple
 
 import cv2
 from cv2.typing import MatLike
 
 from kern import KernReader
-from kernsheet import KernSheetSource
-from sheetmusic import Box, Page, Score, Source, Staff, System
+from kernsheet import KernSheet
+from sheetmusic import Box, Page, Score, Staff, System
 
 
 class Action:
@@ -34,9 +33,11 @@ class Action:
 class StaffEditor:
     STAFFER_WINDOW = "StaffEditor"
 
-    source: Source
+    kern_sheet: KernSheet
 
     # Data being edited.
+    key: str
+    id: str
     images: list[MatLike]
     score: Score
     kern: KernReader
@@ -87,6 +88,14 @@ class StaffEditor:
             bars[self.bar_index] += delta
             self.replace_system(bars=bars)
 
+    def move_system(self, delta: int) -> None:
+        if self.system_index < 0:
+            return
+        new_staves = [
+            replace(staff, box=staff.box.up(delta)) for staff in self.system.staves
+        ]
+        self.page.systems[self.system_index] = replace(self.system, staves=new_staves)
+
     @property
     def bar_number(self) -> int:
         bar_number = self.bar_offset
@@ -94,14 +103,18 @@ class StaffEditor:
             bar_number += max(len(system.bars) - 1, 0)
         return bar_number + self.bar_index
 
-    def _tokens_path(self) -> Path:
-        source = cast(KernSheetSource, self.source)
-        return source._tokens_path(self.id)
-
-    def __init__(self, source: Source, id: str, max_size: tuple[int, int] = (992, 780)):
-        self.source = source
+    def __init__(
+        self,
+        kern_sheet: KernSheet,
+        key: str,
+        id: str,
+        max_size: tuple[int, int] = (992, 780),
+    ):
+        self.kern_sheet = kern_sheet
+        self.key = key
+        self.id = id
         self._load_score(id)
-        self.kern = KernReader(self._tokens_path())
+        self.kern = KernReader(kern_sheet.tokens_path(key))
         self.max_size = max_size
         self.page_index = 0
         self.system_index = 0
@@ -123,13 +136,15 @@ class StaffEditor:
         self.init_commands()
 
     def _load_score(self, id: str) -> None:
-        self.score = self.source.score(id)
+        self.score = self.kern_sheet.load_score(id)
         self.images = []
         for page in self.score.pages:
-            image = self.source.image(id, page.page_number)
-            self.images.append(
-                cv2.cvtColor(image.permute(1, 2, 0).numpy(), cv2.COLOR_RGB2BGR)
-            )
+            png_path = self.kern_sheet.png_path(id, page.page_number)
+            image = cv2.imread(png_path.as_posix())  # already BGR, ready for imshow
+            if image is None:
+                logging.warning(f"failed to load {png_path}")
+            else:
+                self.images.append(image)
         self.id = id
 
     def draw_page(
@@ -498,8 +513,7 @@ class StaffEditor:
                 print(f"Unknown key: '{key}', press 'h' for help.")
 
     def save(self) -> None:
-        source = cast(KernSheetSource, self.source)
-        source._save_layout(self.score)
+        self.kern_sheet.save_score(self.id, self.score)
         print(f"{self.score.page_count} pages reviewed and saved.")
 
     KEY_NAMES = {
@@ -578,12 +592,11 @@ class StaffEditor:
         print(f"Blanked pages {page_range.start} to {page_range.stop}.")
 
     def edit_kern_and_tokens(self) -> None:
-        source = cast(KernSheetSource, self.source)
         subprocess.run(
             [
                 "code",
-                source._kern_path(self.score.id).as_posix(),
-                self._tokens_path().as_posix(),
+                self.kern_sheet.kern_path(self.key).as_posix(),
+                self.kern_sheet.tokens_path(self.key).as_posix(),
             ]
         )
 
@@ -619,21 +632,15 @@ class StaffEditor:
                 lambda: self.replace_system(bottom=self.system.bottom - 1),
                 "Shrinks the selected staff up.",
             ),
-            Action(  # TODO move all system staves down.
+            Action(
                 "i",
-                lambda: self.replace_system(
-                    bottom=self.system.bottom - 2,
-                    top=self.system.top - 2,
-                ),
+                lambda: self.move_system(2),
                 "Moves the selected system up.",
             ),
-            Action(  # TODO move all system staves up.
+            Action(
                 "m",
-                lambda: self.replace_system(
-                    bottom=self.system.bottom + 2,
-                    top=self.system.top + 2,
-                ),
-                "Moves the selected stsystem down.",
+                lambda: self.move_system(-2),
+                "Moves the selected system down.",
             ),
             Action(
                 "c",

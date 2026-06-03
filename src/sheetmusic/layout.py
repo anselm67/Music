@@ -38,6 +38,9 @@ class Box:
     def height(self) -> int:
         return self.bottom - self.top
 
+    def up(self, delta: int) -> "Box":
+        return Box((self.left, self.top - delta), (self.right, self.bottom - delta))
+
     def to_cxcywh(self, image_width: int, image_height: int) -> CenteredBox:
         cx = (self.left + self.right) / 2 / image_width
         cy = (self.top + self.bottom) / 2 / image_height
