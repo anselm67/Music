@@ -78,6 +78,23 @@ def test_id_is_json_stem_and_scores_filtered_by_layout(tmp_path: Path) -> None:
     assert src.score("a/b/work-0").id == "a/b/work-0"
 
 
+def test_scores_skips_unmigrated_empty_json_path(tmp_path: Path) -> None:
+    # An unmigrated score carries an empty json_path; its layout_path resolves to
+    # the layout/ directory itself, which exists() — scores() must still skip it
+    # (it guards on is_file, else load_score would read_text a directory).
+    _catalog(
+        tmp_path,
+        {
+            "a/b/work": _entry(_score("a/b/work.json", "a/b/work.pdf")),
+            "c/d/none": _entry(_score("", "c/d/none.pdf")),
+        },
+    )
+    _write_layout(tmp_path, "a/b/work", [_page(1)])  # also creates the layout/ dir
+    src = KernSheetSource(KernSheet(tmp_path))
+
+    assert [s.id for s in src.scores()] == ["a/b/work"]
+
+
 def test_records_keyed_by_entry_not_edition(tmp_path: Path) -> None:
     # Editions share one .krn/tokens file, keyed by the entry key (not the score id).
     _catalog(

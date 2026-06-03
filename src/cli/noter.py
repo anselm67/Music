@@ -371,6 +371,18 @@ def grow_checkpoint(src_ckpt: Path, out_ckpt: Path, vocab_path: Path) -> None:
     default=-1,
     help="Override the number of validation samples.",
 )
+@click.option(
+    "--lr",
+    type=float,
+    default=None,
+    help="Override the learning rate (fine-tuning wants below the 3e-4 default).",
+)
+@click.option(
+    "--warmup-steps",
+    type=int,
+    default=-1,
+    help="Override the number of warmup steps.",
+)
 @click.pass_obj
 def train(
     ctx: ClickContext,
@@ -382,6 +394,8 @@ def train(
     init_from: Path | None,
     train_len: int,
     valid_len: int,
+    lr: float | None,
+    warmup_steps: int,
 ) -> None:
     """Trains and/or resumes training of a Noter model instance.
 
@@ -395,9 +409,10 @@ def train(
     if ckpt_path.exists():
         logging.info(f"Resuming training from {ckpt_path}")
         config = config_from_checkpoint(ckpt_path)
-        if train_len > 0 or valid_len > 0:
+        if train_len > 0 or valid_len > 0 or lr is not None or warmup_steps >= 0:
             logging.warning(
-                "Resuming from checkpoint; --train-len/--valid-len ignored."
+                "Resuming from checkpoint; "
+                "--train-len/--valid-len/--lr/--warmup-steps ignored."
             )
     else:
         ckpt_path = None
@@ -407,6 +422,10 @@ def train(
             config.train_len = train_len
         if valid_len > 0:
             config.valid_len = valid_len
+        if lr is not None:
+            config.lr = lr
+        if warmup_steps >= 0:
+            config.warmup_steps = warmup_steps
 
     config.max_steps = epochs * (config.train_len // config.batch_size)
     logging.info(

@@ -104,6 +104,8 @@ class KernSheet:
 
     def load_score(self, id: str) -> Score:
         score = self.id2score[id]
+        if not score.json_path:
+            raise ValueError(f"{id}: unmigrated score has no layout")
         return Score.from_json(json.loads(self.layout_path(score).read_text()))
 
     def save_score(self, id: str, score: Score) -> None:
