@@ -134,9 +134,9 @@
       <tr>
         <td><span class="tag">boulez</span></td><td>KernSheet</td><td>2026-06-04</td><td>8</td>
         <td>97.28%<sup>†</sup></td><td>0.938<sup>†</sup></td><td>5.25 px<sup>†</sup></td>
-        <td><strong>89.5%</strong> · 12/300 miscount</td>
+        <td>89.5% · 12/300 miscount</td>
         <td>Unfreeze staffer @ step 500 (joint det + tr fine-tune)</td>
-        <td><span class="badge badge-green">KernSheet best</span></td>
+        <td><span class="badge badge-slate">superseded</span></td>
       </tr>
       <tr>
         <td><span class="tag">walton</span></td><td>KernSheet</td><td>2026-06-04</td><td>8</td>
@@ -144,6 +144,13 @@
         <td>87.2% · 32/300 miscount</td>
         <td>Staffer frozen throughout</td>
         <td><span class="badge badge-amber">freeze ablation</span></td>
+      </tr>
+      <tr>
+        <td><span class="tag">ravel</span></td><td>KernSheet</td><td>2026-06-04</td><td>20</td>
+        <td>97.51%<sup>†</sup></td><td>0.945<sup>†</sup></td><td>5.57 px<sup>†</sup></td>
+        <td><strong>90.7%</strong> · 3/300 miscount</td>
+        <td>boulez recipe, 20 epochs (longer joint training)</td>
+        <td><span class="badge badge-green">KernSheet best</span></td>
       </tr>
     </tbody>
   </table>
@@ -246,30 +253,32 @@
   <!-- ════════════════════════ boulez & walton (KernSheet) ════════════════════════ -->
   <div class="session">
     <div class="session-header">
-      <h2><span class="tag">boulez</span> &amp; <span class="tag">walton</span> — KernSheet fine-tune</h2>
-      <span class="session-meta">2026-06-04 · tags <code>train/boulez</code>, <code>train/walton</code> · 8 epochs each · from <code>stave-primary-grid-full-kernsheet</code> + <code>enhanced3-center+jitter-kernsheet</code> · shared 5543 vocab</span>
+      <h2><span class="tag">boulez</span>, <span class="tag">walton</span> &amp; <span class="tag">ravel</span> — KernSheet fine-tune</h2>
+      <span class="session-meta">2026-06-04 · tags <code>train/boulez</code> / <code>train/walton</code> / <code>train/ravel</code> · from <code>stave-primary-grid-full-kernsheet</code> + <code>enhanced3-center+jitter-kernsheet</code> · shared 5543 vocab</span>
     </div>
 
-    <p>First end-to-end runs on <strong>KernSheet</strong> (real scanned piano scores), rebuilt fresh from the two KernSheet-fine-tuned standalone branches at the shared 5543 vocab — no checkpoint-growing needed. The two runs are identical except for one knob — when the detector unfreezes — set up as a deliberate <strong>freeze ablation</strong>:</p>
+    <p>First end-to-end runs on <strong>KernSheet</strong> (real scanned piano scores), rebuilt fresh from the two KernSheet-fine-tuned standalone branches at the shared 5543 vocab — no checkpoint-growing needed. Three runs answer two questions — <em>should the detector be frozen?</em> and <em>does longer joint training help?</em>:</p>
     <div class="changes">
-      <div class="change-item"><span class="change-sym mod">~</span> <strong>boulez</strong> — staffer unfreezes at step 500 (<code>freeze_staffer_steps=500</code>, the merge1 default), then trains jointly. The detector keeps receiving its full detection loss for 6 more epochs.</div>
-      <div class="change-item"><span class="change-sym mod">~</span> <strong>walton</strong> — staffer frozen for the whole run (<code>--freeze-staffer-steps 3000</code> &gt; 2000 total steps). The noter branch adapts to predicted crops; the detector never moves.</div>
+      <div class="change-item"><span class="change-sym mod">~</span> <strong>boulez</strong> (8 ep) — staffer unfreezes at step 500 (<code>freeze_staffer_steps=500</code>, the merge1 default), then trains jointly. The detector keeps receiving its full detection loss for 6 more epochs.</div>
+      <div class="change-item"><span class="change-sym mod">~</span> <strong>walton</strong> (8 ep) — staffer frozen for the whole run (<code>--freeze-staffer-steps 3000</code> &gt; 2000 total steps). The noter adapts to predicted crops; the detector never moves. The <strong>freeze ablation</strong>.</div>
+      <div class="change-item"><span class="change-sym mod">~</span> <strong>ravel</strong> (20 ep) — boulez recipe, longer (boulez was still improving at ep7). Converged ~ep14.</div>
     </div>
 
-    <h3>Matched eval — identical 300 pages, both models</h3>
-    <p>The in-training Val acc / IoU / stave_err live on independent unseeded splits (walton's frozen stave_err is 4.53 px vs boulez's 3.86 px on the <em>same</em> frozen checkpoint — proof the splits differ), so they are <strong>not</strong> comparable. The honest comparator is a free-running greedy eval over the <em>same</em> 300 pages for both models:</p>
+    <h3>Matched eval — identical 300 pages, all three models</h3>
+    <p>The in-training Val acc / IoU / stave_err live on independent unseeded splits (walton's frozen stave_err is 4.53 px vs boulez's 3.86 px on the <em>same</em> frozen checkpoint — proof the splits differ), so they are <strong>not</strong> comparable. The honest comparator is a free-running greedy eval over the <em>same</em> 300 pages (seed 0) for all three:</p>
     <table class="summary-table">
       <thead>
         <tr><th>Model</th><th>Avg similarity</th><th>Min / Max</th><th>Miscount pages</th><th>Pred / GT staves</th></tr>
       </thead>
       <tbody>
-        <tr><td><span class="tag">boulez</span></td><td><strong>89.5%</strong></td><td>7.9% / 100%</td><td><strong>12 / 300</strong></td><td>3420 / 3408</td></tr>
-        <tr><td><span class="tag">walton</span></td><td>87.2%</td><td>7.2% / 100%</td><td>32 / 300</td><td>3438 / 3408</td></tr>
+        <tr><td><span class="tag">ravel</span> (joint, 20 ep)</td><td><strong>90.7%</strong></td><td>8.5% / 100%</td><td><strong>3 / 300</strong></td><td>3394 / 3408</td></tr>
+        <tr><td><span class="tag">boulez</span> (joint, 8 ep)</td><td>89.5%</td><td>7.9% / 100%</td><td>12 / 300</td><td>3420 / 3408</td></tr>
+        <tr><td><span class="tag">walton</span> (frozen, 8 ep)</td><td>87.2%</td><td>7.2% / 100%</td><td>32 / 300</td><td>3438 / 3408</td></tr>
       </tbody>
     </table>
 
-    <h3>Training curves</h3>
-    <p class="session-meta">boulez (solid blue) vs walton (solid amber). Accuracy / tr-loss curves are on different val splits — read trajectories, not the gap. Detection curves: boulez's staffer moves after the ep1→ep2 unfreeze; walton's is flat (frozen).</p>
+    <h3>Training curves — the freeze ablation (boulez vs walton)</h3>
+    <p class="session-meta">boulez (solid blue) vs walton (solid amber), 8 epochs. Accuracy / tr-loss curves are on different val splits — read trajectories, not the gap. Detection curves: boulez's staffer moves after the ep1→ep2 unfreeze; walton's is flat (frozen). ravel (20 ep, boulez recipe) is not charted here — its converged numbers are in the matched-eval table above.</p>
     <div class="charts">
       <div class="chart-card"><h4>Val accuracy</h4><canvas id="c-ks-acc"></canvas></div>
       <div class="chart-card"><h4>Val tr-loss</h4><canvas id="c-ks-tr"></canvas></div>
@@ -277,16 +286,16 @@
       <div class="chart-card"><h4>Stave error (px)</h4><canvas id="c-ks-err"></canvas></div>
     </div>
 
-    <h3>Analysis — the freeze call reversed</h3>
+    <h3>Analysis — one consistent story: detection training drives end-to-end</h3>
     <div class="changes">
-      <div class="change-item"><span class="change-sym add">+</span> <strong>boulez (joint) wins end-to-end</strong>: 89.5% vs 87.2% similarity, and fewer than half the miscount pages (12 vs 32) on identical pages.</div>
-      <div class="change-item"><span class="change-sym add">+</span> The win comes from <strong>continued detection training</strong>: with <code>λ_det=1</code>, boulez's staffer kept getting its full L1+GIoU+<em>objectness</em> loss for 6 more epochs, which improved recall/counting. Walton's frozen detector got none of it.</div>
-      <div class="change-item"><span class="change-sym rem">−</span> <code>val/stave_err_px</code> is a <strong>misleading proxy for detector quality</strong>: it is GT-routed edge-L1 on already-matched boxes, blind to recall. Joint training worsened it (boulez 3.86→5.25 px on its split) while <em>improving</em> the counting that actually drives transcription.</div>
-      <div class="change-item"><span class="change-sym mod">~</span> The eval's top-to-bottom order matching over-penalizes a miscount (a missed/extra stave shifts every match below it), so walton's 2.3-pt deficit is partly amplified — but the underlying 32-vs-12 miscount gap is real. (Fixed once eval moves to center-y <code>linear_sum_assignment</code>.)</div>
-      <div class="change-item"><span class="change-sym mod">~</span> Caveat: boulez's edge is "more detection fine-tuning helped," not proof the transcription→box gradient helped — isolating that needs a det-loss-only continued staffer fine-tune.</div>
+      <div class="change-item"><span class="change-sym add">+</span> <strong>The matched eval rank-orders by how much the detector trained</strong>: walton (frozen) 87.2% → boulez (8 ep joint) 89.5% → ravel (20 ep joint) <strong>90.7%</strong>. Miscount pages fall in lock-step: 32 → 12 → <strong>3</strong>.</div>
+      <div class="change-item"><span class="change-sym add">+</span> The lever is <strong>continued detection training</strong>: with <code>λ_det=1</code>, the unfrozen staffer keeps getting its full L1+GIoU+<em>objectness</em> loss, which improves recall/counting. Walton's frozen detector got none of it; ravel got the most.</div>
+      <div class="change-item"><span class="change-sym rem">−</span> <code>val/stave_err_px</code> is a <strong>misleading proxy for detector quality</strong>: GT-routed edge-L1 on already-matched boxes, blind to recall. Joint training <em>raised</em> it (3.86→5.25 px boulez; ~5.5 px ravel) while <em>improving</em> the counting that actually drives transcription. Trust the matched eval, not stave_err_px.</div>
+      <div class="change-item"><span class="change-sym mod">~</span> The eval's top-to-bottom order matching over-penalizes a miscount (a missed/extra stave shifts every match below it), so the similarity spread is partly amplified by the miscount spread — but the underlying miscount gaps are real. (To be de-amplified once eval moves to center-y <code>linear_sum_assignment</code>.)</div>
+      <div class="change-item"><span class="change-sym mod">~</span> Caveat: this is "more detection fine-tuning helped," not proof the transcription→box gradient helped — isolating that needs a det-loss-only continued staffer fine-tune.</div>
     </div>
 
-    <div class="result-box positive"><strong>boulez is the KernSheet best.</strong> Freezing the staffer (walton) forgoes the recall gains from continued joint detection training and loses ~2.3 pts of end-to-end similarity with ~2.7× the miscounts. The pre-run hypothesis that freezing would protect the detector (because KernSheet boxes are a thirds approximation) did not hold up against the matched eval.</div>
+    <div class="result-box positive"><strong>ravel is the KernSheet best</strong> — 90.7% matched similarity, only 3/300 miscount pages. The progression walton → boulez → ravel is monotonic in both similarity and miscount, all explained by how much the detector kept training. The pre-run hypothesis that <em>freezing</em> would protect the detector (because KernSheet boxes are a thirds approximation) was wrong: more joint detection training is what helps.</div>
   </div>
 
 </main>
