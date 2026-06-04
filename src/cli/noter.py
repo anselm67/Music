@@ -25,6 +25,8 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from noter import (
+    NORM_MEAN,
+    NORM_STD,
     NoterConfig,
     NoterDataModule,
     NoterDataset,
@@ -191,7 +193,10 @@ def show(ctx: ClickContext) -> None:
     while True:
         index = random.randint(0, len(dataset) - 1)
         img_tensor, _, seq_tensor = dataset[index]
-        img = img_tensor.squeeze(0).cpu().numpy()
+        # De-normalise to uint8 [0, 255]; a raw normalised float renders as
+        # solid black (dark crops) or blows out to white via cv2's float rescale.
+        img = (img_tensor.squeeze(0).cpu().numpy() * NORM_STD + NORM_MEAN).clip(0, 1)
+        img = (np.stack([img] * 3, axis=-1) * 255).astype(np.uint8)
         tokens = dataset.vocab.i2tok(seq_tensor)
         print(tokens)
         cv2.imshow("Staff", img)
@@ -763,7 +768,7 @@ def predict(ctx: ClickContext, name: str) -> None:
 
         # Denormalize and display.
         img = image.squeeze(0).cpu().numpy()
-        img = img * 0.17525607175008864 + 0.9482423663139343
+        img = img * NORM_STD + NORM_MEAN
         img = (np.clip(img, 0.0, 1.0) * 255).astype(np.uint8)
         cv2.imshow("Staff", np.stack([img] * 3, axis=-1))
 

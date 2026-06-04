@@ -30,6 +30,8 @@ from kernsheet import KernSheet, KernSheetSource
 from pdmx import PDMX, PdmxSource
 from sheetmusic import Box, Source
 from staffer import (
+    NORM_MEAN,
+    NORM_STD,
     StafferConfig,
     StafferModel,
     StafferDataModule,
@@ -182,8 +184,8 @@ def show(ctx: ClickContext) -> None:
     while True:
         index = random.randint(0, len(dataset) - 1)
         img_tensor, sys, staff, assign = dataset[index]
-        img = img_tensor.squeeze(0).cpu().numpy()
-        img = np.stack([img] * 3, axis=-1) * 255
+        img = (img_tensor.squeeze(0).cpu().numpy() * NORM_STD + NORM_MEAN).clip(0, 1)
+        img = (np.stack([img] * 3, axis=-1) * 255).astype(np.uint8)
         width_height = img.shape[1], img.shape[0]
         # Try to make sense of the ground truth data.
         for sys_index in range(sys.shape[0]):
@@ -647,8 +649,12 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
                 pred_sys_logits,
             ) = tuple(map(lambda t: t.squeeze(0), model.forward(img.unsqueeze(0))))
 
-        img = img.squeeze(0).cpu().numpy()
-        img = np.stack([img] * 3, axis=-1) * 255
+        # De-normalise back to [0, 1] then to uint8 [0, 255] before display.
+        # Otherwise darker real scans (page mean well below NORM_MEAN) stay
+        # negative and render as solid black; leaving it float makes cv2.imshow
+        # re-scale by 255 and blow it out to white.
+        img = (img.squeeze(0).cpu().numpy() * NORM_STD + NORM_MEAN).clip(0, 1)
+        img = (np.stack([img] * 3, axis=-1) * 255).astype(np.uint8)
         width_height = img.shape[1], img.shape[0]
         # Stave -> system grouping. Active queries are non-contiguous, so the
         # boundary cumsum must run over only the active staves, ordered top-to-

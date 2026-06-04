@@ -12,6 +12,11 @@ from sheetmusic import Box, Source
 from .noter_model import NoterConfig
 from .noter_vocab import Vocab
 
+# Crop normalisation stats (from running: noter stats). Exposed so callers
+# that display a transformed crop (e.g. `noter show`) can de-normalise.
+NORM_MEAN = 0.9482423663139343
+NORM_STD = 0.17525607175008864
+
 
 class NoterDataset(Dataset):
     def __init__(
@@ -30,11 +35,10 @@ class NoterDataset(Dataset):
                     interpolation=config.interpolation,
                     antialias=config.antialias,
                 ),
-                # Values from running: staffer stats
-                v2.Normalize(mean=[0.9482423663139343], std=[0.17525607175008864]),
+                v2.Normalize(mean=[NORM_MEAN], std=[NORM_STD]),
             ]
         )
-        self.image_pad_value = (1.0 - 0.9482423663139343) / 0.17525607175008864
+        self.image_pad_value = (1.0 - NORM_MEAN) / NORM_STD
         # Pre-computes start and end sequence tokens.
         self.s_sos = torch.full((1, config.max_chords), self.vocab.SOS)
         self.s_eos = torch.full((1, config.max_chords), self.vocab.EOS)

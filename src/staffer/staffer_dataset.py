@@ -15,6 +15,11 @@ from sheetmusic import Source
 
 from .staffer_model import StafferConfig
 
+# Page normalisation stats (from running: staffer stats). Exposed so callers
+# that display a transformed page (e.g. `staffer predict`) can de-normalise.
+NORM_MEAN = 0.9563435316085815
+NORM_STD = 0.16557540870879858
+
 
 class StafferDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]]):
     source: Source
@@ -36,8 +41,7 @@ class StafferDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]]):
                     antialias=config.antialias,
                 ),
                 v2.ToDtype(torch.float, scale=True),
-                # Values from running: staffer stats
-                v2.Normalize(mean=[0.9563435316085815], std=[0.16557540870879858]),
+                v2.Normalize(mean=[NORM_MEAN], std=[NORM_STD]),
             ]
         )
         # Build flat list of (score id, page_number) pairs
