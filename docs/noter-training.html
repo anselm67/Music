@@ -30,6 +30,10 @@
     .tag  { display: inline-block; font-family: monospace; font-size: 0.82rem;
             background: var(--slate-bg); border: 1px solid var(--border);
             border-radius: 4px; padding: 0 5px; color: var(--slate-tx); }
+    .run-link { text-decoration: none; }
+    .run-link .tag { transition: background 0.12s, border-color 0.12s; }
+    .run-link:hover .tag { background: var(--border); border-color: var(--slate-tx); }
+    .session-header h2[id] { scroll-margin-top: 1rem; }
     .badge { display: inline-block; font-size: 0.75rem; font-weight: 600;
              border-radius: 4px; padding: 1px 7px; }
     .badge-green  { background: var(--green-bg);  color: var(--green-tx);  border: 1px solid var(--green-bd); }
@@ -123,34 +127,46 @@
     </thead>
     <tbody>
       <tr>
-        <td><span class="tag">basic</span></td><td>2026-05-21</td><td>12</td>
+        <td><a class="run-link" href="#run-basic"><span class="tag">basic</span></a></td><td>2026-05-21</td><td>12</td>
         <td>95.71%</td><td>0.164</td>
         <td>First model; fixed-width sources; SIL as chord padding</td>
         <td><span class="badge badge-slate">archived</span></td>
       </tr>
       <tr>
-        <td><span class="tag">enhanced</span></td><td>2026-05-22</td><td>12</td>
+        <td><a class="run-link" href="#run-enhanced"><span class="tag">enhanced</span></a></td><td>2026-05-22</td><td>12</td>
         <td>94.26%</td><td>0.206</td>
         <td>Variable-width sources; instrument annotation filtering</td>
         <td><span class="badge badge-amber">regression</span></td>
       </tr>
       <tr>
-        <td><span class="tag">enhanced2</span></td><td>2026-05-22</td><td>12</td>
+        <td><a class="run-link" href="#run-enhanced2"><span class="tag">enhanced2</span></a></td><td>2026-05-22</td><td>12</td>
         <td>99.08%</td><td>0.036</td>
         <td>Pos embed + LayerNorm in encoder/decoder; chord-slot pos embed; SIL restored; 2× dataset</td>
         <td><span class="badge badge-slate">archived</span></td>
       </tr>
       <tr>
-        <td><span class="tag">enhanced3</span></td><td>2026-05-23</td><td>12</td>
+        <td><a class="run-link" href="#run-enhanced3"><span class="tag">enhanced3</span></a></td><td>2026-05-23</td><td>12</td>
         <td>99.58%</td><td>0.018</td>
         <td>AdamW eps 1e-4 → default 1e-8</td>
         <td><span class="badge badge-green">PDMX best</span></td>
       </tr>
       <tr>
-        <td><span class="tag">enhanced3-kernsheet</span></td><td>2026-06-03</td><td>12</td>
+        <td><a class="run-link" href="#run-enhanced3-kernsheet"><span class="tag">enhanced3-kernsheet</span></a></td><td>2026-06-03</td><td>12</td>
         <td>96.78%</td><td>0.135</td>
         <td>Fine-tune of <span class="tag">enhanced3</span> on <strong>KernSheet</strong> (real scanned scores); vocab grown 4,784 → 5,543</td>
         <td><span class="badge badge-green">KernSheet best</span></td>
+      </tr>
+      <tr>
+        <td><a class="run-link" href="#run-enhanced3-center+jitter"><span class="tag">enhanced3-center+jitter</span></a></td><td>2026-06-04</td><td>12</td>
+        <td>—</td><td>—</td>
+        <td>PDMX base retrained: <strong>centered</strong> staff crop + train-only <strong>box jitter</strong> (p=0.5); born directly at the 5,543 KernSheet vocab</td>
+        <td><span class="badge badge-amber">training</span></td>
+      </tr>
+      <tr>
+        <td><a class="run-link" href="#run-enhanced3-center+jitter-kernsheet"><span class="tag">enhanced3-center+jitter-kernsheet</span></a></td><td>2026-06-04</td><td>12</td>
+        <td>—</td><td>—</td>
+        <td>KernSheet fine-tune of the centered+jitter base; <strong>no added jitter</strong> (thirds boxes already imprecise)</td>
+        <td><span class="badge badge-slate">queued</span></td>
       </tr>
     </tbody>
   </table>
@@ -165,7 +181,7 @@
   <!-- ════════════════════════════════════════════ basic -->
   <div class="session">
     <div class="session-header">
-      <h2><span class="tag">basic</span></h2>
+      <h2 id="run-basic"><span class="tag">basic</span></h2>
       <span class="session-meta">2026-05-21 · milestone: <code>milestone/basic-noter-staffer</code> · 12 epochs · D=256</span>
     </div>
     <p>First functional noter model. Staff images are treated as fixed width — no variable-width padding mask. Chord slots use <code>SIL</code> (silence token) as padding. Reaches 95.71% token accuracy, converging around epoch 10.</p>
@@ -208,7 +224,7 @@
   <!-- ════════════════════════════════════════════ enhanced -->
   <div class="session">
     <div class="session-header">
-      <h2><span class="tag">enhanced</span></h2>
+      <h2 id="run-enhanced"><span class="tag">enhanced</span></h2>
       <span class="session-meta">2026-05-22 · 12 epochs · D=256</span>
     </div>
     <p>Introduces variable-width source handling: real staff widths are passed to <code>make_src_padding_mask</code> so the encoder ignores padding patches beyond the actual image content. Also filters instrument annotation tokens from the vocabulary to reduce noise. Despite these improvements, accuracy regressed slightly — the variable-width masking changes the learning problem enough that the model needed more epochs or other changes to recover.</p>
@@ -231,7 +247,7 @@
   <!-- ════════════════════════════════════════════ enhanced2 -->
   <div class="session">
     <div class="session-header">
-      <h2><span class="tag">enhanced2</span></h2>
+      <h2 id="run-enhanced2"><span class="tag">enhanced2</span></h2>
       <span class="session-meta">2026-05-22 · 12 epochs · D=256</span>
     </div>
     <p>Major batch of improvements, all landing on the same day. Positional embeddings are added to both the encoder (patch positions) and decoder (target sequence positions and chord-slot positions). The SOS token mismatch in inference is fixed. Dataset doubled. The combined effect is a large jump: 94% → 99%.</p>
@@ -288,7 +304,7 @@
   <!-- ════════════════════════════════════════════ enhanced3 -->
   <div class="session">
     <div class="session-header">
-      <h2><span class="tag">enhanced3</span></h2>
+      <h2 id="run-enhanced3"><span class="tag">enhanced3</span></h2>
       <span class="session-meta">2026-05-23 · 12 epochs · D=256</span>
     </div>
     <p>Single targeted fix: the non-standard AdamW <code>eps=1e-4</code> introduced in an earlier session is removed, restoring PyTorch's default of 1e-8. The smaller epsilon allows the optimiser to take more aggressive steps in low-gradient regions, noticeably improving convergence speed and final accuracy.</p>
@@ -309,7 +325,7 @@
   <!-- ════════════════════════════════════════════ enhanced3-kernsheet -->
   <div class="session">
     <div class="session-header">
-      <h2><span class="tag">enhanced3-kernsheet</span></h2>
+      <h2 id="run-enhanced3-kernsheet"><span class="tag">enhanced3-kernsheet</span></h2>
       <span class="session-meta">2026-06-03 · fine-tune · 12 epochs · D=256</span>
     </div>
     <p>First fine-tune on <strong>KernSheet</strong> — real published/scanned piano scores with
@@ -423,6 +439,133 @@
     <div class="result-box positive">Best result: <strong>96.78 % val token accuracy</strong> (<code>val/loss</code> 0.135) at epoch 11. Steady, monotonic improvement across all 12 epochs (no early stop): from a 90.8 % first validation up through 93.8 % (ep 0) → 95.8 % (ep 2) → 96.8 % (ep 9–11), where it flattened. Free-running greedy-decode edit-distance similarity on 1,000 random KernSheet staves: <strong>87.2 % average</strong> (min 17.2 %, max 100 %) — lower than the teacher-forced token accuracy, as expected, since autoregressive decoding compounds errors across the sequence. This is the model's first exposure to real engraving — the 99.58 % figure above is synthetic PDMX, a much easier domain, so the right comparison is the grown checkpoint's ~92 % cold-start on KernSheet.</div>
   </div>
 
+  <!-- ════════════════════════════════════════════ enhanced3-center+jitter -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-enhanced3-center+jitter"><span class="tag">enhanced3-center+jitter</span></h2>
+      <span class="session-meta">2026-06-04 · PDMX base · 12 epochs · D=256 · <span class="badge badge-amber">training</span></span>
+    </div>
+    <p>A <strong>from-scratch PDMX base retrain</strong> (not a fine-tune) carrying two changes into the
+    base model: a corrected <strong>staff-centered crop</strong> and a train-only <strong>box-jitter</strong>
+    augmentation. It is also born directly at the 5,543 KernSheet vocab so the KernSheet fine-tune
+    (<span class="tag">enhanced3-center+jitter-kernsheet</span>) can <code>--init-from</code> it with no
+    checkpoint surgery. Architecturally identical to <span class="tag">enhanced3</span> (D=256, same
+    optimiser/schedule); the deltas are the crop, the jitter, and the vocab.</p>
+
+    <h3>Why retrain the base (not just fine-tune)</h3>
+    <p>The centering fix changes the actual <em>input</em> the model sees. Noter's patch embedding uses
+    full-height <code>64×4</code> columns, so moving the staff from the lower half of the crop to the
+    centre changes the content of every patch. <span class="tag">enhanced3</span> learned the old,
+    lower-half placement; a thin fine-tune would only re-adapt those weights. Retraining the base lets it
+    learn centred crops from scratch — the base is also where the bulk of learning happens (150k steps on
+    200k PDMX samples vs the fine-tune's ~17k steps on 23k).</p>
+
+    <h3>Centered staff crop</h3>
+    <p>The crop targets a fixed <code>64×768</code> window. The old code cropped from
+    <code>box.top − box.height</code> with height <code>min(64, 3·box.height)</code>, intending a
+    3×-staff-height window with the staff centred in the middle third. But a real staff is ~24–32 px, so
+    <code>3·h ≈ 75–96 px</code> always exceeded 64: the cap fired on every staff, the window started a full
+    staff-height above the staff top, and the staff got shoved into the <em>lower half</em> — with the
+    tallest staves clipped at the bottom edge (visible as a treble sliver atop a bass crop). The fix centres
+    the staff midline in the 64 px window (<code>crop_top = box.top + box.height//2 − 32</code>), clamps to
+    the page, and pads white (<code>image_pad_value</code>) at the edges; the crop width is likewise clamped
+    so a jittered right edge past the page pads white, not black.</p>
+
+    <h3>Box jitter (train-only)</h3>
+    <p>Per-edge independent clipped-Gaussian perturbation of the box before cropping, modelling the
+    <span class="tag">staffer</span> detector's box error measured on KernSheet
+    (<code>scripts/eval_predicted_boxes.py</code>): horizontal ≫ vertical, right edge worst.</p>
+    <table class="summary-table">
+      <thead><tr><th>Edge</th><th>σ (px)</th><th>clip (px)</th></tr></thead>
+      <tbody>
+        <tr><td>top / bottom</td><td>3</td><td>±15</td></tr>
+        <tr><td>left</td><td>5</td><td>±26</td></tr>
+        <tr><td>right</td><td>8</td><td>±50</td></tr>
+      </tbody>
+    </table>
+    <p>Applied to a fraction <code>--jitter 0.5</code> of <em>train</em> samples only; the validation split
+    stays on clean centred crops (the datamodule jitters a shallow-copied train view, so val accuracy stays
+    comparable to a no-jitter run). Jitter is added <strong>here</strong>, on PDMX, because PDMX boxes come
+    from precise Verovio SVG extraction — so the jitter is the only, controlled source of box error. It is
+    deliberately <em>not</em> added to the KernSheet fine-tune (see that card).</p>
+
+    <h3>Direct KernSheet vocab (no checkpoint surgery)</h3>
+    <p>The KernSheet vocab (5,543) is a verified <strong>id-preserving superset</strong> of the PDMX vocab
+    (4,784 — 0 ids differ, 759 appended). Training the base directly on it (via the new <code>--vocab</code>
+    flag) is identical in outcome to training on 4,784 then growing: the 759 KernSheet-only rows never
+    appear in PDMX data, so they stay at init — exactly what <code>grow-checkpoint</code> produced — but
+    without the surgery or its risk. The fine-tune then <code>--init-from</code>s the base directly.</p>
+
+    <h3>Exact training command</h3>
+    <pre><code>noter --log-file logs/noter/enhanced3-center+jitter.log \
+      train \
+      --vocab /home/anselm/datasets/KernSheet/build/vocab.json \
+      -e 12 --jitter 0.5 \
+      enhanced3-center+jitter</code></pre>
+    <p>Launched from the tag <span class="tag">train/enhanced3-center+jitter</span>. Source is the default
+    PDMX <code>System2.csv</code>; <code>--train-len</code>/<code>--valid-len</code> are left at their PDMX
+    defaults (<strong>200,000 / 1,600</strong>), so the run is 150,000 steps over 12 epochs — identical to
+    <span class="tag">enhanced3</span> aside from the crop, jitter, and vocab.</p>
+
+    <h3>Training curves</h3>
+    <p style="font-size:0.85rem;color:var(--muted);">PDMX validation set (clean centred crops, no jitter).
+    <em>Results pending — run in progress.</em></p>
+    <div class="charts">
+      <div class="chart-card"><h4>Val accuracy — vs enhanced3</h4><canvas id="c-e3cj-acc"></canvas></div>
+      <div class="chart-card"><h4>Val loss — vs enhanced3</h4><canvas id="c-e3cj-loss"></canvas></div>
+    </div>
+
+    <div class="result-box">⏳ <strong>Training in progress.</strong> Results (final val acc/loss, curve vs
+    <span class="tag">enhanced3</span>, and the cost of centering+jitter on clean PDMX val) to be filled in
+    on completion.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ enhanced3-center+jitter-kernsheet -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-enhanced3-center+jitter-kernsheet"><span class="tag">enhanced3-center+jitter-kernsheet</span></h2>
+      <span class="session-meta">2026-06-04 · KernSheet fine-tune · 12 epochs · D=256 · <span class="badge badge-slate">queued</span></span>
+    </div>
+    <p>KernSheet fine-tune of the <span class="tag">enhanced3-center+jitter</span> base — the centered+jitter
+    analogue of <span class="tag">enhanced3-kernsheet</span>. Same recipe as that earlier fine-tune
+    (<code>--lr 1e-4</code>, <code>--warmup-steps 200</code>, 12 epochs, KernSheet 90/10 split) with two
+    differences: it inits from the centered base (so no <code>grow-checkpoint</code> step), and it adds
+    <strong>no box jitter</strong>.</p>
+
+    <h3>Why no jitter on the fine-tune</h3>
+    <p>KernSheet's per-staff boxes are not tight ground truth — they are a <strong>thirds approximation</strong>
+    of the grand-staff envelope (<code>migrate.py</code>: treble = <code>[rh_top, rh_top + (lh_bot−rh_top)//3]</code>,
+    bass = <code>[lh_bot − delta, lh_bot]</code>). Only the outer edges (<code>rh_top</code>, <code>lh_bot</code>)
+    are human-annotated; the inner edges carry ~15–25 px of systematic slop, comparable to the jitter clip
+    itself. So the KernSheet data <em>already</em> trains box-imprecision tolerance — adding synthetic jitter
+    on top would compound an already-loose box and risk pushing the staff toward the window edge. The base's
+    jitter robustness carries through; the fine-tune just adapts the real-engraving domain.</p>
+
+    <h3>Exact training command</h3>
+    <pre><code>noter --kern-home /home/anselm/datasets/KernSheet \
+      --log-file logs/noter/enhanced3-center+jitter-kernsheet.log \
+      train \
+      --init-from checkpoints/noter/enhanced3-center+jitter/last.ckpt \
+      --train-len 23400 --valid-len 2600 \
+      --lr 1e-4 --warmup-steps 200 \
+      -e 12 -s 2.0 \
+      enhanced3-center+jitter-kernsheet</code></pre>
+    <p>Launched from the tag <span class="tag">train/enhanced3-center+jitter-kernsheet</span>. Runs after the
+    base completes (<code>--init-from</code> needs the base's <code>last.ckpt</code>).</p>
+
+    <h3>Training curves</h3>
+    <p style="font-size:0.85rem;color:var(--muted);">KernSheet validation set (end-of-epoch).
+    <em>Queued — pending the base.</em></p>
+    <div class="charts">
+      <div class="chart-card"><h4>Val accuracy — KernSheet</h4><canvas id="c-e3cjks-acc"></canvas></div>
+      <div class="chart-card"><h4>Val loss — KernSheet</h4><canvas id="c-e3cjks-loss"></canvas></div>
+    </div>
+
+    <div class="result-box">⏳ <strong>Queued.</strong> On completion: final val acc/loss vs
+    <span class="tag">enhanced3-kernsheet</span>, and the before/after predicted-box jitter spec from
+    <code>scripts/eval_predicted_boxes.py</code> (does centering+jitter close the ~5.85 % real-scan drop?).</div>
+  </div>
+
 </main>
 
 <div id="chart-modal" class="chart-modal" role="dialog" aria-modal="true">
@@ -435,7 +578,7 @@
 
 <script>
 const ep12 = [0,1,2,3,4,5,6,7,8,9,10,11];
-const C = { basic: '#64748b', enh: '#7c3aed', e2: '#2563eb', e3: '#059669', e3ks: '#d97706' };
+const C = { basic: '#64748b', enh: '#7c3aed', e2: '#2563eb', e3: '#059669', e3ks: '#d97706', e3cj: '#db2777', e3cjks: '#0891b2' };
 
 const basic = {
   acc:  [0.853,0.893,0.906,0.903,0.920,0.917,0.928,0.930,0.941,0.950,0.955,0.957],
@@ -458,6 +601,11 @@ const e3ks = {
   acc:  [0.938,0.9531,0.9582,0.9612,0.9636,0.965,0.9659,0.9668,0.9673,0.9678,0.9678,0.9678],
   loss: [0.2634,0.1999,0.1759,0.1629,0.1525,0.1464,0.1425,0.1389,0.1363,0.1354,0.135,0.1349],
 };
+// enhanced3-center+jitter — PDMX val (clean centred crops). TODO: fill from
+// logs/noter/enhanced3-center+jitter/metrics.csv on completion.
+const e3cj = { acc: [], loss: [] };
+// enhanced3-center+jitter-kernsheet — KernSheet val. TODO: fill on completion.
+const e3cjks = { acc: [], loss: [] };
 
 function line(label, data, color, opts={}) {
   return { label, data, borderColor: color, backgroundColor: color+'18',
@@ -543,6 +691,14 @@ makeChart('c-e3-loss', [line('enhanced2',e2.loss,C.e2,{dashed:true}), line('enha
 // enhanced3-kernsheet solo (KernSheet val — not comparable to the PDMX runs above)
 makeChart('c-e3ks-acc',  [line('enhanced3-kernsheet',e3ks.acc, C.e3ks,{fill:true})], {min:0,max:1});
 makeChart('c-e3ks-loss', [line('enhanced3-kernsheet',e3ks.loss,C.e3ks,{fill:true})]);
+
+// enhanced3-center+jitter vs enhanced3 (PDMX) — TODO: populate e3cj on completion.
+makeChart('c-e3cj-acc',  [line('enhanced3',e3.acc, C.e3,{dashed:true}), line('enhanced3-center+jitter',e3cj.acc, C.e3cj,{fill:true})], {min:0,max:1});
+makeChart('c-e3cj-loss', [line('enhanced3',e3.loss,C.e3,{dashed:true}), line('enhanced3-center+jitter',e3cj.loss,C.e3cj,{fill:true})]);
+
+// enhanced3-center+jitter-kernsheet solo (KernSheet val) — TODO: populate on completion.
+makeChart('c-e3cjks-acc',  [line('enhanced3-center+jitter-kernsheet',e3cjks.acc, C.e3cjks,{fill:true})], {min:0,max:1});
+makeChart('c-e3cjks-loss', [line('enhanced3-center+jitter-kernsheet',e3cjks.loss,C.e3cjks,{fill:true})]);
 
 // ── Modal close wiring: backdrop click, close button, Esc.
 document.querySelector('.chart-modal-close').addEventListener('click', closeChartModal);
