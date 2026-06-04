@@ -187,7 +187,13 @@ def main() -> None:
     pred: list[float] = []  # predicted-box similarity
     dtop: list[float] = []  # |pred_top - gt_top| px
     dbot: list[float] = []  # |pred_bot - gt_bot| px
+    dleft: list[float] = []  # |pred_left - gt_left| px
+    dright: list[float] = []  # |pred_right - gt_right| px
     n_gt = n_missed = n_extra = 0
+    # Per-miss diagnostics: (page, gt_cy_norm, n_preds, n_gts, nearest_pred_px).
+    misses: list[tuple[str, float, int, int, float]] = []
+    # Per-page: (raw_brightness_0to1, n_gt, n_missed_on_page).
+    page_stats: list[tuple[float, int, int]] = []
 
     for page_key in tqdm(pages, desc="pages"):
         idxs = page_to_idx[page_key]
@@ -198,6 +204,8 @@ def main() -> None:
             page_img = s_transform(raw).unsqueeze(0).to(device)
         except Exception:
             continue
+        brightness = float(raw.float().mean()) / 255.0
+        page_missed = 0
         pred_boxes = staffer_active_boxes(staffer, page_img)
         pred_cy = [((t + b) / 2.0) * page_h for (_l, t, _r, b) in pred_boxes]
 
@@ -240,6 +248,11 @@ def main() -> None:
             if gpos not in match:  # detection miss → whole staff lost
                 pred.append(0.0)
                 n_missed += 1
+                page_missed += 1
+                nearest = min((abs(cy - pcy) for pcy in pred_cy), default=float("inf"))
+                misses.append(
+                    (f"{sid} p{pno}", cy / page_h, len(pred_boxes), len(gts), nearest)
+                )
                 continue
             pl, pt, pr, pb = pred_boxes[match[gpos]]
             pbox = Box(
@@ -248,6 +261,8 @@ def main() -> None:
             )
             dtop.append(abs(pt * page_h - gt_box.top))
             dbot.append(abs(pb * page_h - gt_box.bottom))
+            dleft.append(abs(pl * page_w - gt_box.left))
+            dright.append(abs(pr * page_w - gt_box.right))
             res2 = dataset._load_image(sid, pno, pbox)
             if res2 is None:
                 pred.append(0.0)
@@ -257,6 +272,8 @@ def main() -> None:
                 img1.unsqueeze(0).to(device), torch.tensor([w1]).to(device)
             )
             pred.append(similarity(seq, p1[0], n_cfg.max_chords))
+
+        page_stats.append((brightness, len(gts), page_missed))
 
     # --- report ---
     def avg(xs: list[float]) -> float:
@@ -281,11 +298,66 @@ def main() -> None:
     )
     print("  matched-box error (jitter spec):")
     print(f"  {'':>6} {'mean':>6} {'p50':>6} {'p90':>6} {'p99':>6} {'max':>7}")
-    for label, xs in (("Δtop", dtop), ("Δbot", dbot)):
+    for label, xs in (
+        ("Δtop", dtop),
+        ("Δbot", dbot),
+        ("Δleft", dleft),
+        ("Δright", dright),
+    ):
         print(
             f"  {label:>6} {avg(xs):>5.2f}p {pct(xs, 0.50):>5.2f}p "
             f"{pct(xs, 0.90):>5.2f}p {pct(xs, 0.99):>5.2f}p {max(xs):>6.1f}p"
         )
+
+    # --- miss breakdown: undercount (fewer preds than GT) vs threshold reject ---
+    undercount = sum(1 for _p, _cy, npred, ngt, _d in misses if npred < ngt)
+    near = sum(1 for *_x, d in misses if d != float("inf") and d < 30)
+    print(f"\n  misses: {len(misses)} — undercount(pred<gt) {undercount}, "
+          f"a pred within 30px {near} (matched-but-rejected/dense)")
+    print("  by vertical position (gt_cy / page_h):")
+    ybins = [0] * 10
+    for _p, cy, *_x in misses:
+        ybins[min(9, int(cy * 10))] += 1
+    print("   " + " ".join(f"{b:>3}" for b in ybins) + "  (deciles top→bottom)")
+    print("  sample missed pages (page · cy · n_pred/n_gt · nearest_px):")
+    for p, cy, npred, ngt, d in misses[:20]:
+        ds = "inf" if d == float("inf") else f"{d:.0f}"
+        print(f"    {p:<28} cy={cy:.2f} {npred}/{ngt} near={ds}")
+
+    # --- darkness vs misses (capacity-controlled) ---
+    # M=16 stave queries: pages with >16 GT staves miss by capacity regardless of
+    # brightness, so analyse within-capacity (n_gt<=16) pages separately.
+    M = 16
+    within = [(b, ng, nm) for (b, ng, nm) in page_stats if ng <= M]
+    over = [(b, ng, nm) for (b, ng, nm) in page_stats if ng > M]
+    clean = [b for (b, _ng, nm) in within if nm == 0]
+    dirty = [b for (b, _ng, nm) in within if nm > 0]
+    print(f"\n  darkness vs misses — {len(page_stats)} pages "
+          f"({len(within)} within capacity n_gt<=16, {len(over)} over):")
+    print(f"    within-cap pages WITH a miss:  n={len(dirty)} brightness "
+          f"mean={avg(dirty):.3f} p50={pct(dirty,0.5):.3f}")
+    print(f"    within-cap pages with NO miss: n={len(clean)} brightness "
+          f"mean={avg(clean):.3f} p50={pct(clean,0.5):.3f}")
+    if over:
+        ob = [b for (b, _n, _m) in over]
+        om = sum(nm for (_b, _n, nm) in over)
+        print(f"    over-capacity pages (>16 staves): n={len(over)} "
+              f"brightness mean={avg(ob):.3f}, total misses on them={om}")
+    # miss-rate by brightness quartile, within-capacity only
+    print("    within-cap miss-rate by brightness quartile (dark→light):")
+    sw = sorted(within, key=lambda t: t[0])
+    if sw:
+        q = max(1, len(sw) // 4)
+        for k in range(4):
+            chunk = sw[k * q : (k + 1) * q] if k < 3 else sw[3 * q :]
+            if not chunk:
+                continue
+            tot_gt = sum(ng for (_b, ng, _m) in chunk)
+            tot_miss = sum(nm for (_b, _n, nm) in chunk)
+            br = avg([b for (b, _n, _m) in chunk])
+            rate = 100 * tot_miss / max(tot_gt, 1)
+            print(f"      Q{k + 1} brightness~{br:.3f}: "
+                  f"miss {tot_miss}/{tot_gt} ({rate:.1f}%)")
 
 
 if __name__ == "__main__":
