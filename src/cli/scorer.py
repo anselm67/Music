@@ -659,8 +659,7 @@ def predict_from_images(
                 for k in pred_by_sys.get(sys_id, [])
             ]
             print(f"\n── system[{sys_id}] ──")
-            for i, seq in enumerate(pred_seqs):
-                print(f"  [{i}] {' '.join(seq)}")
+            print(_format_system([], pred_seqs))
         cv2.imshow("Page", img)
         if cv2.waitKey(0) == ord("q"):
             break
