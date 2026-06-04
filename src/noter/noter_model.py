@@ -16,9 +16,9 @@ class NoterConfig:
     id_name: str = "default"
     git_hash: str = current_commit()
 
-    page_shape: tuple[int, int] = (966, 680)
+    page_shape: list[int] = field(default_factory=lambda: [966, 680])
 
-    input_shape: tuple[int, int] = (64, 6 * 128)
+    input_shape: list[int] = field(default_factory=lambda: [64, 6 * 128])
     max_chords: int = 8
     max_seqlen: int = 128  # Also known as T
     vocab_size: int = -1

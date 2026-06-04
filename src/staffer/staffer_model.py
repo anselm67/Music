@@ -14,7 +14,7 @@ from utils import current_commit
 class StafferConfig:
     id_name: str = "default"
     git_hash: str = current_commit()
-    image_shape: tuple[int, int] = field(init=False)
+    image_shape: list[int] = field(init=False)
 
     # Maximums as obtained with the "stats" command.
     max_width: int = 1024
@@ -58,10 +58,10 @@ class StafferConfig:
         return int(round(ret / self.patch_size) * self.patch_size)
 
     def __post_init__(self) -> None:
-        self.image_shape = (
+        self.image_shape = [
             self.scale_to_patch(self.max_height),
             self.scale_to_patch(self.max_width),
-        )
+        ]
         if self.train_len == -1:
             self.train_len = 21875 * self.batch_size
         if self.valid_len == -1:

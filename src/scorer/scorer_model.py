@@ -9,6 +9,7 @@ thing the merge adds over running the two models back-to-back. (``roi_align`` is
 used: torchvision's implementation does not backprop to the box coordinates.)
 """
 
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 
 import torch
@@ -79,7 +80,7 @@ def build_stave_boxes(
     sys_lr: Tensor,  # (B, N, 2) — normalised [left, right]
     sel_queries: list[Tensor],  # per page: (G,) query slots to crop, in target order
     sys_ids: list[Tensor],  # per page: (G,) system index owning each selected stave
-    image_hw: tuple[int, int],  # (H, W) of the page in pixels
+    image_hw: Sequence[int],  # (H, W) of the page in pixels
 ) -> Tensor:
     """Build the ``(K, 5)`` raw stave-box tensor for the selected staves.
 
