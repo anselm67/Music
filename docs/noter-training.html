@@ -154,7 +154,7 @@
         <td><a class="run-link" href="#run-enhanced3-kernsheet"><span class="tag">enhanced3-kernsheet</span></a></td><td>2026-06-03</td><td>12</td>
         <td>96.78%</td><td>0.135</td>
         <td>Fine-tune of <span class="tag">enhanced3</span> on <strong>KernSheet</strong> (real scanned scores); vocab grown 4,784 → 5,543</td>
-        <td><span class="badge badge-green">KernSheet best</span></td>
+        <td><span class="badge badge-slate">prev KernSheet</span></td>
       </tr>
       <tr>
         <td><a class="run-link" href="#run-enhanced3-center+jitter"><span class="tag">enhanced3-center+jitter</span></a></td><td>2026-06-04</td><td>12</td>
@@ -164,9 +164,9 @@
       </tr>
       <tr>
         <td><a class="run-link" href="#run-enhanced3-center+jitter-kernsheet"><span class="tag">enhanced3-center+jitter-kernsheet</span></a></td><td>2026-06-04</td><td>12</td>
-        <td>—</td><td>—</td>
+        <td>97.41%</td><td>0.1097</td>
         <td>KernSheet fine-tune of the centered+jitter base; <strong>no added jitter</strong> (thirds boxes already imprecise)</td>
-        <td><span class="badge badge-slate">queued</span></td>
+        <td><span class="badge badge-green">KernSheet best</span></td>
       </tr>
     </tbody>
   </table>
@@ -534,7 +534,7 @@
   <div class="session">
     <div class="session-header">
       <h2 id="run-enhanced3-center+jitter-kernsheet"><span class="tag">enhanced3-center+jitter-kernsheet</span></h2>
-      <span class="session-meta">2026-06-04 · KernSheet fine-tune · 12 epochs · D=256 · <span class="badge badge-slate">queued</span></span>
+      <span class="session-meta">2026-06-04 · KernSheet fine-tune · 12 epochs · D=256 · <span class="badge badge-green">KernSheet best</span></span>
     </div>
     <p>KernSheet fine-tune of the <span class="tag">enhanced3-center+jitter</span> base — the centered+jitter
     analogue of <span class="tag">enhanced3-kernsheet</span>. Same recipe as that earlier fine-tune
@@ -564,16 +564,26 @@
     base completes (<code>--init-from</code> needs the base's <code>last.ckpt</code>).</p>
 
     <h3>Training curves</h3>
-    <p style="font-size:0.85rem;color:var(--muted);">KernSheet validation set (end-of-epoch).
-    <em>Queued — pending the base.</em></p>
+    <p style="font-size:0.85rem;color:var(--muted);">KernSheet validation set (end-of-epoch), dashed
+    <span class="tag">enhanced3-kernsheet</span> for reference.</p>
     <div class="charts">
-      <div class="chart-card"><h4>Val accuracy — KernSheet</h4><canvas id="c-e3cjks-acc"></canvas></div>
-      <div class="chart-card"><h4>Val loss — KernSheet</h4><canvas id="c-e3cjks-loss"></canvas></div>
+      <div class="chart-card"><h4>Val accuracy — vs enhanced3-kernsheet</h4><canvas id="c-e3cjks-acc"></canvas></div>
+      <div class="chart-card"><h4>Val loss — vs enhanced3-kernsheet</h4><canvas id="c-e3cjks-loss"></canvas></div>
     </div>
 
-    <div class="result-box">⏳ <strong>Queued.</strong> On completion: final val acc/loss vs
-    <span class="tag">enhanced3-kernsheet</span>, and the before/after predicted-box jitter spec from
-    <code>scripts/eval_predicted_boxes.py</code> (does centering+jitter close the ~5.85 % real-scan drop?).</div>
+    <div class="result-box positive">Best result: <strong>97.41 % val token accuracy</strong>
+    (<code>val/loss</code> 0.1097) at epoch 11 — a clear gain over <span class="tag">enhanced3-kernsheet</span>'s
+    96.78 % / 0.135, with lower loss throughout. Monotonic across all 12 epochs from a <strong>96.2 %
+    warm-start</strong> first epoch (vs enhanced3-kernsheet's ~90.8 % cold start), reflecting the stronger
+    centered base. So the corrected crop + the base's jitter robustness carry through to a better KernSheet
+    model. This is the new KernSheet best and the noter for the <span class="tag">scorer</span> merge on
+    real scans.</div>
+
+    <h3>Predicted-box jitter spec — before / after</h3>
+    <p style="font-size:0.85rem;color:var(--muted);">⏳ <code>scripts/eval_predicted_boxes.py</code> running
+    (300 KernSheet pages, fed staffer's <em>predicted</em> stave crops): does centering + jitter shrink the
+    ~5.85 % similarity drop the old <span class="tag">enhanced3-kernsheet</span> showed under predicted
+    boxes? Result to be filled on completion.</p>
   </div>
 
 </main>
@@ -616,8 +626,11 @@ const e3cj = {
   acc:  [0.9475,0.9805,0.9863,0.9893,0.9913,0.9926,0.9935,0.9942,0.9949,0.9952,0.9955,0.9955],
   loss: [0.2004,0.077,0.0536,0.0427,0.0352,0.0306,0.0262,0.024,0.0215,0.0202,0.0197,0.0196],
 };
-// enhanced3-center+jitter-kernsheet — KernSheet val. TODO: fill on completion.
-const e3cjks = { acc: [], loss: [] };
+// enhanced3-center+jitter-kernsheet — KernSheet val (end-of-epoch).
+const e3cjks = {
+  acc:  [0.962,0.9662,0.9683,0.9699,0.9709,0.972,0.9728,0.9733,0.9737,0.974,0.974,0.9741],
+  loss: [0.1644,0.144,0.1343,0.127,0.1224,0.1179,0.1145,0.1124,0.1109,0.11,0.1099,0.1097],
+};
 
 function line(label, data, color, opts={}) {
   return { label, data, borderColor: color, backgroundColor: color+'18',
@@ -708,9 +721,9 @@ makeChart('c-e3ks-loss', [line('enhanced3-kernsheet',e3ks.loss,C.e3ks,{fill:true
 makeChart('c-e3cj-acc',  [line('enhanced3',e3.acc, C.e3,{dashed:true}), line('enhanced3-center+jitter',e3cj.acc, C.e3cj,{fill:true})], {min:0,max:1});
 makeChart('c-e3cj-loss', [line('enhanced3',e3.loss,C.e3,{dashed:true}), line('enhanced3-center+jitter',e3cj.loss,C.e3cj,{fill:true})]);
 
-// enhanced3-center+jitter-kernsheet solo (KernSheet val) — TODO: populate on completion.
-makeChart('c-e3cjks-acc',  [line('enhanced3-center+jitter-kernsheet',e3cjks.acc, C.e3cjks,{fill:true})], {min:0,max:1});
-makeChart('c-e3cjks-loss', [line('enhanced3-center+jitter-kernsheet',e3cjks.loss,C.e3cjks,{fill:true})]);
+// enhanced3-center+jitter-kernsheet vs enhanced3-kernsheet (KernSheet val)
+makeChart('c-e3cjks-acc',  [line('enhanced3-kernsheet',e3ks.acc, C.e3ks,{dashed:true}), line('enhanced3-center+jitter-kernsheet',e3cjks.acc, C.e3cjks,{fill:true})], {min:0,max:1});
+makeChart('c-e3cjks-loss', [line('enhanced3-kernsheet',e3ks.loss,C.e3ks,{dashed:true}), line('enhanced3-center+jitter-kernsheet',e3cjks.loss,C.e3cjks,{fill:true})]);
 
 // ── Modal close wiring: backdrop click, close button, Esc.
 document.querySelector('.chart-modal-close').addEventListener('click', closeChartModal);
