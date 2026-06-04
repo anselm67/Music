@@ -21,6 +21,7 @@ from matplotlib.backend_bases import Event, KeyEvent
 from torchvision.io import decode_image
 from tqdm import tqdm
 
+from kernsheet import KernSheet, KernSheetSource
 from noter import NoterConfig, Vocab
 from pdmx import PDMX, PdmxSource
 from scorer import (
@@ -31,6 +32,7 @@ from scorer import (
     ScorerModule,
     build_stave_boxes,
 )
+from sheetmusic import Source
 from staffer import StafferConfig
 from utils import log_uncaught_exceptions, sequence_edit_distance, strip_eos
 
@@ -43,7 +45,7 @@ HOME = Path("/home/anselm/datasets/PDMX")
 @dataclass
 class ClickContext:
     home: Path
-    source: PdmxSource
+    source: Source
     config: ScorerConfig
 
 
@@ -67,14 +69,20 @@ class ClickContext:
     "default traceback to stderr instead.",
 )
 @click.option(
-    "--home",
-    "-h",
+    "--pdmx-home",
     type=click.Path(
         dir_okay=True, file_okay=False, exists=True, readable=True, path_type=Path
     ),
-    default=HOME,
-    show_default=True,
-    help="Root directory of the PDMX dataset.",
+    default=None,
+    help=f"PDMX dataset root (default: {HOME}). Mutually exclusive with --kern-home.",
+)
+@click.option(
+    "--kern-home",
+    type=click.Path(
+        dir_okay=True, file_okay=False, exists=True, readable=True, path_type=Path
+    ),
+    default=None,
+    help="KernSheet dataset root. Selects KernSheet; exclusive with --pdmx-home.",
 )
 @click.option(
     "--csv",
@@ -104,7 +112,8 @@ def cli(
     log_level: str,
     log_file: None | Path,
     no_excepthook: bool,
-    home: Path,
+    pdmx_home: Path | None,
+    kern_home: Path | None,
     csv: str,
     offset: int,
     count: int,
@@ -123,8 +132,17 @@ def cli(
             logging.FileHandler(log_file.as_posix())
         )
     logging.info("Running: %s", " ".join(sys.argv))
-    pdmx = PDMX(home, csv, offset, count)
-    ctx.obj = ClickContext(home, PdmxSource(pdmx), ScorerConfig())
+    if pdmx_home is not None and kern_home is not None:
+        raise click.UsageError("--pdmx-home and --kern-home are mutually exclusive.")
+    if kern_home is not None:
+        home: Path = kern_home
+        source: Source = KernSheetSource(KernSheet(home))
+    else:
+        home = pdmx_home or HOME
+        if not home.exists():
+            raise click.UsageError(f"PDMX dataset root does not exist: {home}")
+        source = PdmxSource(PDMX(home, csv, offset, count))
+    ctx.obj = ClickContext(home, source, ScorerConfig())
 
 
 def config_from_checkpoint(checkpoint_path: Path) -> ScorerConfig:
@@ -214,6 +232,48 @@ def check(ctx: ClickContext) -> None:
     default=8,
     help="Number of workers for the dataset loader.",
 )
+@click.option(
+    "--train-len",
+    type=int,
+    default=-1,
+    help="Override the number of training samples (needed for small datasets "
+    "like KernSheet, whose total is far below the PDMX default).",
+)
+@click.option(
+    "--valid-len",
+    type=int,
+    default=-1,
+    help="Override the number of validation samples.",
+)
+@click.option(
+    "--lr",
+    type=float,
+    default=None,
+    help="Override the learning rate (fine-tuning wants below the 1e-4 default).",
+)
+@click.option(
+    "--warmup-steps",
+    type=int,
+    default=-1,
+    help="Override the number of warmup steps.",
+)
+@click.option(
+    "--freeze-staffer-steps",
+    type=int,
+    default=-1,
+    help="Steps to keep the detector frozen before joint training. Pass a value "
+    "above the total step count to keep it frozen throughout — recommended on "
+    "KernSheet, whose per-staff boxes are a thirds approximation the transcription "
+    "loss would otherwise teach the detector to match.",
+)
+@click.option(
+    "--vocab",
+    "vocab_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Vocab JSON to train against (default: <home>/build/vocab.json). Pass the "
+    "larger KernSheet vocab so the merge matches its KernSheet-fine-tuned branches.",
+)
 @click.pass_obj
 def train(
     ctx: ClickContext,
@@ -224,6 +284,12 @@ def train(
     early_stopping: float,
     epochs: int,
     num_workers: int,
+    train_len: int,
+    valid_len: int,
+    lr: float | None,
+    warmup_steps: int,
+    freeze_staffer_steps: int,
+    vocab_path: Path | None,
 ) -> None:
     """Trains and/or resumes training of a Scorer model instance.
 
@@ -234,7 +300,7 @@ def train(
     """
     VAL_CHECK_INTERVAL = 250
 
-    vocab = Vocab.load(ctx.home / "build" / "vocab.json")
+    vocab = Vocab.load(vocab_path or ctx.home / "build" / "vocab.json")
     ckpt_path: Path | None = None
     candidate = Path("checkpoints") / "scorer" / name / "last.ckpt"
     if candidate.exists():
@@ -242,9 +308,30 @@ def train(
         ckpt_path = candidate
         config = config_from_checkpoint(candidate)
         module = ScorerModule(config)
+        if (
+            train_len > 0
+            or valid_len > 0
+            or lr is not None
+            or warmup_steps >= 0
+            or freeze_staffer_steps >= 0
+        ):
+            logging.warning(
+                "Resuming from checkpoint; --train-len/--valid-len/--lr/"
+                "--warmup-steps/--freeze-staffer-steps ignored."
+            )
     else:
         config = replace(ctx.config, id_name=name)
         config.use_vocab(vocab)
+        if train_len > 0:
+            config.train_len = train_len
+        if valid_len > 0:
+            config.valid_len = valid_len
+        if lr is not None:
+            config.lr = lr
+        if warmup_steps >= 0:
+            config.warmup_steps = warmup_steps
+        if freeze_staffer_steps >= 0:
+            config.freeze_staffer_steps = freeze_staffer_steps
         staffer_ckpt = Path("checkpoints") / "staffer" / staffer / "last.ckpt"
         noter_ckpt = Path("checkpoints") / "noter" / noter / "last.ckpt"
         for label, path in [("staffer", staffer_ckpt), ("noter", noter_ckpt)]:
