@@ -580,10 +580,29 @@
     real scans.</div>
 
     <h3>Predicted-box jitter spec — before / after</h3>
-    <p style="font-size:0.85rem;color:var(--muted);">⏳ <code>scripts/eval_predicted_boxes.py</code> running
-    (300 KernSheet pages, fed staffer's <em>predicted</em> stave crops): does centering + jitter shrink the
-    ~5.85 % similarity drop the old <span class="tag">enhanced3-kernsheet</span> showed under predicted
-    boxes? Result to be filled on completion.</p>
+    <p style="font-size:0.85rem;color:var(--muted);"><code>scripts/eval_predicted_boxes.py</code>, 300 KernSheet
+    pages / 3,404 GT staves, same staffer (<span class="tag">stave-primary-grid-full-kernsheet</span>) and
+    same seed before/after — so the box errors and the 154 detection misses are identical; only the noter
+    changed.</p>
+    <table class="summary-table">
+      <thead><tr><th>Free-running similarity</th><th><span class="tag">enhanced3-kernsheet</span> (old)</th><th><span class="tag">enhanced3-center+jitter-kernsheet</span> (new)</th></tr></thead>
+      <tbody>
+        <tr><td>base — clean GT-box crops</td><td>0.8718</td><td><strong>0.8978</strong> (+2.6 %)</td></tr>
+        <tr><td>pred — staffer's predicted crops</td><td>0.8133</td><td><strong>0.8412</strong> (+2.8 %)</td></tr>
+        <tr><td>Δ drop (GT → predicted)</td><td>0.0585</td><td>0.0565</td></tr>
+        <tr><td>detection miss</td><td>154 / 3404 (4.5 %)</td><td>154 / 3404 (4.5 %) — identical</td></tr>
+      </tbody>
+    </table>
+    <div class="result-box positive">The new noter is <strong>+2.8 % on staffer's predicted crops</strong>
+    (and +2.6 % even on clean GT crops) — a real end-to-end gain on real scans, driven by the centered crop
+    and the stronger fine-tune. The GT→predicted <em>drop</em>, though, barely moved (5.85 % → 5.65 %): it is
+    dominated by <strong>detection misses</strong> (154 staves, identical since the staffer is unchanged) —
+    each a full base→0 collapse, ≈ 72 % of the drop — which box jitter structurally cannot fix. The
+    geometric-slop slice jitter <em>does</em> target shrank from ≈ 1.9 % to ≈ 1.6 %: real but modest, because
+    that slice was already small. So jitter delivered on its narrow target, but the remaining real-scan gap
+    is gated by <span class="tag">staffer</span> recall — the &gt;2-staff / dense-page misses (the 20-stave
+    <code>ballade52</code>, <code>etude10-12</code> over-counts, matcher artifacts), not by noter's box
+    tolerance. Closing the rest is a detector problem, not a noter one.</div>
   </div>
 
 </main>
