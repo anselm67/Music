@@ -36,10 +36,9 @@ class NoterDataset(Dataset):
         self.source = source
         self.config = config
         self.vocab = vocab
-        # Train-only box jitter; the datamodule enables it on the train view
-        # only, leaving validation on clean (centered) crops.
-        self.jitter = False
-        self.jitter_prob = config.jitter_prob
+        # Train-only box jitter probability (0 = off); the datamodule enables it
+        # on the train view only, leaving validation on clean (centered) crops.
+        self.jitter = 0.0
         # Sets up image transforms.
         self.transform = v2.Compose(
             [
@@ -195,7 +194,7 @@ class NoterDataset(Dataset):
                 idx
             ]
             logging.debug(f"Loading {score_id}")
-            if self.jitter and random.random() < self.jitter_prob:
+            if self.jitter and random.random() < self.jitter:
                 box = self._jitter_box(box)
             if (result := self._load_image(score_id, page_number, box)) is None:
                 idx = (idx + 1) % len(self)
