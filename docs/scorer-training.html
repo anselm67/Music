@@ -114,24 +114,40 @@
   <p>Baseline standalone models: staffer <code>stave-primary-grid-full</code> (sys IoU 0.985, stave_err 0.41 px) and noter <code>enhanced3</code> (99.58% token accuracy).</p>
 
   <h2>All runs</h2>
+  <p class="subtitle"><code>merge1</code> trains on PDMX (<code>System2.csv</code>); <code>boulez</code> &amp; <code>walton</code> fine-tune on KernSheet (real scans). For the KernSheet runs the Val acc / Sys IoU / Stave err columns are on <em>independent, unseeded</em> validation splits and are <strong>not</strong> directly comparable run-to-run — the matched 300-page eval (identical pages for both models) is the honest comparator.</p>
   <table class="summary-table">
     <thead>
       <tr>
-        <th>Model</th><th>Date</th><th>Epochs</th>
-        <th>Val acc</th><th>Val loss</th><th>Sys IoU</th><th>Stave err</th>
-        <th>Eval sim (500 pp)</th><th>Key change</th><th>Status</th>
+        <th>Model</th><th>Data</th><th>Date</th><th>Epochs</th>
+        <th>Val acc</th><th>Sys IoU</th><th>Stave err</th>
+        <th>Eval sim</th><th>Key change</th><th>Status</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><span class="tag">merge1</span></td><td>2026-06-02</td><td>8</td>
-        <td>99.57%</td><td>0.036</td><td>0.971</td><td>0.054 px</td>
-        <td>avg 97.7% · 0 miscounts</td>
-        <td>First joint staffer+noter training; initialized from standalone best checkpoints</td>
-        <td><span class="badge badge-green">current best</span></td>
+        <td><span class="tag">merge1</span></td><td>PDMX</td><td>2026-06-02</td><td>8</td>
+        <td>99.57%</td><td>0.971</td><td>0.054 px</td>
+        <td>97.7% · 0/500 miscount</td>
+        <td>First joint staffer+noter training; from standalone best checkpoints</td>
+        <td><span class="badge badge-green">PDMX best</span></td>
+      </tr>
+      <tr>
+        <td><span class="tag">boulez</span></td><td>KernSheet</td><td>2026-06-04</td><td>8</td>
+        <td>97.28%<sup>†</sup></td><td>0.938<sup>†</sup></td><td>5.25 px<sup>†</sup></td>
+        <td><strong>89.5%</strong> · 12/300 miscount</td>
+        <td>Unfreeze staffer @ step 500 (joint det + tr fine-tune)</td>
+        <td><span class="badge badge-green">KernSheet best</span></td>
+      </tr>
+      <tr>
+        <td><span class="tag">walton</span></td><td>KernSheet</td><td>2026-06-04</td><td>8</td>
+        <td>96.54%<sup>†</sup></td><td>0.927<sup>†</sup></td><td>4.53 px<sup>†</sup></td>
+        <td>87.2% · 32/300 miscount</td>
+        <td>Staffer frozen throughout</td>
+        <td><span class="badge badge-amber">freeze ablation</span></td>
       </tr>
     </tbody>
   </table>
+  <p class="subtitle" style="margin-top:-1rem"><sup>†</sup> on an unseeded validation split; see note above.</p>
 
   <!-- ════════════════════════ merge1 ════════════════════════ -->
   <div class="session">
@@ -225,6 +241,52 @@
     </div>
 
     <div class="result-box positive">Strong first end-to-end result. 97.7% eval similarity with zero miscounts. Token accuracy on par with the standalone noter. Detection slightly below standalone staffer but holding well and still improving.</div>
+  </div>
+
+  <!-- ════════════════════════ boulez & walton (KernSheet) ════════════════════════ -->
+  <div class="session">
+    <div class="session-header">
+      <h2><span class="tag">boulez</span> &amp; <span class="tag">walton</span> — KernSheet fine-tune</h2>
+      <span class="session-meta">2026-06-04 · tags <code>train/boulez</code>, <code>train/walton</code> · 8 epochs each · from <code>stave-primary-grid-full-kernsheet</code> + <code>enhanced3-center+jitter-kernsheet</code> · shared 5543 vocab</span>
+    </div>
+
+    <p>First end-to-end runs on <strong>KernSheet</strong> (real scanned piano scores), rebuilt fresh from the two KernSheet-fine-tuned standalone branches at the shared 5543 vocab — no checkpoint-growing needed. The two runs are identical except for one knob — when the detector unfreezes — set up as a deliberate <strong>freeze ablation</strong>:</p>
+    <div class="changes">
+      <div class="change-item"><span class="change-sym mod">~</span> <strong>boulez</strong> — staffer unfreezes at step 500 (<code>freeze_staffer_steps=500</code>, the merge1 default), then trains jointly. The detector keeps receiving its full detection loss for 6 more epochs.</div>
+      <div class="change-item"><span class="change-sym mod">~</span> <strong>walton</strong> — staffer frozen for the whole run (<code>--freeze-staffer-steps 3000</code> &gt; 2000 total steps). The noter branch adapts to predicted crops; the detector never moves.</div>
+    </div>
+
+    <h3>Matched eval — identical 300 pages, both models</h3>
+    <p>The in-training Val acc / IoU / stave_err live on independent unseeded splits (walton's frozen stave_err is 4.53 px vs boulez's 3.86 px on the <em>same</em> frozen checkpoint — proof the splits differ), so they are <strong>not</strong> comparable. The honest comparator is a free-running greedy eval over the <em>same</em> 300 pages for both models:</p>
+    <table class="summary-table">
+      <thead>
+        <tr><th>Model</th><th>Avg similarity</th><th>Min / Max</th><th>Miscount pages</th><th>Pred / GT staves</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="tag">boulez</span></td><td><strong>89.5%</strong></td><td>7.9% / 100%</td><td><strong>12 / 300</strong></td><td>3420 / 3408</td></tr>
+        <tr><td><span class="tag">walton</span></td><td>87.2%</td><td>7.2% / 100%</td><td>32 / 300</td><td>3438 / 3408</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Training curves</h3>
+    <p class="session-meta">boulez (solid blue) vs walton (solid amber). Accuracy / tr-loss curves are on different val splits — read trajectories, not the gap. Detection curves: boulez's staffer moves after the ep1→ep2 unfreeze; walton's is flat (frozen).</p>
+    <div class="charts">
+      <div class="chart-card"><h4>Val accuracy</h4><canvas id="c-ks-acc"></canvas></div>
+      <div class="chart-card"><h4>Val tr-loss</h4><canvas id="c-ks-tr"></canvas></div>
+      <div class="chart-card"><h4>Sys IoU</h4><canvas id="c-ks-iou"></canvas></div>
+      <div class="chart-card"><h4>Stave error (px)</h4><canvas id="c-ks-err"></canvas></div>
+    </div>
+
+    <h3>Analysis — the freeze call reversed</h3>
+    <div class="changes">
+      <div class="change-item"><span class="change-sym add">+</span> <strong>boulez (joint) wins end-to-end</strong>: 89.5% vs 87.2% similarity, and fewer than half the miscount pages (12 vs 32) on identical pages.</div>
+      <div class="change-item"><span class="change-sym add">+</span> The win comes from <strong>continued detection training</strong>: with <code>λ_det=1</code>, boulez's staffer kept getting its full L1+GIoU+<em>objectness</em> loss for 6 more epochs, which improved recall/counting. Walton's frozen detector got none of it.</div>
+      <div class="change-item"><span class="change-sym rem">−</span> <code>val/stave_err_px</code> is a <strong>misleading proxy for detector quality</strong>: it is GT-routed edge-L1 on already-matched boxes, blind to recall. Joint training worsened it (boulez 3.86→5.25 px on its split) while <em>improving</em> the counting that actually drives transcription.</div>
+      <div class="change-item"><span class="change-sym mod">~</span> The eval's top-to-bottom order matching over-penalizes a miscount (a missed/extra stave shifts every match below it), so walton's 2.3-pt deficit is partly amplified — but the underlying 32-vs-12 miscount gap is real. (Fixed once eval moves to center-y <code>linear_sum_assignment</code>.)</div>
+      <div class="change-item"><span class="change-sym mod">~</span> Caveat: boulez's edge is "more detection fine-tuning helped," not proof the transcription→box gradient helped — isolating that needs a det-loss-only continued staffer fine-tune.</div>
+    </div>
+
+    <div class="result-box positive"><strong>boulez is the KernSheet best.</strong> Freezing the staffer (walton) forgoes the recall gains from continued joint detection training and loses ~2.3 pts of end-to-end similarity with ~2.7× the miscounts. The pre-run hypothesis that freezing would protect the detector (because KernSheet boxes are a thirds approximation) did not hold up against the matched eval.</div>
   </div>
 
 </main>
@@ -321,6 +383,43 @@ makeChart('c-m1-iou',
 
 makeChart('c-m1-err',
   [line('merge1 stave_err_px', m1.err, C.m1, {fill:true})]);
+
+// ── KernSheet fine-tune: boulez (joint) vs walton (frozen) ──
+const C2 = { bz: '#2563eb', wt: '#d97706' };
+// Per-epoch end-of-epoch values from boulez/metrics.csv and walton/metrics.csv.
+// Sys IoU shown as actual IoU (= 1 − logged val/sys_iou). NB: acc/tr-loss are on
+// different unseeded val splits — read trajectory, not the gap.
+const bz = {
+  acc: [0.9610, 0.9639, 0.9679, 0.9692, 0.9713, 0.9722, 0.9727, 0.9728],
+  tr:  [0.1532, 0.1414, 0.1252, 0.1191, 0.1121, 0.1084, 0.1062, 0.1061],
+  iou: [0.9328, 0.9328, 0.9083, 0.9189, 0.9299, 0.9335, 0.9372, 0.9379],
+  err: [3.86,   3.86,   6.05,   5.89,   5.55,   5.30,   5.25,   5.25],
+};
+const wt = {
+  acc: [0.9584, 0.9613, 0.9629, 0.9638, 0.9647, 0.9651, 0.9653, 0.9654],
+  tr:  [0.1631, 0.1526, 0.1465, 0.1432, 0.1402, 0.1383, 0.1376, 0.1375],
+  iou: Array(8).fill(0.9268),  // frozen — constant
+  err: Array(8).fill(4.53),    // frozen — constant
+};
+
+makeChart('c-ks-acc',
+  [line('boulez (joint)', bz.acc, C2.bz, {fill:true}),
+   line('walton (frozen)', wt.acc, C2.wt)],
+  {min: 0.95, max: 0.98});
+
+makeChart('c-ks-tr',
+  [line('boulez (joint)', bz.tr, C2.bz, {fill:true}),
+   line('walton (frozen)', wt.tr, C2.wt)]);
+
+makeChart('c-ks-iou',
+  [line('boulez (joint)', bz.iou, C2.bz, {fill:true}),
+   line('walton (frozen)', wt.iou, C2.wt)],
+  {min: 0.88, max: 0.96});
+
+makeChart('c-ks-err',
+  [line('boulez stave_err_px (joint)', bz.err, C2.bz, {fill:true}),
+   line('walton stave_err_px (frozen)', wt.err, C2.wt)],
+  {min: 0, max: 7});
 
 document.querySelector('.chart-modal-close').addEventListener('click', closeChartModal);
 document.getElementById('chart-modal').addEventListener('click', (e) => {
