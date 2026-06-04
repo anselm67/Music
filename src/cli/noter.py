@@ -537,8 +537,19 @@ def train(
         if ckpt_path is not None:
             logging.warning(f"Resuming from {ckpt_path}; ignoring --init-from")
         else:
+            # Accept either a bare state_dict (grow-checkpoint output) or a full
+            # Lightning checkpoint (a base run's last.ckpt). weights_only=False is
+            # safe here: it is our own trusted checkpoint, and a Lightning ckpt
+            # carries non-tensor globals (e.g. the InterpolationMode enum in
+            # hyper_parameters) that weights_only=True refuses to unpickle.
+            loaded = torch.load(init_from, weights_only=False)
+            state = (
+                loaded["state_dict"]
+                if isinstance(loaded, dict) and "state_dict" in loaded
+                else loaded
+            )
             try:
-                module.load_state_dict(torch.load(init_from, weights_only=True))
+                module.load_state_dict(state)
             except RuntimeError as e:
                 raise click.ClickException(
                     f"--init-from state dict mismatch: {e}"
