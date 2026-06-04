@@ -89,8 +89,11 @@ class ScorerDataset(Dataset[Sample]):
             self.vocab.PAD,
         )
         for idx, text in enumerate(records):
-            str_tok = text.split("\t")[spine_number]
             try:
+                # Real KernSheet records occasionally have fewer spines than the
+                # system's staff count (malformed/misaligned bar range); skip the
+                # sample rather than letting the IndexError crash the worker.
+                str_tok = text.split("\t")[spine_number]
                 body[idx, :] = self.vocab.tok2i(
                     str_tok.strip().split(), max_chords=self.config.noter.max_chords
                 )
