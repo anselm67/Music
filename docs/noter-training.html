@@ -523,8 +523,11 @@
     <em>faster</em> early — 94.8 % at epoch 0 (vs enhanced3's 85.6 %) and 98.6 % by epoch 2 (vs 98.2 %),
     plausibly because the centred crop puts the staff at a consistent vertical position — then the two
     curves meet at the top. Validation runs on clean centred crops (jitter is train-only), so this is an
-    apples-to-apples comparison with enhanced3 aside from the crop change. This checkpoint is the base for
-    the <span class="tag">enhanced3-center+jitter-kernsheet</span> fine-tune.</div>
+    apples-to-apples comparison with enhanced3 aside from the crop change. Free-running greedy-decode
+    edit-distance similarity on <strong>1,024 random PDMX System2 staves: 97.8 % average</strong>
+    (min 27.3 %, max 100 %) — below the teacher-forced 99.55 %, as expected, since autoregressive decoding
+    compounds errors across the sequence; also on clean centred crops (jitter is train-only). This
+    checkpoint is the base for the <span class="tag">enhanced3-center+jitter-kernsheet</span> fine-tune.</div>
   </div>
 
   <!-- ════════════════════════════════════════════ enhanced3-center+jitter-kernsheet -->
