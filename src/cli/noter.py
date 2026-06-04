@@ -407,6 +407,15 @@ def grow_checkpoint(src_ckpt: Path, out_ckpt: Path, vocab_path: Path) -> None:
     "whose box is perturbed to model the staffer detector's box error). "
     "Omit to leave disabled.",
 )
+@click.option(
+    "--vocab",
+    "vocab_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Vocab JSON to train against (default: <home>/build/vocab.json). Use "
+    "the larger KernSheet vocab to pre-train a PDMX base that fine-tunes on "
+    "KernSheet without checkpoint surgery (the extra rows stay unlearned).",
+)
 @click.pass_obj
 def train(
     ctx: ClickContext,
@@ -421,6 +430,7 @@ def train(
     lr: float | None,
     warmup_steps: int,
     jitter: float | None,
+    vocab_path: Path | None,
 ) -> None:
     """Trains and/or resumes training of a Noter model instance.
 
@@ -428,7 +438,7 @@ def train(
     """
     VAL_CHECK_INTERVAL = 250
 
-    vocab = Vocab.load(ctx.home / "build" / "vocab.json")
+    vocab = Vocab.load(vocab_path or ctx.home / "build" / "vocab.json")
     ckpt_path: Path | None = None
     ckpt_path = Path("checkpoints") / "noter" / name / "last.ckpt"
     if ckpt_path.exists():
