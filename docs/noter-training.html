@@ -158,9 +158,9 @@
       </tr>
       <tr>
         <td><a class="run-link" href="#run-enhanced3-center+jitter"><span class="tag">enhanced3-center+jitter</span></a></td><td>2026-06-04</td><td>12</td>
-        <td>—</td><td>—</td>
+        <td>99.55%</td><td>0.0196</td>
         <td>PDMX base retrained: <strong>centered</strong> staff crop + train-only <strong>box jitter</strong> (p=0.5); born directly at the 5,543 KernSheet vocab</td>
-        <td><span class="badge badge-amber">training</span></td>
+        <td><span class="badge badge-slate">base · ≈ enhanced3</span></td>
       </tr>
       <tr>
         <td><a class="run-link" href="#run-enhanced3-center+jitter-kernsheet"><span class="tag">enhanced3-center+jitter-kernsheet</span></a></td><td>2026-06-04</td><td>12</td>
@@ -443,7 +443,7 @@
   <div class="session">
     <div class="session-header">
       <h2 id="run-enhanced3-center+jitter"><span class="tag">enhanced3-center+jitter</span></h2>
-      <span class="session-meta">2026-06-04 · PDMX base · 12 epochs · D=256 · <span class="badge badge-amber">training</span></span>
+      <span class="session-meta">2026-06-04 · PDMX base · 12 epochs · D=256</span>
     </div>
     <p>A <strong>from-scratch PDMX base retrain</strong> (not a fine-tune) carrying two changes into the
     base model: a corrected <strong>staff-centered crop</strong> and a train-only <strong>box-jitter</strong>
@@ -508,16 +508,23 @@
     <span class="tag">enhanced3</span> aside from the crop, jitter, and vocab.</p>
 
     <h3>Training curves</h3>
-    <p style="font-size:0.85rem;color:var(--muted);">PDMX validation set (clean centred crops, no jitter).
-    <em>Results pending — run in progress.</em></p>
+    <p style="font-size:0.85rem;color:var(--muted);">PDMX validation set (clean centred crops, no jitter),
+    end-of-epoch, dashed <span class="tag">enhanced3</span> for reference.</p>
     <div class="charts">
       <div class="chart-card"><h4>Val accuracy — vs enhanced3</h4><canvas id="c-e3cj-acc"></canvas></div>
       <div class="chart-card"><h4>Val loss — vs enhanced3</h4><canvas id="c-e3cj-loss"></canvas></div>
     </div>
 
-    <div class="result-box">⏳ <strong>Training in progress.</strong> Results (final val acc/loss, curve vs
-    <span class="tag">enhanced3</span>, and the cost of centering+jitter on clean PDMX val) to be filled in
-    on completion.</div>
+    <div class="result-box positive">Best result: <strong>99.55 % val token accuracy</strong>
+    (<code>val/loss</code> 0.0196) at epoch 11 — effectively tied with the
+    <span class="tag">enhanced3</span> base's 99.58 % / 0.018. So the centered crop and the train-only box
+    jitter cost only <strong>~0.03 %</strong> on clean PDMX val: negligible on the easy synthetic domain,
+    while buying box-error robustness for the merge / real-scan path. If anything it converges
+    <em>faster</em> early — 94.8 % at epoch 0 (vs enhanced3's 85.6 %) and 98.6 % by epoch 2 (vs 98.2 %),
+    plausibly because the centred crop puts the staff at a consistent vertical position — then the two
+    curves meet at the top. Validation runs on clean centred crops (jitter is train-only), so this is an
+    apples-to-apples comparison with enhanced3 aside from the crop change. This checkpoint is the base for
+    the <span class="tag">enhanced3-center+jitter-kernsheet</span> fine-tune.</div>
   </div>
 
   <!-- ════════════════════════════════════════════ enhanced3-center+jitter-kernsheet -->
@@ -601,9 +608,11 @@ const e3ks = {
   acc:  [0.938,0.9531,0.9582,0.9612,0.9636,0.965,0.9659,0.9668,0.9673,0.9678,0.9678,0.9678],
   loss: [0.2634,0.1999,0.1759,0.1629,0.1525,0.1464,0.1425,0.1389,0.1363,0.1354,0.135,0.1349],
 };
-// enhanced3-center+jitter — PDMX val (clean centred crops). TODO: fill from
-// logs/noter/enhanced3-center+jitter/metrics.csv on completion.
-const e3cj = { acc: [], loss: [] };
+// enhanced3-center+jitter — PDMX val (clean centred crops, end-of-epoch).
+const e3cj = {
+  acc:  [0.9475,0.9805,0.9863,0.9893,0.9913,0.9926,0.9935,0.9942,0.9949,0.9952,0.9955,0.9955],
+  loss: [0.2004,0.077,0.0536,0.0427,0.0352,0.0306,0.0262,0.024,0.0215,0.0202,0.0197,0.0196],
+};
 // enhanced3-center+jitter-kernsheet — KernSheet val. TODO: fill on completion.
 const e3cjks = { acc: [], loss: [] };
 
