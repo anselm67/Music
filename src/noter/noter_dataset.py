@@ -1,4 +1,5 @@
 import logging
+import random
 
 import torch
 from torch import Tensor
@@ -17,6 +18,16 @@ from .noter_vocab import Vocab
 NORM_MEAN = 0.9482423663139343
 NORM_STD = 0.17525607175008864
 
+# Per-edge box-jitter spec (sigma_px, clip_px), train-only augmentation modelling
+# the staffer detector's box error measured on KernSheet (scripts/
+# eval_predicted_boxes.py): horizontal error >> vertical, right edge the worst.
+JITTER = {
+    "top": (3.0, 15.0),
+    "bot": (3.0, 15.0),
+    "left": (5.0, 26.0),
+    "right": (8.0, 50.0),
+}
+
 
 class NoterDataset(Dataset):
     def __init__(
@@ -25,6 +36,10 @@ class NoterDataset(Dataset):
         self.source = source
         self.config = config
         self.vocab = vocab
+        # Train-only box jitter; the datamodule enables it on the train view
+        # only, leaving validation on clean (centered) crops.
+        self.jitter = False
+        self.jitter_prob = config.jitter_prob
         # Sets up image transforms.
         self.transform = v2.Compose(
             [
@@ -101,16 +116,22 @@ class NoterDataset(Dataset):
             logging.error(f"{score_id}: {e}")
             return None
         height, width = self.config.input_shape
-        tensor = crop(
-            tensor,
-            max(0, box.top - box.height),
-            box.left,
-            min(height, 3 * box.height),
-            box.width,
-        )
+        _, page_height, page_width = tensor.shape
+        # Center the staff vertically in the fixed-height window. A real staff
+        # (~24-32px) is far shorter than `height` (64), so the old 3*box.height
+        # window always exceeded it: cropping from box.top-box.height shoved the
+        # staff into the lower half and clipped the tallest ones. Center on the
+        # staff midline instead, padding white (image_pad_value) at page edges.
+        crop_top = box.top + box.height // 2 - height // 2
+        src_top = max(0, crop_top)
+        src_bot = min(page_height, crop_top + height)
+        # Clamp the crop to the page so overhang (jittered right edge past the
+        # page) pads white via the canvas, not black (crop() zero-pads = ink).
+        crop_width = min(box.width, page_width - box.left)
+        tensor = crop(tensor, src_top, box.left, src_bot - src_top, crop_width)
         image = torch.full((1, height, width), self.image_pad_value)
         _, cropped_height, cropped_width = tensor.shape
-        y0 = (height - cropped_height) // 2
+        y0 = src_top - crop_top
         image[:, y0 : y0 + cropped_height, :cropped_width] = tensor
         return image, cropped_width
 
@@ -155,12 +176,27 @@ class NoterDataset(Dataset):
         tensor[len(records), :] = self.s_eos
         return torch.cat([self.s_sos, tensor])
 
+    def _jitter_box(self, box: Box) -> Box:
+        """Perturb each edge independently by clipped Gaussian noise (px)."""
+
+        def delta(edge: str) -> int:
+            sigma, clip = JITTER[edge]
+            return int(round(max(-clip, min(clip, random.gauss(0.0, sigma)))))
+
+        left = max(0, box.left + delta("left"))
+        right = max(left + 1, box.right + delta("right"))
+        top = max(0, box.top + delta("top"))
+        bottom = max(top + 1, box.bottom + delta("bot"))
+        return Box((left, top), (right, bottom))
+
     def __getitem__(self, idx: int) -> tuple[Tensor, Tensor, Tensor]:
         while True:
             score_id, page_number, box, spine_number, first_bar, last_bar = self.items[
                 idx
             ]
             logging.debug(f"Loading {score_id}")
+            if self.jitter and random.random() < self.jitter_prob:
+                box = self._jitter_box(box)
             if (result := self._load_image(score_id, page_number, box)) is None:
                 idx = (idx + 1) % len(self)
             elif (

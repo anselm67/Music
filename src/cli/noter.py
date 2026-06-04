@@ -399,6 +399,12 @@ def grow_checkpoint(src_ckpt: Path, out_ckpt: Path, vocab_path: Path) -> None:
     default=-1,
     help="Override the number of warmup steps.",
 )
+@click.option(
+    "--jitter/--no-jitter",
+    default=False,
+    help="Enable train-only box-jitter augmentation (models the staffer "
+    "detector's box error so noter tolerates predicted crops).",
+)
 @click.pass_obj
 def train(
     ctx: ClickContext,
@@ -412,6 +418,7 @@ def train(
     valid_len: int,
     lr: float | None,
     warmup_steps: int,
+    jitter: bool,
 ) -> None:
     """Trains and/or resumes training of a Noter model instance.
 
@@ -425,10 +432,16 @@ def train(
     if ckpt_path.exists():
         logging.info(f"Resuming training from {ckpt_path}")
         config = config_from_checkpoint(ckpt_path)
-        if train_len > 0 or valid_len > 0 or lr is not None or warmup_steps >= 0:
+        if (
+            train_len > 0
+            or valid_len > 0
+            or lr is not None
+            or warmup_steps >= 0
+            or jitter
+        ):
             logging.warning(
                 "Resuming from checkpoint; "
-                "--train-len/--valid-len/--lr/--warmup-steps ignored."
+                "--train-len/--valid-len/--lr/--warmup-steps/--jitter ignored."
             )
     else:
         ckpt_path = None
@@ -442,6 +455,7 @@ def train(
             config.lr = lr
         if warmup_steps >= 0:
             config.warmup_steps = warmup_steps
+        config.jitter = jitter
 
     config.max_steps = epochs * (config.train_len // config.batch_size)
     logging.info(

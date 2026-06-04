@@ -1,5 +1,7 @@
+import copy
+
 import lightning as L
-from torch.utils.data import DataLoader, Dataset, random_split
+from torch.utils.data import DataLoader, Dataset, Subset, random_split
 
 from sheetmusic import Source
 
@@ -35,6 +37,13 @@ class NoterDataModule(L.LightningDataModule):
         self.train_ds, self.val_ds = random_split(
             full, [self.config.train_len, self.config.valid_len]
         )
+        if self.config.jitter:
+            # Shallow copy shares the (read-only) items/transform but lets the
+            # train view jitter boxes while validation (self.val_ds, on `full`)
+            # stays on clean centered crops. Re-point train at the jittering view.
+            train_full = copy.copy(full)
+            train_full.jitter = True
+            self.train_ds = Subset(train_full, self.train_ds.indices)
 
     def train_dataloader(self) -> DataLoader:
         return DataLoader(
