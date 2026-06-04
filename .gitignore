@@ -1,6 +1,7 @@
 # Anselm added.
 checkpoints/
 logs/
+.claude/scheduled_tasks.lock
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
