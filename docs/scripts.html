@@ -256,6 +256,37 @@ uv run python scripts/staffer_box_deltas.py \
     --kern-home /home/anselm/datasets/KernSheet</pre>
   </div>
 
+  <!-- ──────────────────────────────────────── train_scorer_pipeline -->
+  <div class="script">
+    <div class="script-header">
+      <span class="script-name">train_scorer_pipeline.sh</span>
+      <span class="badge badge-violet">orchestrator</span>
+      <span class="badge badge-violet">staffer</span>
+      <span class="badge badge-violet">noter</span>
+      <span class="badge badge-violet">scorer</span>
+    </div>
+    <p class="script-desc">
+      Trains a full scorer from one base <code>NAME</code>: PDMX base + KernSheet
+      fine-tune for both the staffer and the noter, then merges the two fine-tuned
+      branches and fine-tunes the scorer on KernSheet (five runs total). A
+      <strong>bash</strong> orchestrator (not a <code>uv run python</code> script):
+      fail-fast, tags <code>train/&lt;name&gt;</code> per CLAUDE.md, and skips any
+      stage whose checkpoint already exists so the long run is resumable. Best-run
+      hyperparameters live in a config block at the top of the file. Run by the user
+      from a main checkout; the user launches training, not Claude.
+    </p>
+    <div class="label">Usage</div>
+<pre>scripts/train_scorer_pipeline.sh &lt;NAME&gt; [SCORER_NAME]   # SCORER_NAME defaults to NAME
+DRYRUN=1 scripts/train_scorer_pipeline.sh my-model     # print commands, run nothing
+FORCE=1  scripts/train_scorer_pipeline.sh my-model     # retrain stages even if a checkpoint exists</pre>
+    <div class="label">Notes</div>
+    <p>Needs the shared KernSheet vocab (<code>KernSheet/build/vocab.json</code>);
+    builds it via <code>noter extend-vocab</code> if missing. The noter PDMX base
+    trains directly on that vocab (no grow-checkpoint). KernSheet fine-tune split
+    sizes are pinned to the dataset (staffer/scorer 2321 pages, noter 26166 staff
+    items).</p>
+  </div>
+
 </main>
 </body>
 </html>
