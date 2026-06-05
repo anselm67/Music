@@ -41,7 +41,7 @@ from torchvision.transforms import v2
 from tqdm import tqdm
 
 from kernsheet import KernSheet, KernSheetSource
-from noter import NoterConfig, NoterDataset, NoterModule, Vocab
+from noter import NoterConfig, NoterDataset, NoterModule, Vocab, load_sequence
 from pdmx import PDMX, PdmxSource
 from sheetmusic import Box, Source
 from staffer import StafferConfig, StafferModule
@@ -236,7 +236,10 @@ def main() -> None:
             sid, pno, gt_box, spine, fb, lb = dataset.items[idx]
 
             res = dataset._load_image(sid, pno, gt_box)
-            seq = dataset._load_sequence(sid, spine, fb, lb)
+            seq = load_sequence(
+                dataset.source, dataset.vocab, sid, spine, fb, lb,
+                dataset.config.max_seqlen, dataset.config.max_chords, dataset.s_sos,
+            )
             if res is None or seq is None:
                 continue
             img0, w0 = res

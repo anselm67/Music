@@ -48,6 +48,7 @@ class ScorerDataset(Dataset[Sample]):
                 v2.Normalize(mean=[0.9563435316085815], std=[0.16557540870879858]),
             ]
         )
+        self.s_sos = torch.full((1, config.noter.max_chords), vocab.SOS)
         logging.info("Initializing ScorerDataset...")
         self.items = []
         for score in tqdm(source.scores(), desc="Loading scorer dataset"):
@@ -62,20 +63,6 @@ class ScorerDataset(Dataset[Sample]):
 
     def __len__(self) -> int:
         return len(self.items)
-
-    def _load_sequence(
-        self, score_id: str, spine_number: int, first_bar: int, last_bar: int
-    ) -> Tensor | None:
-        return load_sequence(
-            self.source,
-            self.vocab,
-            score_id,
-            spine_number,
-            first_bar,
-            last_bar,
-            self.config.noter.max_seqlen,
-            self.config.noter.max_chords,
-        )
 
     def __getitem__(self, idx: int) -> Sample:
         c = self.config.staffer
@@ -125,11 +112,11 @@ class ScorerDataset(Dataset[Sample]):
                     if staff_idx >= c.num_stave_queries:
                         is_ok = False
                         break
-                    seq = self._load_sequence(
-                        score_id,
-                        spine_numbers[i],
-                        system.first_bar_number,
-                        system.last_bar_number,
+                    seq = load_sequence(
+                        self.source, self.vocab, score_id, spine_numbers[i],
+                        system.first_bar_number, system.last_bar_number,
+                        self.config.noter.max_seqlen, self.config.noter.max_chords,
+                        self.s_sos,
                     )
                     if seq is None:
                         is_ok = False

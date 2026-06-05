@@ -38,6 +38,7 @@ def load_sequence(
     last_bar: int,
     max_seqlen: int,
     max_chords: int,
+    s_sos: Tensor,
 ) -> Tensor | None:
     """Load one stave's token sequence from source, shape (max_seqlen, max_chords).
 
@@ -58,7 +59,6 @@ def load_sequence(
             f"sequence too long {len(records)} (max {max_seqlen - 2})"
         )
         return None
-    s_sos = torch.full((1, max_chords), vocab.SOS)
     body = torch.full((max_seqlen - 1, max_chords), vocab.PAD)
     for idx, text in enumerate(records):
         try:
@@ -98,6 +98,7 @@ class NoterDataset(Dataset):
             ]
         )
         self.image_pad_value = (1.0 - NORM_MEAN) / NORM_STD
+        self.s_sos = torch.full((1, config.max_chords), vocab.SOS)
         # Creates the actual dataset, with theright number of samples.
         logging.info("Initializing NoterDataset...")
         self.items = []
@@ -176,24 +177,6 @@ class NoterDataset(Dataset):
         image[:, y0 : y0 + cropped_height, :cropped_width] = tensor
         return image, cropped_width
 
-    def _load_sequence(
-        self,
-        score_id: str,
-        spine_number: int,
-        first_bar_number: int,
-        last_bar_number: int,
-    ) -> Tensor | None:
-        return load_sequence(
-            self.source,
-            self.vocab,
-            score_id,
-            spine_number,
-            first_bar_number,
-            last_bar_number,
-            self.config.max_seqlen,
-            self.config.max_chords,
-        )
-
     def _jitter_box(self, box: Box) -> Box:
         """Perturb each edge independently by clipped Gaussian noise (px)."""
 
@@ -218,8 +201,10 @@ class NoterDataset(Dataset):
             if (result := self._load_image(score_id, page_number, box)) is None:
                 idx = (idx + 1) % len(self)
             elif (
-                sequence := self._load_sequence(
-                    score_id, spine_number, first_bar, last_bar
+                sequence := load_sequence(
+                    self.source, self.vocab, score_id, spine_number,
+                    first_bar, last_bar,
+                    self.config.max_seqlen, self.config.max_chords, self.s_sos,
                 )
             ) is None:
                 idx = (idx + 1) % len(self)
