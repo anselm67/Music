@@ -85,15 +85,10 @@
 </p>
 <div class="callout">
   <strong>Design choice — do not share the patch embedding (for now).</strong>
-  An earlier draft fused both models onto one shared 4×4 patch embedding. We rejected it:
-  the saving is ~4 K params and one cheap conv (negligible next to the ViT and the
-  autoregressive decoder), while the cost is the most fragile weight transfer in the whole
-  design — it discards the noter's pre-trained encoder and forces the staffer ViT to
-  re-adapt to features from two stacked random convs. Sharing also <em>creates</em> the
-  coarse-RoI-resolution problem it then elaborately solves. Keeping both models intact and
-  bridging at full pixel resolution dissolves that problem and lets both checkpoints
-  transfer cleanly. Sharing the low-level embedding is deferred to
-  <a href="#future">§8 — Deferred</a>, to revisit only if profiling demands it.
+  Each model keeps its own patch embedding; they are joined only by the crop bridge. An
+  earlier draft fused both onto one shared 4×4 embedding and was rejected — the full
+  rationale, the alternatives considered, and the conditions that would justify revisiting
+  are recorded in <a href="journal.html">the project journal</a>.
 </div>
 
 <!-- LEGEND -->
@@ -638,110 +633,8 @@
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════════ -->
-<section id="rationale">
-<h2>6 — Design Rationale</h2>
-<p>
-  This section traces the key decisions made in conversation that led to the architecture above.
-</p>
-
-<div class="rationale-grid">
-  <div class="rationale-card">
-    <h4>Starting point: naïve RoIAlign from 16×16 backbone</h4>
-    <p>
-      The first Scorer proposal reused the Staffer's 16×16 patch ViT feature map
-      <code>(B, 256, 60, 43)</code> as the RoIAlign source, with
-      <code>output_size=(4, 192)</code>.
-    </p>
-    <p>
-      <strong>Problem:</strong> a typical stave is only 2–4 feature rows tall at
-      16px/patch — very coarse for transcription, where vertical position encodes pitch.
-    </p>
-  </div>
-
-  <div class="rationale-card">
-    <h4>Attempt: full 4×4 patch backbone</h4>
-    <p>
-      Moving to 4×4 patches on the full page gives 240×172 = 41 280 positions.
-      Running a ViT on 41 280 tokens is quadratically expensive — roughly 256×
-      more attention computation per layer than today's 2 580-token model
-      ((41 280 / 2 580)² ≈ 256).
-    </p>
-    <p>
-      <strong>Rejected</strong> on compute grounds. But fine-grained shared features
-      remained the right idea.
-    </p>
-  </div>
-
-  <div class="rationale-card">
-    <h4>Clarification: noter patch size is (64, 4) not (64, 1)</h4>
-    <p>
-      During discussion a concern was raised about changing the noter's patch size
-      from "(64, 1)" to "(4, 64)". A check of <code>noter_model.py</code> confirmed
-      the actual values: <code>patch_width=4, patch_height=64</code>, giving
-      <code>Conv2d(k=(64,4))</code> and 192 patches per staff.
-    </p>
-    <p>
-      This matters because pitch is encoded <em>vertically</em>: the relative position
-      of noteheads within the 64px staff height determines the note. Shortening the
-      patch height would break this inductive bias and invalidate the pre-trained weights.
-    </p>
-  </div>
-
-  <div class="rationale-card">
-    <h4>Considered: shared 4×4 embedding + branch convolutions</h4>
-    <p>
-      One <code>Conv2d(1→256, k=4)</code> on the page, then a <code>k=4</code> downsample for
-      staffer and an <code>RoIAlign + Conv2d(k=(16,1))</code> height-merge for noter — both
-      tuned so their effective receptive fields match the standalone patch sizes.
-    </p>
-    <p>
-      <strong>Rejected (deferred).</strong> The saving is ~4 K params and one conv pass —
-      negligible. The costs are real: it <em>discards</em> the noter's pre-trained encoder
-      (the decoder would cross-attend to features it never saw), and forces the staffer ViT
-      to re-adapt from two stacked random convs instead of its trained <code>k=16</code> embed.
-      Receptive-field matching is necessary but not sufficient — it does not match the feature
-      <em>distribution</em> the pre-trained stacks learned to read.
-    </p>
-  </div>
-
-  <div class="rationale-card">
-    <h4>Decision: decouple with a differentiable bridge</h4>
-    <p>
-      The coarse-RoI problem (card 1) only exists <em>because</em> we insisted on a shared
-      source. Crop from the raw page instead and it evaporates — the noter samples at full
-      pixel resolution exactly as standalone.
-    </p>
-    <p>
-      And the actual prize — transcription gradients reaching the detector — comes from the
-      crop being <strong>differentiable in the box position</strong>, not from sharing
-      anything. So: keep both models intact, bridge them with a differentiable crop. Both
-      checkpoints transfer wholesale; the pre-merge diagnostic already measured only
-      <strong>~0.86%</strong> degradation feeding predicted (vs GT) crops to the unchanged
-      noter — we start from a near-working pipeline and merely <em>add</em> the gradient path.
-    </p>
-    <p>
-      <strong>Implementation caveat (verified):</strong> the crop must use
-      <code>affine_grid</code> + <code>grid_sample</code>, <em>not</em>
-      <code>torchvision.ops.roi_align</code> — the latter does not backprop to the box
-      coordinates (<code>boxes.grad is None</code>), so it would carry no gradient to the
-      detector at all.
-    </p>
-  </div>
-</div>
-
-<div class="callout">
-  <strong>The core invariant:</strong> the bridge reproduces the standalone noter's crop
-  window exactly — a 1:1, left-aligned, right-masked <code>64 × 768</code> slice anchored at
-  <code>(top − h, left)</code> — only differentiably. Neither model's architecture changes;
-  Stage 1 and Stage 2 checkpoints transfer to Stage 3 with <em>no</em> surgery at all. The
-  only thing the merge introduces is a gradient from the transcription loss into the box
-  position.
-</div>
-</section>
-
-<!-- ═══════════════════════════════════════════════════════════════ -->
 <section id="impl">
-<h2>7 — Implementation Guide</h2>
+<h2>6 — Implementation Guide</h2>
 <p>
   Everything needed to go from the two standalone checkpoints to a working Scorer model.
   No decisions are left open — only write code.
@@ -756,7 +649,7 @@
   so <code>ScorerModel</code> can construct the right sub-graph without duplicating code.
 </div>
 
-<h3>7.1 Pre-trained checkpoints</h3>
+<h3>6.1 Pre-trained checkpoints</h3>
 <table>
   <thead><tr><th>Model</th><th>Path</th><th>Val metric</th></tr></thead>
   <tbody>
@@ -770,7 +663,7 @@
   <code>model.</code> prefix (Lightning adds it automatically).
 </p>
 
-<h3>7.2 New files to create</h3>
+<h3>6.2 New files to create</h3>
 <p style="font-size:.875rem;color:var(--muted);">
   All Scorer code lives in a new top-level package <code>src/scorer/</code>, mirroring the
   <code>src/noter/</code> and <code>src/models/</code> layout. No existing source files are
@@ -787,7 +680,7 @@
   </tbody>
 </table>
 
-<h3>7.3 Weight loading map</h3>
+<h3>6.3 Weight loading map</h3>
 <p>
   After stripping the Lightning <code>model.</code> prefix, the state-dict keys map as follows.
   Keys marked <em>new</em> must be randomly initialised; all others transfer directly.
@@ -821,7 +714,7 @@
   These two architectures are not interchangeable.
 </p>
 
-<h3>7.4 Differentiable stave crop</h3>
+<h3>6.4 Differentiable stave crop</h3>
 <p>
   Given Staffer outputs, build the <code>(N_staves_total, 5)</code> box tensor
   <code>[batch_idx, left, top, right, bot]</code> and crop directly from the
@@ -882,7 +775,7 @@ memory = noter.encode(crops, widths)       # noter SourceEmbedding + Encoder, un
   page context instead of white vertical pad — a minor deviation to revisit if it bites.
 </p>
 
-<h3>7.5 Image dimensions</h3>
+<h3>6.5 Image dimensions</h3>
 <p>
   The Staffer resizes pages to <code>(960, 688)</code> px via
   <code>StafferConfig.scale_to_patch()</code>: <code>max_height=1449 / divider=1.5 → 966 → round to 16 → 960</code>;
@@ -893,7 +786,7 @@ memory = noter.encode(crops, widths)       # noter SourceEmbedding + Encoder, un
   coordinates (normalised [0,1]) scale by exactly <code>H, W</code>.
 </p>
 
-<h3>7.6 Scorer dataset</h3>
+<h3>6.6 Scorer dataset</h3>
 <p>
   <code>ScorerDataset</code> must provide per-sample:
 </p>
@@ -912,7 +805,7 @@ memory = noter.encode(crops, widths)       # noter SourceEmbedding + Encoder, un
   Use only scores present in <code>System2.csv</code> initially (guarantees token coverage).
 </p>
 
-<h3>7.7 Joint loss and training recipe</h3>
+<h3>6.7 Joint loss and training recipe</h3>
 <table>
   <thead><tr><th>Setting</th><th>Value</th><th>Notes</th></tr></thead>
   <tbody>
@@ -926,42 +819,6 @@ memory = noter.encode(crops, widths)       # noter SourceEmbedding + Encoder, un
     <tr><td>Batch size</td><td>8–16</td><td>start at 8; VRAM ≈ 2.6 GB at B=16 bf16</td></tr>
   </tbody>
 </table>
-</section>
-
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<section id="future">
-<h2>8 — Deferred: shared patch embedding</h2>
-<p>
-  The <a href="#scorer">§4</a> model deliberately does <strong>not</strong> share a low-level
-  patch embedding between the two branches. That option — one
-  <code>Conv2d(1→256, k=4)</code> feeding both, with per-branch convs restoring each model's
-  patch granularity (detailed in <a href="#rationale">§6</a>) — is parked here as a future
-  optimisation, to be revisited only if a concrete pressure justifies the integration risk.
-</p>
-<div class="callout">
-  <strong>Why deferred, not adopted:</strong> sharing saves ~4 K params and one cheap conv
-  pass — irrelevant next to the ViT and the autoregressive decoder, and irrelevant to the
-  phone-deployment target. It buys nothing measurable while imposing the most fragile weight
-  transfer in the design (a discarded noter encoder, a re-adapted ViT). The decoupled bridge
-  delivers the entire end-to-end payoff — joint gradients — with both checkpoints intact.
-</div>
-<h3>Conditions that would justify revisiting</h3>
-<ul style="font-size:.9rem;">
-  <li><strong>Profiling shows the duplicated low-level conv is a real cost</strong> on the
-  target device — e.g. inference latency on the phone is dominated by running both patch
-  embeddings rather than by attention. (Unlikely: both embeddings are tiny.)</li>
-  <li><strong>Evidence of low-level feature data-starvation</strong> — if the shared
-  staff-line / notehead features would measurably improve generalisation when learned jointly
-  rather than independently. No such evidence exists today; both models converge well on the
-  ~500 K-page corpus.</li>
-  <li><strong>A redesign already rewrites the low-level stack</strong> for another reason
-  (e.g. a unified high-resolution backbone), making the shared embedding nearly free to adopt
-  in passing.</li>
-</ul>
-<p style="font-size:.9rem;color:var(--muted);">
-  If revisited, keep the noter encoder rather than discarding it (run it on the crops) —
-  that removes the single largest risk the original shared-embedding draft carried.
-</p>
 </section>
 
 </main>

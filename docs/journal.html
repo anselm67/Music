@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project Journal — Decision Log</title>
+  <style>
+    :root {
+      --blue-bg:   #dbeafe; --blue-bd:   #2563eb; --blue-tx:   #1e40af;
+      --green-bg:  #d1fae5; --green-bd:  #059669; --green-tx:  #065f46;
+      --amber-bg:  #fef3c7; --amber-bd:  #d97706; --amber-tx:  #92400e;
+      --slate-bg:  #f1f5f9; --slate-bd:  #475569; --slate-tx:  #334155;
+      --rose-bg:   #ffe4e6; --rose-bd:   #e11d48; --rose-tx:   #9f1239;
+      --body-bg:   #f8fafc; --surface:   #ffffff;
+      --border:    #e2e8f0; --muted:     #64748b; --text:      #1e293b;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--body-bg); color: var(--text);
+      margin: 0; padding: 2rem 1rem; line-height: 1.65;
+    }
+    main { max-width: 1080px; margin: 0 auto; }
+    h1 { font-size: 2rem; margin: 0 0 0.35rem; color: #0f172a; }
+    .subtitle { color: var(--muted); font-size: 1rem; margin: 0 0 1.5rem; }
+    h2 { font-size: 1.35rem; margin: 0 0 0.2rem; color: #0f172a; }
+    h3 { font-size: 1.02rem; margin: 1.3rem 0 0.35rem; }
+    h4 { margin: 0 0 0.5rem; font-size: 0.9rem; color: var(--muted); }
+    p  { margin: 0.4rem 0 0.9rem; }
+    code {
+      font-family: 'JetBrains Mono','Fira Code','Cascadia Code',monospace;
+      background: #f1f5f9; padding: 0.1em 0.35em; border-radius: 4px;
+      font-size: 0.875em;
+    }
+    pre { background: #f1f5f9; padding: 0.9rem 1.1rem; border-radius: 6px;
+          overflow-x: auto; font-size: 0.85rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; margin: 0.75rem 0 1rem; }
+    th, td { padding: 0.45rem 0.75rem; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+    th { background: var(--body-bg); font-weight: 600; }
+    ul, ol { margin: 0.4rem 0 0.9rem; padding-left: 1.4rem; }
+    li { margin: 0.2rem 0; }
+
+    /* one journal entry */
+    article.entry {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1.4rem 1.6rem; margin: 1.5rem 0;
+    }
+    .entry-meta { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center;
+                  margin: 0.3rem 0 0.6rem; font-size: 0.85rem; color: var(--muted); }
+    .badge { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.03em;
+             text-transform: uppercase; padding: 0.12rem 0.5rem; border-radius: 999px;
+             border: 1px solid; }
+    .badge.accepted  { background: var(--green-bg); border-color: var(--green-bd); color: var(--green-tx); }
+    .badge.superseded{ background: var(--slate-bg); border-color: var(--slate-bd); color: var(--slate-tx); }
+    .badge.deferred  { background: var(--amber-bg); border-color: var(--amber-bd); color: var(--amber-tx); }
+    .ref { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; }
+
+    .rationale-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 0.75rem 0; }
+    @media (max-width:650px) { .rationale-grid { grid-template-columns: 1fr; } }
+    .rationale-card { background: var(--body-bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.9rem 1rem; }
+    .rationale-card h4 { margin: 0 0 0.4rem; font-size: 0.88rem; color: var(--muted); }
+    .rationale-card p { font-size: 0.85rem; margin: 0.3rem 0; }
+    .callout { background: #fefce8; border-left: 4px solid #ca8a04;
+               padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0.9rem 0; font-size: 0.9rem; }
+    .bad { background: var(--rose-bg); border-left: 4px solid var(--rose-bd);
+           padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0.9rem 0; font-size: 0.9rem; }
+    .outcome { background: var(--green-bg); border-left: 4px solid var(--green-bd);
+               padding: 0.75rem 1rem; border-radius: 0 6px 6px 0; margin: 0.9rem 0; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+<main>
+
+<h1>Project Journal</h1>
+<p class="subtitle">A running decision log — what we decided, why, and how it turned out.</p>
+
+<p>
+  This is the <strong>"why"</strong> companion to the other docs. Read
+  <code>architecture.html</code> for how the system works <em>now</em>, the
+  <code>*-training.html</code> logs for which checkpoint scored what, and this file for
+  the design decisions that got us there — the rationale, the alternatives we rejected,
+  and the outcome. Entries are <strong>reverse-chronological (newest first)</strong>.
+  Each is an ADR-style record: <em>Context · Decision · Rationale · Outcome</em>, with a
+  status badge and a pointer to the implementing commit/tag.
+</p>
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     NEWEST ENTRY GOES HERE. To add one, prepend a complete
+     <article class="entry"> … </article> block directly below this comment,
+     following the format of the entries that follow. Keep newest-first order.
+     ════════════════════════════════════════════════════════════════════════ -->
+
+<!-- ── KernSheet Source protocol + fine-tune ───────────────────────────── -->
+<article class="entry">
+  <h2>KernSheet via a shared <code>Source</code> protocol, and the KernSheet fine-tunes</h2>
+  <div class="entry-meta">
+    <span>2026-06-02 → 06-04</span>
+    <span class="badge accepted">Accepted</span>
+    <span class="ref">68c663b · 2c76e75 · train/enhanced3-kernsheet · train/{boulez,walton,ravel}</span>
+  </div>
+
+  <h3>Context</h3>
+  <p>
+    The models trained only on synthetic PDMX. KernSheet is the <em>real</em> corpus —
+    published / scanned piano scores with manually-reviewed layout — and the natural
+    fine-tune target. But its on-disk layout was a legacy "envelope" schema (one entry
+    per grand-staff system storing only <code>rh_top</code> / <code>lh_bot</code>, plus
+    barline x-coords; no treble/bass split, no absolute bar numbers), incompatible with
+    the PDMX <code>Score</code> hierarchy the datasets consume.
+  </p>
+
+  <h3>Decision</h3>
+  <ul>
+    <li><strong>One <code>Source</code> protocol</strong> abstracts both datasets behind
+      four methods — <code>scores()</code>, <code>score(id)</code>,
+      <code>image(id, page)</code>, <code>records(id, first_bar, last_bar)</code> — so
+      staffer / noter / scorer never see either dataset's disk layout. Vocab is
+      <em>out</em> of the protocol: one shared <code>vocab.json</code> passed alongside.
+      Protocol + <code>Score</code> hierarchy live in a new <code>src/sheetmusic/</code>
+      (named to avoid the <code>score</code>/<code>scorer</code> collision); adapters
+      <code>PdmxSource</code> / <code>KernSheetSource</code> live in their own packages.</li>
+    <li><strong>Migrate, don't translate.</strong> A one-time script rewrote all 581
+      annotated KernSheet scores from the envelope schema into native <code>Score</code>
+      JSON at <code>KernSheet/layout/&lt;id&gt;.json</code> (non-destructive;
+      <code>.krn</code>/<code>.pdf</code> untouched). <code>KernSheetSource.score(id)</code>
+      then just <code>Score.from_json</code>s it — no per-load translation.</li>
+    <li><strong>Stave split = thirds.</strong> Piano grand staff is always RH treble +
+      LH bass: with <code>delta=(lh_bot−rh_top)//3</code>, RH = top third, LH = bottom
+      third, middle third = inter-staff gap. Persisted at migration.</li>
+    <li><strong>Shared vocab by extension.</strong> The frozen PDMX vocab (4784) was
+      <em>extended</em> (not rebuilt — rebuilding reorders ids and invalidates the
+      checkpoint's embedding/head rows) with KernSheet tokens at <code>count≥2</code> →
+      5543 tokens; PDMX ids preserved, new tokens appended at the tail. Checkpoints grown
+      with <code>noter grow-checkpoint</code> (handles the slot-major output head).</li>
+    <li><strong>Drop the heuristic detector.</strong> The ported OMR editor keeps the
+      book-keeping but its <code>find_bars</code> is a stub — layouts are seeded from the
+      trained staffer and human-reviewed, not projection-peak heuristics.</li>
+  </ul>
+
+  <h3>Rationale</h3>
+  <p>
+    Migrating once keeps the load path trivial and makes <code>Score</code> KernSheet's
+    native format (a step toward subsuming OMR entirely). The thirds split is a loose-but-
+    correct approximation that lets us train immediately; crucially it means
+    <strong>KernSheet boxes already carry ~15–25px inner-edge slop</strong>, which is why
+    box-jitter augmentation is applied only to PDMX (tight Verovio boxes), not to the
+    already-loose KernSheet fine-tune. Extending rather than rebuilding the vocab is what
+    makes warm-starting from PDMX checkpoints possible at all.
+  </p>
+
+  <div class="bad">
+    <strong>Chief hazard — bar-number alignment.</strong> Any system whose annotated
+    measure count diverges from the kern's <code>=N</code> sequence (pickups, repeats,
+    second endings, multirests) misaligns tokens to crops. Mitigation: a count-match guard
+    in migration (~31 scores excluded, flagged per-id not silently dropped) + crop/token
+    spot-checks.
+  </div>
+
+  <div class="outcome">
+    <strong>Outcome.</strong> Phases 1–3 (extract <code>sheetmusic</code>, refactor
+    datasets onto <code>Source</code>, implement <code>KernSheetSource</code> + port editor)
+    landed sample-for-sample equivalent on PDMX. <strong>Noter fine-tune</strong>
+    <code>enhanced3-kernsheet</code> → 96.78% val token-acc (later beaten by the
+    centering+jitter retrain at 97.41%). <strong>Scorer fine-tunes</strong>, composer-named
+    worst-first: <code>walton</code> (frozen-staffer, 87.2%) &lt; <code>boulez</code>
+    (joint, 89.5%) &lt; <code>ravel</code> (joint, 20 epochs, <strong>90.7% sim / 3 miscount</strong>
+    — current best). The monotonic gain came entirely from more joint detection training.
+    Detail in <code>scorer-training.html</code> / <code>noter-training.html</code>.
+  </div>
+</article>
+
+<!-- ── Scorer end-to-end merge ─────────────────────────────────────────── -->
+<article class="entry">
+  <h2>Scorer end-to-end: a differentiable crop bridge, not a shared backbone</h2>
+  <div class="entry-meta">
+    <span>2026-06-02</span>
+    <span class="badge accepted">Accepted</span>
+    <span class="ref">289cdce · cc4d374 · d0ee8ac · bbbc337 · train/merge1</span>
+  </div>
+
+  <h3>Context</h3>
+  <p>
+    The goal of "end-to-end" is to let the transcription loss reach the detector, so it
+    places boxes that <em>transcribe</em> well, not merely boxes with high IoU. The first
+    instinct was to fuse staffer and noter onto one shared low-level feature map. This
+    section traces the decisions — moved here from <code>architecture.html</code> §6/§8 —
+    that led to rejecting that fusion in favour of a differentiable crop.
+  </p>
+
+  <div class="rationale-grid">
+    <div class="rationale-card">
+      <h4>Starting point: naïve RoIAlign from the 16×16 backbone</h4>
+      <p>Reuse the staffer's 16×16-patch ViT feature map <code>(B, 256, 60, 43)</code> as
+        the RoIAlign source, <code>output_size=(4, 192)</code>.</p>
+      <p><strong>Problem:</strong> a stave is only 2–4 feature rows tall at 16px/patch —
+        far too coarse for transcription, where vertical position encodes pitch.</p>
+    </div>
+    <div class="rationale-card">
+      <h4>Attempt: full 4×4-patch backbone</h4>
+      <p>4×4 patches on the full page → 240×172 = 41 280 positions. A ViT on that many
+        tokens is ~256× the attention cost of today's 2 580-token model.</p>
+      <p><strong>Rejected</strong> on compute. But fine-grained features stayed the right
+        idea.</p>
+    </div>
+    <div class="rationale-card">
+      <h4>Constraint surfaced: noter patch is (64, 4)</h4>
+      <p><code>patch_width=4, patch_height=64</code> → <code>Conv2d(k=(64,4))</code>, 192
+        patches/staff. Pitch is encoded <em>vertically</em> in the 64px height; shortening
+        it breaks the inductive bias and invalidates the pre-trained weights.</p>
+    </div>
+    <div class="rationale-card">
+      <h4>Considered: shared 4×4 embed + branch convs</h4>
+      <p>One <code>Conv2d(1→256, k=4)</code> feeding both, per-branch convs restoring each
+        patch granularity.</p>
+      <p><strong>Rejected (deferred).</strong> Saves ~4K params; <em>discards</em> the
+        noter's pre-trained encoder and forces the staffer ViT to re-adapt to two stacked
+        random convs. Matching receptive fields ≠ matching the feature distribution the
+        pre-trained stacks learned to read.</p>
+    </div>
+  </div>
+
+  <h3>Decision</h3>
+  <p>
+    <strong>Keep both models intact; bridge them with a differentiable crop.</strong> The
+    coarse-RoI problem only existed <em>because</em> we insisted on a shared source —
+    cropping from the raw page dissolves it, and the noter samples at full pixel resolution
+    exactly as standalone. The actual prize (transcription gradients reaching the detector)
+    comes from the crop being <strong>differentiable in the box position</strong>, not from
+    sharing anything.
+  </p>
+  <div class="callout">
+    <strong>Implementation caveat (verified):</strong> the crop must use
+    <code>affine_grid</code> + <code>grid_sample</code>, <em>not</em>
+    <code>torchvision.ops.roi_align</code> — the latter does not backprop to box
+    coordinates (<code>boxes.grad is None</code>), carrying no gradient to the detector.
+    The bridge reproduces the standalone noter crop exactly — a 1:1, left-aligned,
+    right-masked <code>64×768</code> slice anchored at <code>(top − h, left)</code> — only
+    differentiably. Both stage-1/stage-2 checkpoints transfer with no surgery.
+  </div>
+
+  <h3>Deferred sub-decision: shared patch embedding</h3>
+  <p>
+    Sharing the low-level embedding is <span class="badge deferred">Deferred</span>, not
+    adopted: it buys nothing measurable (≈4K params, one cheap conv — irrelevant next to
+    the ViT and the AR decoder, and to the phone target) while imposing the most fragile
+    weight transfer in the design. Revisit only if: profiling shows the duplicated conv is
+    a real cost on-device (unlikely — both embeddings are tiny); evidence of low-level
+    feature data-starvation appears (none today); or a redesign rewrites the low-level
+    stack anyway. If revisited, <em>keep</em> the noter encoder (run it on the crops)
+    rather than discarding it.
+  </p>
+
+  <div class="outcome">
+    <strong>Outcome.</strong> The pre-merge diagnostic measured only <strong>~0.86%</strong>
+    transcription degradation feeding predicted (vs GT) crops to the unchanged noter — so
+    the merge starts from a near-working pipeline and merely adds the gradient path.
+    <code>train/merge1</code> completed end-to-end; the package + CLI landed on
+    <code>main</code>. The decoupled bridge later enabled the KernSheet scorer fine-tunes
+    (see the entry above). Architecture detail in <code>architecture.html</code> §3–§5.
+  </div>
+</article>
+
+<!-- ── Staffer: LTRB boxes → stave-primary grid anchors ─────────────────── -->
+<article class="entry">
+  <h2>Staffer: per-edge LTRB boxes, then stave-primary grid anchors</h2>
+  <div class="entry-meta">
+    <span>2026-05-29 → 06-01</span>
+    <span class="badge accepted">Accepted</span>
+    <span class="ref">train/enhanced2-ltrb-anchor · train/stave-primary-grid · train/stave-primary-grid-full</span>
+  </div>
+
+  <h3>Context</h3>
+  <p>
+    The standing defect was <strong>bottom-of-page drift</strong>: stave/system edges near
+    the page bottom were off by ~12–16px while the top was accurate to ~1px. Two
+    successive decisions chased it.
+  </p>
+
+  <h3>Decision 1 — direct LTRB system boxes (replacing cx/cy/w/h)</h3>
+  <p>
+    Predict each box as <code>(left, top, right, bottom)</code> directly, instead of
+    <code>(cx, cy, w, h)</code>. Under the old form <code>bottom = cy + h/2</code> had no
+    independent gradient — a <code>cy</code> bias toward the visually-dominant treble plus
+    an underestimated <code>h</code> cancel at the top but <em>compound</em> at the bottom
+    (the observed 0.9px-top / 16px-bottom asymmetry). LTRB gives every edge its own gradient.
+    Rejected the earlier "chaining" idea (<code>top[i+1]=bottom[i]</code>) — saves 1 number
+    in 8 for N=2 systems, not worth the error-propagation risk; the model learns structural
+    coupling from data.
+  </p>
+
+  <h3>Decision 2 — invert the hierarchy + uniform grid anchors</h3>
+  <p>
+    LTRB helped but didn't flatten the drift. The deeper fix, <strong>stave-primary</strong>:
+    invert staffer's hierarchy so <em>staves lead and systems are derived</em> (the system
+    box has zero independent DOF — it's the hull of its staves, so a separate
+    <code>sys_box_head</code> only let the copies disagree). Then <strong>freeze the stave
+    anchors to a uniform grid <code>(i+0.5)/M</code></strong> and route each GT stave to its
+    nearest anchor (free, non-contiguous assignment). This trains every query at ~uniform
+    frequency on a count-independent spatial band, so the rarely-fired high slots — the last
+    source of drift — finally learn their position.
+  </p>
+
+  <div class="bad">
+    <strong>Rejected along the way (negative results, logged in</strong>
+    <code>staffer-training.html</code><strong>):</strong> iterative box refinement
+    (<code>anchor-iter</code>, DAB-DETR style) was worse on every metric including the
+    bottom bin; count-conditional anchoring was insufficient (it only encodes count-averaged
+    position); bottom-bias sampler + 4× data didn't help, confirming the cause was
+    structural, not data-starvation. vflip augmentation hurt top accuracy.
+  </div>
+
+  <div class="outcome">
+    <strong>Outcome.</strong> <code>stave-primary-grid-full</code> (D=256) is the PDMX best:
+    sys IoU <strong>0.985</strong>, stave edge error <strong>0.41px</strong>, bottom drift
+    collapsed from ~12–16px to <strong>~1px</strong>. This is the detector feeding the
+    scorer; it was later KernSheet-fine-tuned (<code>stave-primary-grid-full-kernsheet</code>),
+    halving the real-scan domain gap (top 7.4→3.2px, bot 6.3→3.1px). Per-model metrics in
+    <code>staffer-training.html</code>.
+  </div>
+</article>
+
+</main>
+</body>
+</html>

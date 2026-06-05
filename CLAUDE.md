@@ -242,7 +242,7 @@ Multi-page scores store per-page PNGs; single-page scores use a flat filename.
 
 ## Current focus areas
 
-1. **Staffer — direct LTRB system boxes:** replaces `(cx,cy,w,h)` with direct `(left,top,right,bottom)` prediction so each edge has its own gradient signal, fixing the 16px bottom-drift asymmetry. Plan documented in `docs/staffer-plan.html`.
+1. **Staffer — direct LTRB system boxes:** replaces `(cx,cy,w,h)` with direct `(left,top,right,bottom)` prediction so each edge has its own gradient signal, fixing the 16px bottom-drift asymmetry. Design history in `docs/journal.html`.
 2. **NoterModel** — `enhanced3` baseline is solid (99.58% val acc). Next: longer sequences, harder scores, multi-staff generalisation.
 3. **Stave↔spine alignment** — mostly done; bar number mismatches remain when Score/page/system computed bar numbers diverge from Verovio output.
 4. [longer term] Multi-stave processing: `SystemTransformer` + `SharedSpineDecoder` + RoIAlign feature extraction from `staffer` detections.
