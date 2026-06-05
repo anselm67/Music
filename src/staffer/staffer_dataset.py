@@ -11,7 +11,7 @@ from torch.utils.data import Dataset, Subset, WeightedRandomSampler
 from torchvision.transforms import v2
 from tqdm import tqdm
 
-from sheetmusic import Source
+from sheetmusic import LetterboxResize, Source, letterbox_scale
 
 from .staffer_model import StafferConfig
 
@@ -35,10 +35,11 @@ class StafferDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]]):
         self.transform = v2.Compose(
             [
                 v2.Grayscale(),
-                v2.Resize(
+                LetterboxResize(
                     config.image_shape,
                     interpolation=config.interpolation,
                     antialias=config.antialias,
+                    fill=255,
                 ),
                 v2.ToDtype(torch.float, scale=True),
                 v2.Normalize(mean=[NORM_MEAN], std=[NORM_STD]),
@@ -99,28 +100,34 @@ class StafferDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]]):
             sys_boxes = torch.zeros(self.config.num_system_queries, 4)
             staff_boxes = torch.zeros(self.config.num_stave_queries, 4)
             assigns = torch.full((self.config.num_stave_queries,), -1, dtype=torch.long)
+            # Normalise boxes into the letterboxed canvas: scale the original-pixel
+            # coords by the aspect-preserving factor, then by the canvas dims (content
+            # is anchored at the top-left, matching LetterboxResize's bottom/right pad).
+            W, H = page.image_width, page.image_height
+            target_h, target_w = self.config.image_shape
+            scale = letterbox_scale(H, W, target_h, target_w)
+            sx, sy = scale / target_w, scale / target_h
             staff_idx = 0
             for sys_idx, system in enumerate(page.systems):
                 if sys_idx >= self.config.num_system_queries:
                     is_ok = False
                     break
-                W, H = page.image_width, page.image_height
                 sys_boxes[sys_idx] = torch.tensor(
                     [
-                        system.box.left / W,
-                        system.box.top / H,
-                        system.box.right / W,
-                        system.box.bottom / H,
+                        system.box.left * sx,
+                        system.box.top * sy,
+                        system.box.right * sx,
+                        system.box.bottom * sy,
                     ]
                 )
                 for staff in system.staves:
                     # ltrb; only cols [1,3] (top, bottom) are used in the loss
                     staff_boxes[staff_idx] = torch.tensor(
                         [
-                            staff.box.left / W,
-                            staff.box.top / H,
-                            staff.box.right / W,
-                            staff.box.bottom / H,
+                            staff.box.left * sx,
+                            staff.box.top * sy,
+                            staff.box.right * sx,
+                            staff.box.bottom * sy,
                         ]
                     )
                     assigns[staff_idx] = sys_idx

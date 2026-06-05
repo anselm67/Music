@@ -8,7 +8,7 @@ from torchvision.transforms import v2
 from torchvision.transforms.functional import crop
 from tqdm import tqdm
 
-from sheetmusic import Box, Source
+from sheetmusic import Box, LetterboxResize, Source, letterbox_scale
 
 from .noter_model import NoterConfig
 from .noter_vocab import Vocab
@@ -99,10 +99,11 @@ class NoterDataset(Dataset):
             [
                 v2.Grayscale(),
                 v2.ToDtype(torch.float, scale=True),
-                v2.Resize(
+                LetterboxResize(
                     config.page_shape,
                     interpolation=config.interpolation,
                     antialias=config.antialias,
+                    fill=1.0,
                 ),
                 v2.Normalize(mean=[NORM_MEAN], std=[NORM_STD]),
             ]
@@ -114,9 +115,18 @@ class NoterDataset(Dataset):
         # Creates the actual dataset, with theright number of samples.
         logging.info("Initializing NoterDataset...")
         self.items = []
+        target_h, target_w = config.page_shape
         for score in tqdm(source.scores(), desc="Loading noter dataset"):
-            score = score.resize(config.page_shape[1], config.page_shape[0])
             for page in score.pages:
+                # Letterbox the boxes by the same single scale the image transform
+                # uses, so crop coords land on the (aspect-preserved) staff.
+                scale = letterbox_scale(
+                    page.image_height, page.image_width, target_h, target_w
+                )
+                page = page.resize(
+                    min(round(page.image_width * scale), target_w),
+                    min(round(page.image_height * scale), target_h),
+                )
                 for system in page.systems:
                     match system.staff_count:
                         case 1:

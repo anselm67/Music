@@ -14,7 +14,7 @@ from torch.utils.data import Dataset
 from torchvision.transforms import v2
 from tqdm import tqdm
 
-from sheetmusic import Source
+from sheetmusic import LetterboxResize, Source, letterbox_scale
 
 from noter import SequenceLoader, Vocab
 
@@ -39,10 +39,11 @@ class ScorerDataset(Dataset[Sample]):
         self.transform = v2.Compose(
             [
                 v2.Grayscale(),
-                v2.Resize(
+                LetterboxResize(
                     config.staffer.image_shape,
                     interpolation=config.staffer.interpolation,
                     antialias=config.staffer.antialias,
+                    fill=255,
                 ),
                 v2.ToDtype(torch.float, scale=True),
                 v2.Normalize(mean=[0.9563435316085815], std=[0.16557540870879858]),
@@ -80,6 +81,11 @@ class ScorerDataset(Dataset[Sample]):
             score = self.source.score(score_id)
             page = score.pages[page_number - 1]
             W, H = page.image_width, page.image_height
+            # Letterboxed-canvas normalisation (see StafferDataset): scale by the
+            # aspect-preserving factor, then by the canvas dims (content top-left).
+            target_h, target_w = c.image_shape
+            scale = letterbox_scale(H, W, target_h, target_w)
+            sx, sy = scale / target_w, scale / target_h
 
             sys_boxes = torch.zeros(c.num_system_queries, 4)
             staff_boxes = torch.zeros(c.num_stave_queries, 4)
@@ -102,10 +108,10 @@ class ScorerDataset(Dataset[Sample]):
                 spine_numbers = [0] if system.staff_count == 1 else [1, 0]
                 sys_boxes[sys_idx] = torch.tensor(
                     [
-                        system.box.left / W,
-                        system.box.top / H,
-                        system.box.right / W,
-                        system.box.bottom / H,
+                        system.box.left * sx,
+                        system.box.top * sy,
+                        system.box.right * sx,
+                        system.box.bottom * sy,
                     ]
                 )
                 for i, staff in enumerate(system.staves):
@@ -125,10 +131,10 @@ class ScorerDataset(Dataset[Sample]):
                         break
                     staff_boxes[staff_idx] = torch.tensor(
                         [
-                            staff.box.left / W,
-                            staff.box.top / H,
-                            staff.box.right / W,
-                            staff.box.bottom / H,
+                            staff.box.left * sx,
+                            staff.box.top * sy,
+                            staff.box.right * sx,
+                            staff.box.bottom * sy,
                         ]
                     )
                     assigns[staff_idx] = sys_idx
