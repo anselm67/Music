@@ -90,6 +90,71 @@
      following the format of the entries that follow. Keep newest-first order.
      ════════════════════════════════════════════════════════════════════════ -->
 
+<!-- ── Beam search decoding in scorer ──────────────────────────────────── -->
+<article class="entry">
+  <h2>Beam search over slot 0 in scorer inference</h2>
+  <div class="entry-meta">
+    <span>2026-06-05</span>
+    <span class="badge accepted">Accepted</span>
+    <span class="ref">5022327</span>
+  </div>
+
+  <h3>Context</h3>
+  <p>
+    The scorer's <code>predict()</code> decoded autoregressively with plain greedy argmax. A
+    recurring error pattern surfaced: the <code>.</code> token (Humdrum <strong>null
+    record</strong> — "no new event in this spine at this timepoint," used to keep two spines
+    in rhythmic alignment) was inserted or deleted spuriously. Because <code>.</code> is an
+    insertion/deletion, not a substitution, a single wrong <code>.</code> shifts every
+    subsequent token one position, cascading into many apparent mismatches and contributing
+    to miscount (wrong stave length). Post-hoc error analysis on <code>ravel</code>:
+    substitutions 61% of errors, structural ins/del 38.9%, 7.5% of systems desynced — and
+    <code>.</code> insertions were the dominant ins/del class.
+  </p>
+  <p>
+    Generating <code>.</code> correctly requires knowing the <em>other</em> spine's current
+    rhythmic duration — cross-spine state the decoder must maintain implicitly. Greedy commits
+    immediately with no chance to recover once the wrong branch is taken.
+  </p>
+
+  <h3>Decision</h3>
+  <p>
+    Replace greedy with <strong>beam search (width 4)</strong> over <strong>slot 0 only</strong>
+    (the primary token that governs sequence structure, including <code>.</code>); chord slots
+    1–7 remain greedy from the selected beam's logits. Staves are decoded one at a time rather
+    than in a single K×B batch, so peak memory scales with beam width, not K×beam width (the
+    batched version OOMed at B=4 on a 16 GB GPU with a dense page). The original greedy path
+    is preserved via <code>predict(use_beam=False)</code>.
+  </p>
+
+  <div class="rationale-grid">
+    <div class="rationale-card">
+      <h4>Why beam over slot 0 only?</h4>
+      <p>Slot 0 is the structural decision: note vs <code>.</code>, note vs EOS — these
+        determine sequence length and alignment. Slots 1–7 are chord tones, independent per
+        slot, and secondary to the structural choice. Beaming over the full chord
+        (vocab<sup>8</sup>) is intractable; beaming over slot 0 targets exactly the failure mode.</p>
+    </div>
+    <div class="rationale-card">
+      <h4>Why not constrained decoding?</h4>
+      <p>Constrained decoding would fix the <code>.</code> problem structurally — only allow
+        <code>.</code> when the rhythm tracker says the current beat position is subdivided by
+        the other spine. But it requires a Kern-aware beat-position state machine alongside the
+        decoder. Beam search is a far cheaper first step; if it closes the gap, constrained
+        decoding can stay deferred.</p>
+    </div>
+  </div>
+
+  <div class="outcome">
+    <strong>Outcome.</strong> 300-page KernSheet eval on <code>ravel</code>: avg similarity
+    <strong>89.6% → 91.3%</strong> (+1.7%), miscounts <strong>9 → 5</strong> (−44%). The
+    miscount drop is consistent with beam search recovering from spurious <code>.</code>
+    insertions, which shift sequence length. ~3× slower per-page (stave-by-stave loop vs
+    batched greedy), acceptable for inference. Beam width 4 was chosen and not swept; a width
+    sweep may show diminishing returns.
+  </div>
+</article>
+
 <!-- ── KernSheet Source protocol + fine-tune ───────────────────────────── -->
 <article class="entry">
   <h2>KernSheet via a shared <code>Source</code> protocol, and the KernSheet fine-tunes</h2>
