@@ -2,6 +2,7 @@
 
 import logging
 
+import torch
 import lightning as L
 from torch.utils.data import DataLoader, random_split
 
@@ -37,7 +38,9 @@ class StafferDataModule(L.LightningDataModule):
             count=self.config.train_len + self.config.valid_len,
         )
         self.train_ds, self.val_ds = random_split(
-            full, [self.config.train_len, self.config.valid_len]
+            full,
+            [self.config.train_len, self.config.valid_len],
+            generator=torch.Generator().manual_seed(42),
         )
 
     def train_dataloader(self) -> DataLoader:

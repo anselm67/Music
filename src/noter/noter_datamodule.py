@@ -1,5 +1,6 @@
 import copy
 
+import torch
 import lightning as L
 from torch.utils.data import DataLoader, Dataset, Subset, random_split
 
@@ -35,7 +36,9 @@ class NoterDataModule(L.LightningDataModule):
             count=self.config.train_len + self.config.valid_len,
         )
         self.train_ds, self.val_ds = random_split(
-            full, [self.config.train_len, self.config.valid_len]
+            full,
+            [self.config.train_len, self.config.valid_len],
+            generator=torch.Generator().manual_seed(42),
         )
         if self.config.jitter > 0:
             # Shallow copy shares the (read-only) items/transform but lets the
