@@ -213,7 +213,7 @@ class ScorerModule(L.LightningModule):
         self._step(batch, "val")
 
     @torch.no_grad()
-    def predict(self, image: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+    def predict(self, image: Tensor, use_beam: bool = True) -> tuple[Tensor, Tensor, Tensor]:
         """End-to-end inference for a single page: detect → crop → transcribe.
 
         ``image``: ``(1, 1, H, W)``. Returns ``(boxes, tokens, owners)``:
@@ -235,10 +235,11 @@ class ScorerModule(L.LightningModule):
             )
             return boxes, tokens, torch.empty(0, dtype=torch.long, device=image.device)
         crops, widths = self.model.crop(image, boxes)
-        return boxes, self._generate(crops, widths), owners
+        generate = self._generate_beam if use_beam else self._generate_greedy
+        return boxes, generate(crops, widths), owners
 
     @torch.no_grad()
-    def _generate(self, crops: Tensor, widths: Tensor) -> Tensor:
+    def _generate_greedy(self, crops: Tensor, widths: Tensor) -> Tensor:
         """Autoregressively decode token sequences for K staff crops (greedy)."""
         c = self.config.noter
         K = crops.shape[0]
@@ -263,6 +264,80 @@ class ScorerModule(L.LightningModule):
             if bool(done.all()):
                 break
         return generated[:, 1:]  # strip SOS
+
+    @torch.no_grad()
+    def _generate_beam(self, crops: Tensor, widths: Tensor, beam_width: int = 4) -> Tensor:
+        """Autoregressively decode token sequences for K staff crops (beam search).
+
+        Processes each stave independently so peak memory scales with beam_width,
+        not K*beam_width.  Beams over slot 0 (the primary/structural token that
+        governs null records and sequence length); slots 1+ are decoded greedily
+        from the selected beam's logits.
+        """
+        return torch.cat(
+            [
+                self._beam_single(crops[k : k + 1], widths[k : k + 1], beam_width)
+                for k in range(crops.shape[0])
+            ],
+            dim=0,
+        )
+
+    @torch.no_grad()
+    def _beam_single(self, crop: Tensor, width: Tensor, B: int) -> Tensor:
+        """Beam search for one stave crop → (1, T, max_chords)."""
+        c = self.config.noter
+        device = crop.device
+
+        memory, src_pad = self.model.noter.encode(crop, width)
+        memory = memory.repeat_interleave(B, dim=0)   # (B, S, D)
+        src_pad = src_pad.repeat_interleave(B, dim=0)  # (B, S)
+
+        generated = torch.full((B, 1, c.max_chords), Vocab.SOS, dtype=torch.long, device=device)
+        scores = torch.full((B,), float("-inf"), device=device)
+        scores[0] = 0.0
+        done = torch.zeros(B, dtype=torch.bool, device=device)
+
+        for _ in range(c.max_seqlen - 1):
+            tgt_pad = (generated == Vocab.SIL).all(dim=-1)
+            logits = self.model.noter.decode(
+                generated,
+                memory,
+                self._causal_mask(generated.shape[1]),
+                tgt_pad,
+                src_pad,
+            )
+            step_logits = logits[:, -1, :, :]  # (B, max_chords, V)
+            V = step_logits.shape[-1]
+
+            slot0_lp = step_logits[:, 0, :].log_softmax(-1)  # (B, V)
+            slot0_lp[done] = float("-inf")
+            slot0_lp[done, Vocab.EOS] = 0.0
+
+            # (B, V) candidates → keep top B
+            top_scores, top_idx = (scores.unsqueeze(-1) + slot0_lp).view(B * V).topk(B)
+            beam_from = top_idx // V
+            token0 = top_idx % V
+
+            scores = top_scores
+            done = done[beam_from]
+            generated = generated[beam_from]
+
+            next_tokens = step_logits[beam_from].argmax(-1)  # (B, max_chords)
+            next_tokens[:, 0] = token0
+            next_tokens[done] = Vocab.EOS
+            done = done | (next_tokens[:, 0] == Vocab.EOS)
+
+            generated = torch.cat([generated, next_tokens.unsqueeze(1)], dim=1)
+            if bool(done.all()):
+                break
+
+        best = generated[0:1, 1:]  # (1, T, max_chords); strip SOS
+        # Pad to max_seqlen - 1 so staves can be concatenated across independent runs.
+        pad_len = c.max_seqlen - 1 - best.shape[1]
+        if pad_len > 0:
+            pad = torch.full((1, pad_len, c.max_chords), Vocab.PAD, dtype=torch.long, device=device)
+            best = torch.cat([best, pad], dim=1)
+        return best
 
     @classmethod
     def load_from_checkpoints(
