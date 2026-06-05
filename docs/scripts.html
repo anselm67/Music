@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>scripts/ — One-off Tools</title>
+  <style>
+    :root {
+      --blue-bg:   #dbeafe; --blue-bd:   #2563eb; --blue-tx:   #1e40af;
+      --green-bg:  #d1fae5; --green-bd:  #059669; --green-tx:  #065f46;
+      --amber-bg:  #fef3c7; --amber-bd:  #d97706; --amber-tx:  #92400e;
+      --violet-bg: #ede9fe; --violet-bd: #7c3aed; --violet-tx: #4c1d95;
+      --slate-bg:  #f1f5f9; --slate-bd:  #475569; --slate-tx:  #334155;
+      --rose-bg:   #ffe4e6; --rose-bd:   #e11d48; --rose-tx:   #9f1239;
+      --body-bg:   #f8fafc; --surface:   #ffffff;
+      --border:    #e2e8f0; --muted:     #64748b; --text:      #1e293b;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--body-bg); color: var(--text);
+      margin: 0; padding: 2rem 1rem; line-height: 1.65;
+    }
+    main { max-width: 1000px; margin: 0 auto; }
+    h1 { font-size: 2rem; margin: 0 0 0.35rem; color: #0f172a; }
+    .subtitle { color: var(--muted); font-size: 1rem; margin: 0 0 2rem; }
+    p  { margin: 0.4rem 0 0.9rem; }
+    code {
+      font-family: 'JetBrains Mono','Fira Code','Cascadia Code',monospace;
+      background: var(--slate-bg); padding: 0.1em 0.35em; border-radius: 4px;
+      font-size: 0.875em;
+    }
+    pre {
+      background: var(--slate-bg); padding: 0.85rem 1.1rem; border-radius: 6px;
+      overflow-x: auto; font-size: 0.84rem; margin: 0.5rem 0 0;
+      font-family: 'JetBrains Mono','Fira Code','Cascadia Code',monospace;
+    }
+    .badge {
+      display: inline-block; font-size: 0.72rem; font-weight: 700;
+      letter-spacing: 0.03em; text-transform: uppercase;
+      padding: 0.12rem 0.5rem; border-radius: 999px; border: 1px solid;
+    }
+    .badge-blue   { background: var(--blue-bg);   color: var(--blue-tx);   border-color: var(--blue-bd); }
+    .badge-green  { background: var(--green-bg);  color: var(--green-tx);  border-color: var(--green-bd); }
+    .badge-amber  { background: var(--amber-bg);  color: var(--amber-tx);  border-color: var(--amber-bd); }
+    .badge-violet { background: var(--violet-bg); color: var(--violet-tx); border-color: var(--violet-bd); }
+    .badge-slate  { background: var(--slate-bg);  color: var(--slate-tx);  border-color: var(--slate-bd); }
+    .badge-rose   { background: var(--rose-bg);   color: var(--rose-tx);   border-color: var(--rose-bd); }
+
+    .script {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1.35rem 1.6rem; margin-bottom: 1.25rem;
+    }
+    .script-header {
+      display: flex; align-items: baseline; gap: 0.75rem; flex-wrap: wrap;
+      margin-bottom: 0.55rem;
+    }
+    .script-name {
+      font-family: 'JetBrains Mono','Fira Code','Cascadia Code',monospace;
+      font-size: 1.05rem; font-weight: 700; color: #0f172a;
+    }
+    .script-desc { font-size: 0.94rem; margin: 0 0 0.6rem; }
+    .label {
+      font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--muted); margin: 0.85rem 0 0.2rem;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>scripts/</h1>
+  <p class="subtitle">
+    One-off diagnostic and migration tools. Run via
+    <code>uv run python scripts/&lt;name&gt;.py</code> from the repo root.
+    Not part of the installable package and not type-checked under <code>mypy</code>.
+  </p>
+
+  <!-- ───────────────────────────────────────────────── eval_predicted_boxes -->
+  <div class="script">
+    <div class="script-header">
+      <span class="script-name">eval_predicted_boxes.py</span>
+      <span class="badge badge-blue">diagnostic</span>
+      <span class="badge badge-blue">staffer</span>
+      <span class="badge badge-blue">noter</span>
+    </div>
+    <p class="script-desc">
+      Pre-merge jitter diagnostic. Measures how much noter's transcription degrades
+      when fed staffer's <em>predicted</em> stave crops instead of ground-truth crops.
+      Reports token-similarity drop, matched-box error (Δtop/Δbottom px), and
+      detection miss/extra rates — i.e. the spec for noter's box-jitter augmentation.
+      Supports both PDMX and KernSheet sources.
+    </p>
+    <div class="label">Usage</div>
+<pre># PDMX
+uv run python scripts/eval_predicted_boxes.py \
+    --noter enhanced3 --staffer stave-primary-grid \
+    --csv System2.csv --pages 300 --device cuda
+
+# KernSheet (real-scan jitter spec)
+uv run python scripts/eval_predicted_boxes.py \
+    --kern-home /home/anselm/datasets/KernSheet \
+    --noter enhanced3-kernsheet --staffer stave-primary-grid-full-kernsheet \
+    --pages 300 --device cuda</pre>
+  </div>
+
+  <!-- ──────────────────────────────────────────────────────── imslp_predict -->
+  <div class="script">
+    <div class="script-header">
+      <span class="script-name">imslp_predict.py</span>
+      <span class="badge badge-green">demo</span>
+      <span class="badge badge-green">scorer</span>
+    </div>
+    <p class="script-desc">
+      End-to-end demo on a real IMSLP score. Downloads a PDF (direct URL or local
+      file), rasterises every page to PNG via <code>pdftoppm</code>, then runs
+      <code>scorer predict</code>. Handles the IMSLP disclaimer cookie automatically.
+    </p>
+    <div class="label">Usage</div>
+<pre>uv run python scripts/imslp_predict.py &lt;url|file.pdf&gt; [--dpi 300] [--model ravel] [--pages N]</pre>
+    <div class="label">Notes</div>
+    <p>Requires <code>pdftoppm</code> (poppler). Pass <code>--pages N</code> to limit
+    to the first N pages. The default model is <code>ravel</code>.</p>
+  </div>
+
+  <!-- ────────────────────────────────────── kernsheet_pages_to_1based -->
+  <div class="script">
+    <div class="script-header">
+      <span class="script-name">kernsheet_pages_to_1based.py</span>
+      <span class="badge badge-amber">migration</span>
+      <span class="badge badge-amber">kernsheet</span>
+    </div>
+    <p class="script-desc">
+      One-time migration: bumps every <code>page_number</code> in KernSheet
+      <code>layout/*.json</code> files from 0-based to 1-based (matching the
+      PDMX/staffer convention of <code>pages[page_number - 1]</code>). Also drops
+      the stale 0-based PNG cache so images re-render under the new naming.
+      Idempotent — scores already at 1-based are skipped.
+    </p>
+    <div class="label">Usage</div>
+<pre>uv run python scripts/kernsheet_pages_to_1based.py</pre>
+  </div>
+
+  <!-- ─────────────────────────────────────── migrate_bars_to_system -->
+  <div class="script">
+    <div class="script-header">
+      <span class="script-name">migrate_bars_to_system.py</span>
+      <span class="badge badge-amber">migration</span>
+      <span class="badge badge-amber">pdmx</span>
+      <span class="badge badge-amber">kernsheet</span>
+    </div>
+    <p class="script-desc">
+      Moves <code>bars[]</code> (barline x-coordinates) from each <code>Staff</code>
+      up to the parent <code>System</code> in layout JSON files. Since all staves in
+      a system share the same bars, storing it once on the system avoids redundancy.
+      Default is a dry-run; pass <code>--write</code> to modify files in place.
+      Migrates both PDMX (~253k files) and KernSheet (~581 files) in parallel.
+    </p>
+    <div class="label">Usage</div>
+<pre>uv run python scripts/migrate_bars_to_system.py           # dry-run
+uv run python scripts/migrate_bars_to_system.py --write   # write in-place</pre>
+  </div>
+
+  <!-- ─────────────────────────────────────── migrate_kernsheet_layout -->
+  <div class="script">
+    <div class="script-header">
+      <span class="script-name">migrate_kernsheet_layout.py</span>
+      <span class="badge badge-amber">migration</span>
+      <span class="badge badge-amber">kernsheet</span>
+    </div>
+    <p class="script-desc">
+      Thin shim around <code>kernsheet.migrate.migrate</code> (also exposed as
+      <code>kernsheet migrate</code> CLI). Migrates KernSheet layout files to the
+      current schema. Default is a dry-run.
+    </p>
+    <div class="label">Usage</div>
+<pre>uv run python scripts/migrate_kernsheet_layout.py [--home DIR] [--limit N] [--write]</pre>
+  </div>
+
+  <!-- ──────────────────────────────────────────── migrate_layout_id -->
+  <div class="script">
+    <div class="script-header">
+      <span class="script-name">migrate_layout_id.py</span>
+      <span class="badge badge-amber">migration</span>
+      <span class="badge badge-amber">pdmx</span>
+    </div>
+    <p class="script-desc">
+      Rewrites the <code>id</code> field in every PDMX <code>build/layout/*.json</code>
+      from the old absolute MXL path to the home-relative key
+      (<code>mxl/&lt;...&gt;.mxl</code>). Safe to run during a live training — only
+      the unused <code>id</code> field changes, and writes are atomic
+      (<code>os.replace</code>). Dry-run by default.
+    </p>
+    <div class="label">Usage</div>
+<pre>uv run python scripts/migrate_layout_id.py [--home DIR] [--dry-run] [--limit N]</pre>
+  </div>
+
+  <!-- ──────────────────────────────────────────── scorer_error_mix -->
+  <div class="script">
+    <div class="script-header">
+      <span class="script-name">scorer_error_mix.py</span>
+      <span class="badge badge-violet">diagnostic</span>
+      <span class="badge badge-violet">scorer</span>
+    </div>
+    <p class="script-desc">
+      Settles the "spellcheck layer" design question with a number. For each predicted
+      stave it runs a Levenshtein backtrace and tallies substitutions (wrong token —
+      a position-wise refiner <em>can</em> fix these) vs. insertions/deletions
+      (structural length changes — a fixed-length spellcheck layer <em>cannot</em>
+      fix these). Also reports whether the predicted spines in a multi-stave system
+      agree on the number of barline (<code>=</code>) records vs. GT.
+    </p>
+    <div class="label">Usage</div>
+<pre>uv run python scripts/scorer_error_mix.py ravel -n 300
+uv run python scripts/scorer_error_mix.py merge1 -n 300 --pdmx-home &lt;PDMX&gt;</pre>
+  </div>
+
+  <!-- ──────────────────────────────────────────── smoke_kernsheet -->
+  <div class="script">
+    <div class="script-header">
+      <span class="script-name">smoke_kernsheet.py</span>
+      <span class="badge badge-slate">smoke test</span>
+      <span class="badge badge-slate">kernsheet</span>
+    </div>
+    <p class="script-desc">
+      Smoke test for the KernSheet data plumbing. Runs a tiny number of training
+      steps (2 optimiser steps) through staffer, noter, and scorer on
+      <code>KernSheetSource</code> to confirm the full pipeline
+      (source → dataset → datamodule → model forward+backward) doesn't crash.
+      Not a real training run — weights are garbage, the goal is only to exercise
+      the plumbing end-to-end.
+    </p>
+    <div class="label">Usage</div>
+<pre>uv run python scripts/smoke_kernsheet.py</pre>
+  </div>
+
+  <!-- ──────────────────────────────────────────── staffer_box_deltas -->
+  <div class="script">
+    <div class="script-header">
+      <span class="script-name">staffer_box_deltas.py</span>
+      <span class="badge badge-blue">diagnostic</span>
+      <span class="badge badge-blue">staffer</span>
+    </div>
+    <p class="script-desc">
+      Per-dimension box delta diagnostic. For each matched stave pair (predicted vs.
+      GT, Hungarian-matched), reports Δleft, Δright, Δtop, Δbottom (pred − GT, pixels)
+      with signed mean (bias direction) and absolute statistics (error magnitude).
+      Supports both PDMX and KernSheet sources.
+    </p>
+    <div class="label">Usage</div>
+<pre># PDMX
+uv run python scripts/staffer_box_deltas.py --staffer stave-primary-grid-full
+
+# KernSheet
+uv run python scripts/staffer_box_deltas.py \
+    --staffer stave-primary-grid-full-kernsheet \
+    --kern-home /home/anselm/datasets/KernSheet</pre>
+  </div>
+
+</main>
+</body>
+</html>
