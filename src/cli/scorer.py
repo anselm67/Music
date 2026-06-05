@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
+from scipy.optimize import linear_sum_assignment
 from lightning.pytorch.callbacks import Callback, EarlyStopping, ModelCheckpoint
 from lightning.pytorch.callbacks.early_stopping import EarlyStoppingReason
 from lightning.pytorch.loggers import CSVLogger
@@ -608,6 +609,23 @@ def _similarity(gt_seq: torch.Tensor, pred_seq: torch.Tensor, max_chords: int) -
     return 1.0 - edit / max_cost if max_cost > 0 else 1.0
 
 
+def _match_staves(
+    gt_cy: np.ndarray,  # type: ignore[type-arg]
+    pred_cy: np.ndarray,  # type: ignore[type-arg]
+) -> list[tuple[int, int]]:
+    """Nearest-center-y matching (Hungarian) of GT↔predicted staves.
+
+    Returns ``(gt_idx, pred_idx)`` pairs, ``min(len(gt), len(pred))`` of them.
+    Matching by center-y instead of top-to-bottom array order keeps a mid-page
+    miss/extra from misaligning every stave below it.
+    """
+    if len(gt_cy) == 0 or len(pred_cy) == 0:
+        return []
+    cost = np.abs(gt_cy[:, None] - pred_cy[None, :])
+    rows, cols = linear_sum_assignment(cost)
+    return list(zip(rows.tolist(), cols.tolist()))
+
+
 def _load_for_inference(name: str) -> tuple[ScorerConfig, ScorerModule]:
     """Load a trained Scorer checkpoint for evaluation, on the best available device."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -740,8 +758,9 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
 def run_eval(ctx: ClickContext, name: str, size: int) -> None:
     """Evaluates end-to-end transcription on N random pages.
 
-    Reports token similarity on order-matched (top-to-bottom) predicted vs GT staves,
-    plus detection counts so geometric slop and miss/extra are visible separately.
+    Reports token similarity on predicted vs GT staves matched by center-y
+    (Hungarian), plus detection counts so geometric slop and miss/extra are
+    visible separately.
 
     NAME: The model version to evaluate.
     """
@@ -754,16 +773,21 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
     similarities: list[float] = []
     total_gt, total_pred, pages_miscount = 0, 0, 0
     for idx in tqdm(indices, desc="Evaluating"):
-        image, _gt_sys, _gt_stave, gt_assign, stave_tokens = dataset[idx]
+        image, _gt_sys, gt_stave, gt_assign, stave_tokens = dataset[idx]
         num_gt = int((gt_assign != -1).sum())
-        _boxes, tokens, _owners = module.predict(image.unsqueeze(0).to(module.device))
+        boxes, tokens, _owners = module.predict(image.unsqueeze(0).to(module.device))
         num_pred = tokens.shape[0]
         total_gt += num_gt
         total_pred += num_pred
         pages_miscount += int(num_pred != num_gt)
-        for k in range(min(num_gt, num_pred)):
+        # Center-y as a fraction of height (scale-invariant): GT boxes are already
+        # normalised ltrb; predicted boxes are px, so divide by the image height.
+        H = image.shape[-2]
+        gt_cy = ((gt_stave[:num_gt, 1] + gt_stave[:num_gt, 3]) / 2).numpy()
+        pred_cy = (((boxes[:, 2] + boxes[:, 4]) / 2) / H).cpu().numpy()
+        for g, p in _match_staves(gt_cy, pred_cy):
             similarities.append(
-                _similarity(stave_tokens[k], tokens[k].cpu(), config.noter.max_chords)
+                _similarity(stave_tokens[g], tokens[p].cpu(), config.noter.max_chords)
             )
 
     if not similarities:
