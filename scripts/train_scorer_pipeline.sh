@@ -38,14 +38,16 @@ NOTER_FT_EPOCHS=12
 SCORER_EPOCHS=20
 
 NOTER_JITTER=0.5             # PDMX base only; KernSheet boxes are a thirds approx (no jitter)
-SCORER_FREEZE_STEPS=3000     # short detector freeze before joint training (boulez/ravel recipe)
 
-FT_LR=1e-4                   # fine-tune learning rate (staffer/noter/scorer KernSheet stages)
-FT_WARMUP=200
+# Per-stage fine-tune LR / warmup. The staffer FT ran 10x lower than the noter FT;
+# the scorer rides the ScorerConfig defaults (lr 1e-4, warmup 500, freeze 500) — it
+# passes no --lr/--warmup-steps/--freeze-staffer-steps, matching the ravel run.
+STAFFER_FT_LR=1e-5; STAFFER_FT_WARMUP=200
+NOTER_FT_LR=1e-4;   NOTER_FT_WARMUP=200
 
-STAFFER_FT_TRAIN=2080; STAFFER_FT_VALID=220     # 2321 pages
+STAFFER_FT_TRAIN=2000; STAFFER_FT_VALID=300     # 2321 pages
 NOTER_FT_TRAIN=23400;  NOTER_FT_VALID=2600      # 26166 staff items
-SCORER_FT_TRAIN=2080;  SCORER_FT_VALID=220      # 2321 pages (>= 250 batches at bs 8)
+SCORER_FT_TRAIN=2000;  SCORER_FT_VALID=300      # 2321 pages (>= 250 batches at bs 8)
 # ---------------------------------------------------------------------------
 
 run() {
@@ -99,7 +101,8 @@ else
   run staffer --kern-home "$KS" --log-file "logs/staffer/$NAME-kernsheet.log" \
     train --init-from "checkpoints/staffer/$NAME/last.ckpt" \
     --train-len "$STAFFER_FT_TRAIN" --valid-len "$STAFFER_FT_VALID" \
-    --lr "$FT_LR" --warmup-steps "$FT_WARMUP" -e "$STAFFER_FT_EPOCHS" \
+    --lr "$STAFFER_FT_LR" --warmup-steps "$STAFFER_FT_WARMUP" \
+    -e "$STAFFER_FT_EPOCHS" --use-sampler \
     "$NAME-kernsheet"
 fi
 
@@ -123,7 +126,8 @@ else
   run noter --kern-home "$KS" --log-file "logs/noter/$NAME-kernsheet.log" \
     train --init-from "checkpoints/noter/$NAME/last.ckpt" \
     --train-len "$NOTER_FT_TRAIN" --valid-len "$NOTER_FT_VALID" \
-    --lr "$FT_LR" --warmup-steps "$FT_WARMUP" -e "$NOTER_FT_EPOCHS" -s 2.0 \
+    --lr "$NOTER_FT_LR" --warmup-steps "$NOTER_FT_WARMUP" \
+    -e "$NOTER_FT_EPOCHS" -s 2.0 \
     "$NAME-kernsheet"
 fi
 
@@ -133,11 +137,13 @@ if done_ckpt scorer "$SCORER_NAME"; then
   echo "  exists — skipping (FORCE=1 to retrain)"
 else
   tag "train/$SCORER_NAME"
+  # No --vocab/--lr/--warmup-steps/--freeze-staffer-steps: ride the ScorerConfig
+  # defaults (the default vocab path under --kern-home is the KernSheet vocab), as
+  # the ravel run did.
   run scorer --kern-home "$KS" --log-file "logs/scorer/$SCORER_NAME.log" \
-    train --staffer "$NAME-kernsheet" --noter "$NAME-kernsheet" --vocab "$VOCAB" \
-    --freeze-staffer-steps "$SCORER_FREEZE_STEPS" \
+    train --staffer "$NAME-kernsheet" --noter "$NAME-kernsheet" \
     --train-len "$SCORER_FT_TRAIN" --valid-len "$SCORER_FT_VALID" \
-    --lr "$FT_LR" --warmup-steps "$FT_WARMUP" -e "$SCORER_EPOCHS" \
+    -e "$SCORER_EPOCHS" \
     "$SCORER_NAME"
 fi
 
