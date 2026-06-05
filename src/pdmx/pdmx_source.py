@@ -8,6 +8,7 @@ existing ``get_path`` rules.
 
 import json
 from collections.abc import Iterator
+from pathlib import Path
 
 from torch import Tensor
 from torchvision.io import decode_image
@@ -33,17 +34,17 @@ class PdmxSource:
         layout_file = self.pdmx.get_path(mxl_file, "layout")
         return Score.from_json(json.loads(layout_file.read_text()))
 
-    def image(self, id: str, page_number: int) -> Tensor:
-        # Single-page scores use a flat png name; multi-page use a `_NNN` suffix.
-        # Pick by existence probe (no Score needed): flat if present, else paged.
+    def image_path(self, id: str, page_number: int) -> Path:
         mxl_file = self.pdmx.home / id
         flat = self.pdmx.get_path(mxl_file, "png")
-        png_file = (
+        return (
             flat
             if flat.exists()
             else self.pdmx.get_page_path(mxl_file, "png", page_number)
         )
-        return decode_image(png_file.as_posix())
+
+    def image(self, id: str, page_number: int) -> Tensor:
+        return decode_image(self.image_path(id, page_number).as_posix())
 
     def records(self, id: str, first_bar: int, last_bar: int) -> list[str] | None:
         tokens_file = self.pdmx.get_path(self.pdmx.home / id, "tokens")

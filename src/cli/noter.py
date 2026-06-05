@@ -192,12 +192,14 @@ def show(ctx: ClickContext) -> None:
     cv2.namedWindow("Staff")
     while True:
         index = random.randint(0, len(dataset) - 1)
+        score_id, page_number = dataset.items[index][:2]
         img_tensor, _, seq_tensor = dataset[index]
         # De-normalise to uint8 [0, 255]; a raw normalised float renders as
         # solid black (dark crops) or blows out to white via cv2's float rescale.
         img = (img_tensor.squeeze(0).cpu().numpy() * NORM_STD + NORM_MEAN).clip(0, 1)
         img = (np.stack([img] * 3, axis=-1) * 255).astype(np.uint8)
         tokens = dataset.vocab.i2tok(seq_tensor)
+        print(ctx.source.image_path(score_id, page_number))
         print(tokens)
         cv2.imshow("Staff", img)
         if cv2.waitKey(0) == ord("q"):
@@ -778,6 +780,7 @@ def predict(ctx: ClickContext, name: str) -> None:
 
     cv2.namedWindow("Staff")
     for idx in shuffled_indices:
+        score_id, page_number = dataset.items[idx][:2]
         image, source_width, gt_sequence = dataset[idx]
 
         device = module.device
@@ -799,6 +802,7 @@ def predict(ctx: ClickContext, name: str) -> None:
         avg_similarity = total_similarity / n_samples
 
         click.clear()
+        print(ctx.source.image_path(score_id, page_number))
         print(f"Item {idx}")
         print(format_sequence_columns(gt_tokens, pred_tokens))
         print(f"\nSimilarity: {similarity:.1%}  (edit {edit_dist} / max {max_cost})")

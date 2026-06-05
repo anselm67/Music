@@ -183,6 +183,7 @@ def show(ctx: ClickContext) -> None:
     cv2.namedWindow("Page")
     while True:
         index = random.randint(0, len(dataset) - 1)
+        score_id, page_number = dataset.items[index][:2]
         img_tensor, sys, staff, assign = dataset[index]
         img = (img_tensor.squeeze(0).cpu().numpy() * NORM_STD + NORM_MEAN).clip(0, 1)
         img = (np.stack([img] * 3, axis=-1) * 255).astype(np.uint8)
@@ -196,6 +197,7 @@ def show(ctx: ClickContext) -> None:
                 break
             box = unbox(width_height, staff[staff_index])
             cv2.rectangle(img, box.top_left, box.bot_right, (0, 0, 255), 1)
+        print(ctx.source.image_path(score_id, page_number))
         print(f"Image size: {img.shape}")
         print(f"    Assign: {assign}")
         cv2.imshow("Page", img)
@@ -633,7 +635,10 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
         shuffled = list(dataset.items)
         random.shuffle(shuffled)
         images = (
-            (f"{score_id} p{page_number}", dataset.source.image(score_id, page_number))
+            (
+                dataset.source.image_path(score_id, page_number).as_posix(),
+                dataset.source.image(score_id, page_number),
+            )
             for score_id, page_number, _, _ in shuffled
         )
     cv2.namedWindow("Page")

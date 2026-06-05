@@ -8,6 +8,7 @@ The vocabulary is intentionally *not* part of this protocol: a single shared voc
 built once and passed to the datasets alongside the source.
 """
 
+from pathlib import Path
 from typing import Iterable, Protocol
 
 from torch import Tensor
@@ -30,6 +31,10 @@ class Source(Protocol):
 
     def image(self, id: str, page_number: int) -> Tensor:
         """Raw page image ``(C, H, W)`` in original pixels; the dataset transforms."""
+        ...
+
+    def image_path(self, id: str, page_number: int) -> Path:
+        """Path to the on-disk PNG for this page."""
         ...
 
     def records(self, id: str, first_bar: int, last_bar: int) -> list[str] | None:

@@ -701,7 +701,9 @@ def predict_from_dataset(
             max(max(gt_by_sys.keys(), default=-1), max(pred_by_sys.keys(), default=-1))
             + 1
         )
+        score_id, page_number = dataset.items[idx]
         click.clear()
+        print(dataset.source.image_path(score_id, page_number))
         print(f"Item {idx}: detected {boxes.shape[0]} staves (GT {num_gt})")
         for sys_id in range(num_systems):
             gt_seqs = [

@@ -8,6 +8,7 @@ live under the entry *key* (shared across a work's editions).
 """
 
 from collections.abc import Iterator
+from pathlib import Path
 
 from torch import Tensor
 from torchvision.io import decode_image
@@ -31,8 +32,11 @@ class KernSheetSource:
     def score(self, id: str) -> Score:
         return self.kern_sheet.load_score(id)
 
+    def image_path(self, id: str, page_number: int) -> Path:
+        return self.kern_sheet.png_path(id, page_number)
+
     def image(self, id: str, page_number: int) -> Tensor:
-        return decode_image(self.kern_sheet.png_path(id, page_number).as_posix())
+        return decode_image(self.image_path(id, page_number).as_posix())
 
     def records(self, id: str, first_bar: int, last_bar: int) -> list[str] | None:
         return self.kern_sheet.load_tokens(id).get_text(first_bar, last_bar)
