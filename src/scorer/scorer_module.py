@@ -213,7 +213,9 @@ class ScorerModule(L.LightningModule):
         self._step(batch, "val")
 
     @torch.no_grad()
-    def predict(self, image: Tensor, use_beam: bool = True) -> tuple[Tensor, Tensor, Tensor]:
+    def predict(
+        self, image: Tensor, use_beam: bool = True
+    ) -> tuple[Tensor, Tensor, Tensor]:
         """End-to-end inference for a single page: detect → crop → transcribe.
 
         ``image``: ``(1, 1, H, W)``. Returns ``(boxes, tokens, owners)``:
@@ -266,7 +268,9 @@ class ScorerModule(L.LightningModule):
         return generated[:, 1:]  # strip SOS
 
     @torch.no_grad()
-    def _generate_beam(self, crops: Tensor, widths: Tensor, beam_width: int = 4) -> Tensor:
+    def _generate_beam(
+        self, crops: Tensor, widths: Tensor, beam_width: int = 4
+    ) -> Tensor:
         """Autoregressively decode token sequences for K staff crops (beam search).
 
         Processes each stave independently so peak memory scales with beam_width,
@@ -289,10 +293,12 @@ class ScorerModule(L.LightningModule):
         device = crop.device
 
         memory, src_pad = self.model.noter.encode(crop, width)
-        memory = memory.repeat_interleave(B, dim=0)   # (B, S, D)
+        memory = memory.repeat_interleave(B, dim=0)  # (B, S, D)
         src_pad = src_pad.repeat_interleave(B, dim=0)  # (B, S)
 
-        generated = torch.full((B, 1, c.max_chords), Vocab.SOS, dtype=torch.long, device=device)
+        generated = torch.full(
+            (B, 1, c.max_chords), Vocab.SOS, dtype=torch.long, device=device
+        )
         scores = torch.full((B,), float("-inf"), device=device)
         scores[0] = 0.0
         done = torch.zeros(B, dtype=torch.bool, device=device)
@@ -335,7 +341,9 @@ class ScorerModule(L.LightningModule):
         # Pad to max_seqlen - 1 so staves can be concatenated across independent runs.
         pad_len = c.max_seqlen - 1 - best.shape[1]
         if pad_len > 0:
-            pad = torch.full((1, pad_len, c.max_chords), Vocab.PAD, dtype=torch.long, device=device)
+            pad = torch.full(
+                (1, pad_len, c.max_chords), Vocab.PAD, dtype=torch.long, device=device
+            )
             best = torch.cat([best, pad], dim=1)
         return best
 
