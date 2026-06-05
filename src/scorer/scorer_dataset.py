@@ -15,9 +15,8 @@ from torchvision.transforms import v2
 from tqdm import tqdm
 
 from sheetmusic import Source
-from utils import load_sequence
 
-from noter import Vocab
+from noter import Vocab, load_sequence
 
 from .scorer_model import ScorerConfig
 

@@ -2,7 +2,6 @@ from .json_query import compile_filter, compile_query
 from .sequence import (
     chord_distance,
     format_sequence_columns,
-    load_sequence,
     sequence_edit_distance,
     strip_eos,
 )
@@ -30,5 +29,4 @@ __all__ = [
     "chord_distance",
     "sequence_edit_distance",
     "strip_eos",
-    "load_sequence",
 ]

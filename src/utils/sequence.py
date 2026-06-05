@@ -1,71 +1,10 @@
-import logging
 from itertools import zip_longest
-from typing import Protocol
 
 import numpy as np
-import torch
 from torch import Tensor
 
 _RED = "\033[31m"
 _RESET = "\033[0m"
-
-
-class _Source(Protocol):
-    def records(self, id: str, first_bar: int, last_bar: int) -> list[str] | None: ...
-
-
-class _Vocab(Protocol):
-    PAD: int
-    SOS: int
-    EOS: int
-
-    def tok2i(self, tokens: list[str], max_chords: int) -> Tensor: ...
-
-
-def load_sequence(
-    source: _Source,
-    vocab: _Vocab,
-    score_id: str,
-    spine_number: int,
-    first_bar: int,
-    last_bar: int,
-    max_seqlen: int,
-    max_chords: int,
-) -> Tensor | None:
-    """Load one stave's token sequence from source, shape (max_seqlen, max_chords).
-
-    Returns SOS-prefixed, EOS-terminated tensor, or None if the bars are missing,
-    the sequence is too long, or any record can't be decoded.
-    """
-    try:
-        records = source.records(score_id, first_bar, last_bar)
-    except Exception as e:
-        logging.error(f"{score_id}: {e}")
-        return None
-    if records is None:
-        logging.error(f"{score_id}: bars {first_bar}:{last_bar} not found.")
-        return None
-    if len(records) + 2 > max_seqlen:
-        logging.error(
-            f"{score_id}: bars {first_bar}:{last_bar}, "
-            f"sequence too long {len(records)} (max {max_seqlen - 2})"
-        )
-        return None
-    s_sos = torch.full((1, max_chords), vocab.SOS)
-    s_eos = torch.full((1, max_chords), vocab.EOS)
-    body = torch.full((max_seqlen - 1, max_chords), vocab.PAD)
-    for idx, text in enumerate(records):
-        try:
-            # Real KernSheet records occasionally have fewer spines than the
-            # system's staff count (malformed/misaligned bar range); skip the
-            # sample rather than letting the IndexError crash the worker.
-            str_tok = text.split("\t")[spine_number]
-            body[idx, :] = vocab.tok2i(str_tok.strip().split(), max_chords=max_chords)
-        except Exception as e:
-            logging.error(f"{score_id}: {e}")
-            return None
-    body[len(records), :] = s_eos
-    return torch.cat([s_sos, body])
 
 
 def format_sequence_columns(
