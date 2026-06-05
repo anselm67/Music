@@ -16,7 +16,7 @@ from tqdm import tqdm
 
 from sheetmusic import Source
 
-from noter import Vocab, load_sequence
+from noter import SequenceLoader, Vocab
 
 from .scorer_model import ScorerConfig
 
@@ -48,7 +48,9 @@ class ScorerDataset(Dataset[Sample]):
                 v2.Normalize(mean=[0.9563435316085815], std=[0.16557540870879858]),
             ]
         )
-        self.s_sos = torch.full((1, config.noter.max_chords), vocab.SOS)
+        self.load_sequence = SequenceLoader(
+            source, vocab, config.noter.max_seqlen, config.noter.max_chords
+        )
         logging.info("Initializing ScorerDataset...")
         self.items = []
         for score in tqdm(source.scores(), desc="Loading scorer dataset"):
@@ -112,11 +114,11 @@ class ScorerDataset(Dataset[Sample]):
                     if staff_idx >= c.num_stave_queries:
                         is_ok = False
                         break
-                    seq = load_sequence(
-                        self.source, self.vocab, score_id, spine_numbers[i],
-                        system.first_bar_number, system.last_bar_number,
-                        self.config.noter.max_seqlen, self.config.noter.max_chords,
-                        self.s_sos,
+                    seq = self.load_sequence(
+                        score_id,
+                        spine_numbers[i],
+                        system.first_bar_number,
+                        system.last_bar_number,
                     )
                     if seq is None:
                         is_ok = False

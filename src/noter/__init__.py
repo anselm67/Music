@@ -1,6 +1,6 @@
 from .grow_checkpoint import grow_state_dict
 from .noter_datamodule import NoterDataModule
-from .noter_dataset import NORM_MEAN, NORM_STD, NoterDataset, load_sequence
+from .noter_dataset import NORM_MEAN, NORM_STD, NoterDataset, SequenceLoader
 from .noter_model import NoterConfig, NoterModel
 from .noter_module import NoterModule
 from .noter_vocab import Vocab
@@ -15,5 +15,5 @@ __all__ = [
     "grow_state_dict",
     "NORM_MEAN",
     "NORM_STD",
-    "load_sequence",
+    "SequenceLoader",
 ]

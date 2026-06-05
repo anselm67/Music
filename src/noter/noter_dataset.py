@@ -29,49 +29,59 @@ JITTER = {
 }
 
 
-def load_sequence(
-    source: Source,
-    vocab: Vocab,
-    score_id: str,
-    spine_number: int,
-    first_bar: int,
-    last_bar: int,
-    max_seqlen: int,
-    max_chords: int,
-    s_sos: Tensor,
-) -> Tensor | None:
-    """Load one stave's token sequence from source, shape (max_seqlen, max_chords).
+class SequenceLoader:
+    """Loads per-stave token sequences, binding the dataset-wide constants once.
 
-    Returns SOS-prefixed, EOS-terminated tensor, or None if the bars are missing,
-    the sequence is too long, or any record can't be decoded.
+    Callers pass only the per-stave args; source/vocab/sizes (and the cached SOS
+    row) are fixed for the loader's lifetime.
     """
-    try:
-        records = source.records(score_id, first_bar, last_bar)
-    except Exception as e:
-        logging.error(f"{score_id}: {e}")
-        return None
-    if records is None:
-        logging.error(f"{score_id}: bars {first_bar}:{last_bar} not found.")
-        return None
-    if len(records) + 2 > max_seqlen:
-        logging.error(
-            f"{score_id}: bars {first_bar}:{last_bar}, "
-            f"sequence too long {len(records)} (max {max_seqlen - 2})"
-        )
-        return None
-    body = torch.full((max_seqlen - 1, max_chords), vocab.PAD)
-    for idx, text in enumerate(records):
+
+    def __init__(
+        self, source: Source, vocab: Vocab, max_seqlen: int, max_chords: int
+    ) -> None:
+        self.source = source
+        self.vocab = vocab
+        self.max_seqlen = max_seqlen
+        self.max_chords = max_chords
+        self.s_sos = torch.full((1, max_chords), vocab.SOS)
+
+    def __call__(
+        self, score_id: str, spine_number: int, first_bar: int, last_bar: int
+    ) -> Tensor | None:
+        """One stave's sequence, shape (max_seqlen, max_chords).
+
+        Returns SOS-prefixed, EOS-terminated tensor, or None if the bars are
+        missing, the sequence is too long, or any record can't be decoded.
+        """
         try:
-            # Real KernSheet records occasionally have fewer spines than the
-            # system's staff count (malformed/misaligned bar range); skip the
-            # sample rather than letting the IndexError crash the worker.
-            str_tok = text.split("\t")[spine_number]
-            body[idx, :] = vocab.tok2i(str_tok.strip().split(), max_chords=max_chords)
+            records = self.source.records(score_id, first_bar, last_bar)
         except Exception as e:
             logging.error(f"{score_id}: {e}")
             return None
-    body[len(records), :] = vocab.EOS
-    return torch.cat([s_sos, body])
+        if records is None:
+            logging.error(f"{score_id}: bars {first_bar}:{last_bar} not found.")
+            return None
+        if len(records) + 2 > self.max_seqlen:
+            logging.error(
+                f"{score_id}: bars {first_bar}:{last_bar}, "
+                f"sequence too long {len(records)} (max {self.max_seqlen - 2})"
+            )
+            return None
+        body = torch.full((self.max_seqlen - 1, self.max_chords), self.vocab.PAD)
+        for idx, text in enumerate(records):
+            try:
+                # Real KernSheet records occasionally have fewer spines than the
+                # system's staff count (malformed/misaligned bar range); skip the
+                # sample rather than letting the IndexError crash the worker.
+                str_tok = text.split("\t")[spine_number]
+                body[idx, :] = self.vocab.tok2i(
+                    str_tok.strip().split(), max_chords=self.max_chords
+                )
+            except Exception as e:
+                logging.error(f"{score_id}: {e}")
+                return None
+        body[len(records), :] = self.vocab.EOS
+        return torch.cat([self.s_sos, body])
 
 
 class NoterDataset(Dataset):
@@ -98,7 +108,9 @@ class NoterDataset(Dataset):
             ]
         )
         self.image_pad_value = (1.0 - NORM_MEAN) / NORM_STD
-        self.s_sos = torch.full((1, config.max_chords), vocab.SOS)
+        self.load_sequence = SequenceLoader(
+            source, vocab, config.max_seqlen, config.max_chords
+        )
         # Creates the actual dataset, with theright number of samples.
         logging.info("Initializing NoterDataset...")
         self.items = []
@@ -201,10 +213,8 @@ class NoterDataset(Dataset):
             if (result := self._load_image(score_id, page_number, box)) is None:
                 idx = (idx + 1) % len(self)
             elif (
-                sequence := load_sequence(
-                    self.source, self.vocab, score_id, spine_number,
-                    first_bar, last_bar,
-                    self.config.max_seqlen, self.config.max_chords, self.s_sos,
+                sequence := self.load_sequence(
+                    score_id, spine_number, first_bar, last_bar
                 )
             ) is None:
                 idx = (idx + 1) % len(self)
