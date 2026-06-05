@@ -15,6 +15,7 @@ from torchvision.transforms import v2
 from tqdm import tqdm
 
 from sheetmusic import Source
+from utils import load_sequence
 
 from noter import Vocab
 
@@ -48,9 +49,6 @@ class ScorerDataset(Dataset[Sample]):
                 v2.Normalize(mean=[0.9563435316085815], std=[0.16557540870879858]),
             ]
         )
-        self.s_sos = torch.full((1, config.noter.max_chords), self.vocab.SOS)
-        self.s_eos = torch.full((1, config.noter.max_chords), self.vocab.EOS)
-
         logging.info("Initializing ScorerDataset...")
         self.items = []
         for score in tqdm(source.scores(), desc="Loading scorer dataset"):
@@ -69,39 +67,16 @@ class ScorerDataset(Dataset[Sample]):
     def _load_sequence(
         self, score_id: str, spine_number: int, first_bar: int, last_bar: int
     ) -> Tensor | None:
-        """Token sequence for one stave (SOS … EOS), shape (max_seqlen, max_chords)."""
-        try:
-            records = self.source.records(score_id, first_bar, last_bar)
-        except Exception as e:
-            logging.error(f"{score_id}: {e}")
-            return None
-        if records is None:
-            logging.error(f"{score_id}: bars {first_bar}:{last_bar} not found.")
-            return None
-        if len(records) + 2 > self.config.noter.max_seqlen:
-            logging.error(
-                f"{score_id}: bars {first_bar}:{last_bar}, sequence too long "
-                f"{len(records)} (max {self.config.noter.max_seqlen - 2})"
-            )
-            return None
-        body = torch.full(
-            (self.config.noter.max_seqlen - 1, self.config.noter.max_chords),
-            self.vocab.PAD,
+        return load_sequence(
+            self.source,
+            self.vocab,
+            score_id,
+            spine_number,
+            first_bar,
+            last_bar,
+            self.config.noter.max_seqlen,
+            self.config.noter.max_chords,
         )
-        for idx, text in enumerate(records):
-            try:
-                # Real KernSheet records occasionally have fewer spines than the
-                # system's staff count (malformed/misaligned bar range); skip the
-                # sample rather than letting the IndexError crash the worker.
-                str_tok = text.split("\t")[spine_number]
-                body[idx, :] = self.vocab.tok2i(
-                    str_tok.strip().split(), max_chords=self.config.noter.max_chords
-                )
-            except Exception as e:
-                logging.error(f"{score_id}: {e}")
-                return None
-        body[len(records), :] = self.s_eos
-        return torch.cat([self.s_sos, body])
 
     def __getitem__(self, idx: int) -> Sample:
         c = self.config.staffer

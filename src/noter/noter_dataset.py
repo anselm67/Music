@@ -9,6 +9,7 @@ from torchvision.transforms.functional import crop
 from tqdm import tqdm
 
 from sheetmusic import Box, Source
+from utils import load_sequence
 
 from .noter_model import NoterConfig
 from .noter_vocab import Vocab
@@ -53,9 +54,6 @@ class NoterDataset(Dataset):
             ]
         )
         self.image_pad_value = (1.0 - NORM_MEAN) / NORM_STD
-        # Pre-computes start and end sequence tokens.
-        self.s_sos = torch.full((1, config.max_chords), self.vocab.SOS)
-        self.s_eos = torch.full((1, config.max_chords), self.vocab.EOS)
         # Creates the actual dataset, with theright number of samples.
         logging.info("Initializing NoterDataset...")
         self.items = []
@@ -141,39 +139,16 @@ class NoterDataset(Dataset):
         first_bar_number: int,
         last_bar_number: int,
     ) -> Tensor | None:
-        try:
-            records = self.source.records(score_id, first_bar_number, last_bar_number)
-        except Exception as e:
-            logging.error(f"{score_id}: {e}")
-            return None
-        tensor = torch.full(
-            (self.config.max_seqlen - 1, self.config.max_chords), self.vocab.PAD
+        return load_sequence(
+            self.source,
+            self.vocab,
+            score_id,
+            spine_number,
+            first_bar_number,
+            last_bar_number,
+            self.config.max_seqlen,
+            self.config.max_chords,
         )
-        if records is None:
-            logging.error(
-                f"{score_id}: bars {first_bar_number}:{last_bar_number} not found."
-            )
-            return None
-        elif len(records) + 2 > self.config.max_seqlen:
-            logging.error(
-                f"{score_id}: bars {first_bar_number}:{last_bar_number}, "
-                f"sequence too long {len(records)} (max {self.config.max_seqlen - 2})"
-            )
-            return None
-        for idx, text in enumerate(records):
-            try:
-                # Real KernSheet records occasionally have fewer spines than the
-                # system's staff count (malformed/misaligned bar range); skip the
-                # sample rather than letting the IndexError crash the worker.
-                str_tok = text.split("\t")[spine_number]
-                tensor[idx, :] = self.vocab.tok2i(
-                    str_tok.strip().split(), max_chords=self.config.max_chords
-                )
-            except Exception as e:
-                logging.error(f"{score_id}: {e}")
-                return None
-        tensor[len(records), :] = self.s_eos
-        return torch.cat([self.s_sos, tensor])
 
     def _jitter_box(self, box: Box) -> Box:
         """Perturb each edge independently by clipped Gaussian noise (px)."""
