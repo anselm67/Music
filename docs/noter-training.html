@@ -168,6 +168,18 @@
         <td>KernSheet fine-tune of the centered+jitter base; <strong>no added jitter</strong> (thirds boxes already imprecise)</td>
         <td><span class="badge badge-green">KernSheet best</span></td>
       </tr>
+      <tr>
+        <td><a class="run-link" href="#run-berlioz"><span class="tag">berlioz</span></a></td><td>2026-06-06</td><td>12</td>
+        <td>99.56%</td><td>0.0167</td>
+        <td><strong>Letterbox</strong> (aspect-preserving resize) instead of stretch — PDMX base of the <span class="tag">scorer</span> letterbox rebuild</td>
+        <td><span class="badge badge-slate">letterbox expt</span></td>
+      </tr>
+      <tr>
+        <td><a class="run-link" href="#run-berlioz-kernsheet"><span class="tag">berlioz-kernsheet</span></a></td><td>2026-06-06</td><td>12</td>
+        <td>97.55%</td><td>0.1015</td>
+        <td>Letterbox KernSheet fine-tune; edges <span class="tag">center+jitter-kernsheet</span> on val but tied free-running</td>
+        <td><span class="badge badge-slate">letterbox expt</span></td>
+      </tr>
     </tbody>
   </table>
 
@@ -603,6 +615,26 @@
     is gated by <span class="tag">staffer</span> recall — the &gt;2-staff / dense-page misses (the 20-stave
     <code>ballade52</code>, <code>etude10-12</code> over-counts, matcher artifacts), not by noter's box
     tolerance. Closing the rest is a detector problem, not a noter one.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ berlioz / berlioz-kernsheet -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-berlioz"><span class="tag">berlioz</span> / <span id="run-berlioz-kernsheet" class="tag">berlioz-kernsheet</span> — the letterbox experiment</h2>
+      <span class="session-meta">2026-06-06 · tags <code>train/berlioz</code> / <code>train/berlioz-kernsheet</code> · the noter side of the full <span class="tag">scorer</span> letterbox rebuild</span>
+      <span class="badge badge-slate">letterbox expt</span>
+    </div>
+    <p>The <span class="tag">scorer</span> pipeline was rebuilt from scratch under a <strong>letterbox</strong> page transform (aspect-preserving resize + white pad, replacing the old independent-x/y stretch — see the <a href="staffer-training.html#run-berlioz">staffer card</a> for the full story). The hypothesis was that un-stretching helps transcription: a stretched staff distorts note spacing, which a sequence model should care about. The noter is the half where that could pay off — and it's the one bright spot of the experiment, though a faint one.</p>
+    <table class="summary-table">
+      <thead><tr><th>Noter, letterbox vs stretch</th><th>stretch reference</th><th><span class="tag">berlioz</span> (letterbox)</th></tr></thead>
+      <tbody>
+        <tr><td>PDMX base · val acc / loss</td><td>99.55% / 0.0196 <span style="color:var(--muted)">(center+jitter)</span></td><td>99.56% / <strong>0.0167</strong></td></tr>
+        <tr><td>KernSheet FT · val acc / loss</td><td>97.41% / 0.1097 <span style="color:var(--muted)">(c+j-kernsheet)</span></td><td><strong>97.55%</strong> / <strong>0.1015</strong></td></tr>
+        <tr><td>KernSheet free-running similarity</td><td>≈ 89.8%*</td><td>89.4%</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">Val numbers are each run's own teacher-forced validation (PDMX nearly identical under letterbox vs stretch, so the base tie is expected). Free-running = <code>noter --kern-home … eval berlioz-kernsheet --size 500</code> (greedy edit-distance similarity). *The reference free-running figure is loose — it comes from the predicted-box diagnostic on GT crops, a slightly different tool, so read the two as tied rather than a clean −0.4%. As with all KernSheet rows these are unseeded splits and the old model can't be re-eval'd under the current letterbox code without being out-of-distribution.</p>
+    <div class="result-box neutral"><strong>The noter is marginally better on val, tied on free-running — a faint positive, not a clear win.</strong> Teacher-forced val edges the stretch baseline (KernSheet 97.55% vs 97.41%, lower loss; PDMX a tie), but the honest free-running number lands on top of it (89.4% vs ≈ 89.8%). So un-stretching helps transcription at most slightly. It is <em>not</em> enough to carry the experiment: the <a href="staffer-training.html#run-berlioz-kernsheet">staffer</a> got measurably worse under letterbox and the <a href="scorer-training.html#run-berlioz">scorer</a> nets to a wash (90.8% vs <span class="tag">ravel</span> 90.7%). The lineage is being reverted, so <span class="tag">enhanced3-center+jitter-kernsheet</span> remains the production noter (it pairs with the stretch staffer); <span class="tag">berlioz-kernsheet</span> only works with the letterbox pipeline. If letterbox is ever revisited, the right scope is <em>noter crops only</em>, stretch for the staffer.</div>
   </div>
 
 </main>

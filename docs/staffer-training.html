@@ -248,10 +248,22 @@
         <td>Fine-tune of <span class="tag">stave-primary-grid-full</span> on KernSheet (real scans)</td>
         <td><span class="badge badge-green">KernSheet best</span></td>
       </tr>
+      <tr>
+        <td><a class="run-link" href="#run-berlioz"><span class="tag">berlioz</span></a></td><td>2026-06-06</td><td>256</td><td>16</td>
+        <td>0.057</td><td>0.981</td><td>val/stave_err_px 0.52§</td>
+        <td><strong>Letterbox</strong> (aspect-preserving resize + pad) instead of stretch — PDMX base</td>
+        <td><span class="badge badge-amber">negative</span></td>
+      </tr>
+      <tr>
+        <td><a class="run-link" href="#run-berlioz-kernsheet"><span class="tag">berlioz-kernsheet</span></a></td><td>2026-06-06</td><td>256</td><td>16</td>
+        <td>0.423</td><td>0.908</td><td>eval ~5.0/5.1 px · val/stave_err_px 4.94</td>
+        <td>Letterbox fine-tune on KernSheet (vs stretch <span class="tag">…-kernsheet</span>)</td>
+        <td><span class="badge badge-amber">negative</span></td>
+      </tr>
     </tbody>
   </table>
   <p style="font-size:0.82rem;color:var(--muted)"><span class="tag">stave-primary-grid-full-kernsheet</span> is evaluated on KernSheet (real scans), not PDMX — its <code>sys IoU</code> 0.930 / stave error are <em>not</em> comparable to the synthetic-domain rows above; the meaningful comparison is its own before/after on KernSheet (see card). <code>sys IoU</code> shown as actual (1 − stored).</p>
-  <p style="font-size:0.82rem;color:var(--muted)">† stave L1 not comparable to prior runs: enhanced2-ltrb stave head outputs (top, bottom) directly; prior runs output (cy, h). ‡ <span class="tag">stave-primary</span>'s <code>val/stave_l1</code> is not a clean metric (logging-key collision, see its card), so its stave column reports the eval table's bottom-of-page error instead — directly comparable to the anchor's bins 12–14 (~12–13 px).</p>
+  <p style="font-size:0.82rem;color:var(--muted)">† stave L1 not comparable to prior runs: enhanced2-ltrb stave head outputs (top, bottom) directly; prior runs output (cy, h). ‡ <span class="tag">stave-primary</span>'s <code>val/stave_l1</code> is not a clean metric (logging-key collision, see its card), so its stave column reports the eval table's bottom-of-page error instead — directly comparable to the anchor's bins 12–14 (~12–13 px). § <span class="tag">berlioz</span>'s PDMX <code>val/stave_err_px</code> 0.52 vs <span class="tag">stave-primary-grid-full</span>'s 0.41 is <em>not</em> a clean comparison — the <code>random_split</code> was reseeded between the two runs, so they validate on different PDMX pages, and the metric is heavy-tailed; on PDMX the letterbox is vertically identical to stretch (see <span class="tag">berlioz</span> card), so the base is effectively unchanged.</p>
   <div class="result-box neutral" style="font-size:0.84rem"><strong>Model size note.</strong> <span class="tag">basic</span>–<span class="tag">enhanced2-vflip</span> ran at <strong>D=256 · H=8 · mlp=1024</strong>. From <span class="tag">enhanced2-sampler</span> onward the <code>StafferConfig</code> default had silently shrunk to <strong>D=128 · H=4 · mlp=512</strong> (the small-model config, never restored; <code>train</code> has no override flag) — so <span class="tag">enhanced2-sampler</span>, <span class="tag">enhanced2-ltrb</span>, <span class="tag">enhanced2-ltrb-anchor</span>, <span class="tag">enhanced2-ltrb-anchor-iter</span>, <span class="tag">stave-primary</span> and <span class="tag">stave-primary-grid</span> are all <strong>half-size</strong>. The D column above is corrected to reflect the saved <code>hparams.yaml</code>. <em>Consequence:</em> the sys-IoU gap of the ltrb line vs <span class="tag">enhanced2</span> (0.914 vs 0.919) is largely <strong>capacity</strong>, not the ltrb formulation being "harder" — the like-for-like comparisons within the ltrb line (all D=128) remain valid. <span class="tag">stave-primary-grid</span> validated as the best architecture at this budget (sys IoU 0.971; bottom drift flattened to ~2.5 px); the full-size retrain <span class="tag">stave-primary-grid-full</span> (D=256/H=8/mlp=1024) has since landed as the new best — the gain compounds with capacity (sys IoU 0.985; bottom bins down to ~1 px).</div>
 
   <!-- ════════════════════ Comparison charts ════════════════════ -->
@@ -1148,6 +1160,31 @@
     </table>
     <p style="font-size:0.78rem;color:var(--muted)">n-weighted mean (bins 0–15): top_err <strong>7.4 → 3.2&nbsp;px</strong>, bot_err <strong>6.3 → 3.1&nbsp;px</strong> (~2×). The big offenders — bins 2–3, where zero-shot drifted ~12–13&nbsp;px — fall to ~2.7–3.9&nbsp;px, so the error profile is now roughly uniform top-to-bottom instead of spiking in the upper third. <strong>Caveat:</strong> this metric matches <code>num_gt</code> staves to nearest anchors and scores only their y top/bottom — it does <em>not</em> capture system left/right extent or missed/spurious detections.</p>
     <div class="result-box positive"><strong>Fine-tune works — the domain gap roughly halves.</strong> Stave y-error drops ~2× across the board (top 7.4 → 3.2&nbsp;px, bot 6.3 → 3.1&nbsp;px) and the upper-third drift that zero-shot showed is gone. This is now the staffer to feed <span class="tag">scorer</span> on KernSheet. Residual ~3&nbsp;px is still ~8× the PDMX in-domain ~0.4&nbsp;px, and this metric is blind to x-extent / missed detections — so the next lever is an x/objectness diagnostic (and likely more than 581 scores / line-level stave splits) rather than more y-tuning.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ berlioz / berlioz-kernsheet -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-berlioz"><span class="tag">berlioz</span> / <span id="run-berlioz-kernsheet" class="tag">berlioz-kernsheet</span> — the letterbox experiment</h2>
+      <span class="session-meta">2026-06-06 · tags <code>train/berlioz</code> / <code>train/berlioz-kernsheet</code> · D=256 H=8 · full <span class="tag">scorer</span> pipeline rebuild</span>
+      <span class="badge badge-amber">negative (staffer)</span>
+    </div>
+    <p><strong>The motivation was geometric fidelity.</strong> Every dataset resized each page to a fixed shape with <code>v2.Resize</code>, which scales x and y independently — so a page that isn't full height (a short end-of-piece system) was stretched vertically. <span class="tag">berlioz</span> replaces that with a shared <code>LetterboxResize</code> (resize by a single aspect-preserving factor, then white-pad the bottom/right), and scales the GT boxes by the same factor. A full from-scratch lineage was retrained under it: PDMX base (<span class="tag">berlioz</span>) → KernSheet fine-tune (<span class="tag">berlioz-kernsheet</span>) → <span class="tag">scorer</span> (<a href="scorer-training.html#run-berlioz">scorer/berlioz</a>).</p>
+    <h3>PDMX base — effectively unchanged</h3>
+    <p>PDMX pages are uniformly 2970×2100, whose aspect ≈ the 960×688 canvas, so the letterbox is height-bound and lands at the <em>exact same vertical scale</em> as the old stretch (0.3232); only the horizontal differs (a 9&nbsp;px white strip vs a 1.4% squeeze). Since the staffer detects stave <em>y</em>-coordinates, the targets are vertically identical. The apparent <code>val/stave_err_px</code> gap (0.52 vs <span class="tag">stave-primary-grid-full</span> 0.41) is a measurement artifact: the <code>random_split</code> seed changed between the runs, so they validate on different (heavy-tailed) PDMX pages. <strong>Treat the base as a tie.</strong></p>
+    <h3>KernSheet fine-tune — worse</h3>
+    <p style="font-size:0.82rem;color:var(--muted)"><code>staffer --kern-home … eval berlioz-kernsheet --size 500</code>, n-weighted over bins. Reference is <span class="tag">stave-primary-grid-full-kernsheet</span>'s documented numbers (measured on its native <em>stretch</em> transform — the old model can't be re-eval'd under the current letterbox code without being out-of-distribution).</p>
+    <table class="summary-table">
+      <thead><tr><th>KernSheet stave error</th><th><span class="tag">…-kernsheet</span> (stretch)</th><th><span class="tag">berlioz-kernsheet</span> (letterbox)</th></tr></thead>
+      <tbody>
+        <tr><td>n-weighted top_err</td><td>3.2 px</td><td><strong>4.99 px</strong></td></tr>
+        <tr><td>n-weighted bot_err</td><td>3.1 px</td><td><strong>5.11 px</strong></td></tr>
+        <tr><td>in-training val/stave_err_px</td><td>3.96</td><td>4.94</td></tr>
+        <tr><td>final val/loss · sys IoU</td><td>0.346 · 0.930</td><td>0.423 · 0.908</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">A per-fill-fraction breakdown showed the regression is <em>not</em> the short, heavily-padded pages (those are fine, ~3&nbsp;px) — it is spread across the canvas-filling majority. On KernSheet's varied page shapes the letterbox introduces variable padding the detector handles less well than the stretch's uniform canvas-fill; the stretch's "distortion" was, for a box detector, a free canvas-normaliser.</p>
+    <div class="result-box negative"><strong>Letterbox is a net negative for the staffer, and end-to-end neutral.</strong> The detector is ~1.8&nbsp;px softer on real scans (4.99/5.11 vs 3.2/3.1&nbsp;px) and miscounts a touch more end-to-end (6 vs 3 / 300 pages). The transcription side moved the other way — <a href="noter-training.html#run-berlioz-kernsheet">noter/berlioz-kernsheet</a> is marginally better on val (97.55% vs 97.41%) but tied on free-running (89.4%) — and the <a href="scorer-training.html#run-berlioz">scorer</a> nets to a wash (90.8% vs <span class="tag">ravel</span> 90.7%, within sampling noise). So un-stretching helps transcription at best marginally and hurts detection measurably. <strong>Next:</strong> the remove-letterbox control — recover <span class="tag">stave-primary-grid-full</span> by reverting to stretch — and, if pursued, keep letterbox on the noter crops only.</div>
   </div>
 
 </main>

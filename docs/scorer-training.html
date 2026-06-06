@@ -152,9 +152,16 @@
         <td>boulez recipe, 20 epochs (longer joint training)</td>
         <td><span class="badge badge-green">KernSheet best</span></td>
       </tr>
+      <tr>
+        <td><a class="run-link" href="#run-berlioz"><span class="tag">berlioz</span></a></td><td>KernSheet</td><td>2026-06-06</td><td>20</td>
+        <td>97.33%<sup>†</sup></td><td>0.925<sup>†</sup></td><td>5.40 px<sup>†</sup></td>
+        <td>90.8%<sup>‡</sup> · 6/300 miscount</td>
+        <td><strong>Letterbox</strong> page transform (vs <span class="tag">ravel</span> stretch); ravel recipe otherwise</td>
+        <td><span class="badge badge-amber">letterbox · wash</span></td>
+      </tr>
     </tbody>
   </table>
-  <p class="subtitle" style="margin-top:-1rem"><sup>†</sup> on an unseeded validation split; see note above.</p>
+  <p class="subtitle" style="margin-top:-1rem"><sup>†</sup> on an unseeded validation split; see note above. <sup>‡</sup> <span class="tag">berlioz</span>'s eval sim is from <code>scorer eval</code> on a random (unseeded) 300 pages, <em>not</em> the page-matched 300-page eval the other rows share — so read it as <strong>tied</strong> with <span class="tag">ravel</span>, not a precise +0.1%.</p>
 
   <!-- ════════════════════════ merge1 ════════════════════════ -->
   <div class="session">
@@ -296,6 +303,26 @@
     </div>
 
     <div class="result-box positive"><strong>ravel is the KernSheet best</strong> — 90.7% matched similarity, only 3/300 miscount pages. The progression walton → boulez → ravel is monotonic in both similarity and miscount, all explained by how much the detector kept training. The pre-run hypothesis that <em>freezing</em> would protect the detector (because KernSheet boxes are a thirds approximation) was wrong: more joint detection training is what helps.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ berlioz -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-berlioz"><span class="tag">berlioz</span> — the letterbox rebuild, end-to-end</h2>
+      <span class="session-meta">2026-06-06 · tag <code>train/berlioz</code> · 20 ep · ravel recipe on a fully letterbox-retrained <span class="tag">staffer</span>+<span class="tag">noter</span></span>
+      <span class="badge badge-amber">letterbox · wash</span>
+    </div>
+    <p><span class="tag">berlioz</span> is the end-to-end verdict on the <strong>letterbox</strong> page transform (aspect-preserving resize + pad, replacing the independent-x/y stretch). The entire pipeline was rebuilt under it — PDMX base + KernSheet fine-tune for both branches (<a href="staffer-training.html#run-berlioz">staffer/berlioz-kernsheet</a>, <a href="noter-training.html#run-berlioz-kernsheet">noter/berlioz-kernsheet</a>) — then merged and fine-tuned exactly as <span class="tag">ravel</span> (same 20-epoch recipe, only the transform differs).</p>
+    <table class="summary-table">
+      <thead><tr><th>End-to-end (KernSheet)</th><th><span class="tag">ravel</span> (stretch)</th><th><span class="tag">berlioz</span> (letterbox)</th></tr></thead>
+      <tbody>
+        <tr><td>matched-stave similarity</td><td><strong>90.7%</strong> (page-matched)</td><td><strong>90.8%</strong> (unseeded)<sup>‡</sup></td></tr>
+        <tr><td>miscount pages</td><td>3 / 300</td><td>6 / 300</td></tr>
+        <tr><td>staffer (KS stave err)</td><td>3.2 / 3.1 px</td><td>4.99 / 5.11 px</td></tr>
+        <tr><td>noter (KS free-running)</td><td>≈ 89.8%</td><td>89.4%</td></tr>
+      </tbody>
+    </table>
+    <div class="result-box neutral"><strong>End-to-end the letterbox is a wash — and not worth its cost.</strong> Transcription similarity is statistically indistinguishable from <span class="tag">ravel</span> (90.8% unseeded vs 90.7% page-matched — within the noise between two different 300-page draws), but <span class="tag">berlioz</span> miscounts <em>more</em> (6 vs 3 / 300), inheriting the weaker detector. The trade is now clear: un-stretching helps the <a href="noter-training.html#run-berlioz-kernsheet">noter</a> at most marginally (val edge, free-running tie) and hurts the <a href="staffer-training.html#run-berlioz-kernsheet">staffer</a> measurably (~1.8 px softer on real scans), and the two cancel. <strong>ravel stays the KernSheet best.</strong> The letterbox is being reverted; if revisited, the right scope is the noter crop only, with a stretched (or otherwise canvas-filling) page for the detector.</div>
   </div>
 
 </main>
