@@ -43,7 +43,7 @@ from tqdm import tqdm
 from kernsheet import KernSheet, KernSheetSource
 from noter import NoterConfig, NoterDataset, NoterModule, Vocab
 from pdmx import PDMX, PdmxSource
-from sheetmusic import Box, Source
+from sheetmusic import Box, Source, letterbox_scale, LetterboxResize
 from staffer import StafferConfig, StafferModule
 from utils import sequence_edit_distance, strip_eos
 
@@ -52,13 +52,15 @@ _NORM_MEAN, _NORM_STD = 0.9563435316085815, 0.16557540870879858
 
 
 def make_staffer_transform(cfg: StafferConfig) -> v2.Transform:
+    # Mirror StafferDataset.transform: aspect-preserving letterbox, white pad.
     return v2.Compose(
         [
             v2.Grayscale(),
-            v2.Resize(
+            LetterboxResize(
                 cfg.image_shape,
                 interpolation=cfg.interpolation,
                 antialias=cfg.antialias,
+                fill=255,
             ),
             v2.ToDtype(torch.float, scale=True),
             v2.Normalize(mean=[_NORM_MEAN], std=[_NORM_STD]),
@@ -206,8 +208,18 @@ def main() -> None:
             continue
         brightness = float(raw.float().mean()) / 255.0
         page_missed = 0
+        # Un-normalise staffer-space predictions into the noter-resized page pixels
+        # where the GT boxes live. The two branches letterbox into different
+        # canvases, so go via original px: pred / (scale_s/target_s) → original,
+        # then * scale_n → noter-resized (both StafferDataset & NoterDataset use the
+        # single aspect-preserving letterbox_scale).
+        h0, w0 = raw.shape[-2], raw.shape[-1]
+        th_s, tw_s = s_cfg.image_shape
+        scale_s = letterbox_scale(h0, w0, th_s, tw_s)
+        scale_n = letterbox_scale(h0, w0, page_h, page_w)
+        convx, convy = tw_s / scale_s * scale_n, th_s / scale_s * scale_n
         pred_boxes = staffer_active_boxes(staffer, page_img)
-        pred_cy = [((t + b) / 2.0) * page_h for (_l, t, _r, b) in pred_boxes]
+        pred_cy = [((t + b) / 2.0) * convy for (_l, t, _r, b) in pred_boxes]
 
         # GT staves on this page: (idx, center_y_px, height_px)
         gts = []
@@ -256,13 +268,13 @@ def main() -> None:
                 continue
             pl, pt, pr, pb = pred_boxes[match[gpos]]
             pbox = Box(
-                (int(pl * page_w), int(pt * page_h)),
-                (int(pr * page_w), int(pb * page_h)),
+                (int(pl * convx), int(pt * convy)),
+                (int(pr * convx), int(pb * convy)),
             )
-            dtop.append(abs(pt * page_h - gt_box.top))
-            dbot.append(abs(pb * page_h - gt_box.bottom))
-            dleft.append(abs(pl * page_w - gt_box.left))
-            dright.append(abs(pr * page_w - gt_box.right))
+            dtop.append(abs(pt * convy - gt_box.top))
+            dbot.append(abs(pb * convy - gt_box.bottom))
+            dleft.append(abs(pl * convx - gt_box.left))
+            dright.append(abs(pr * convx - gt_box.right))
             res2 = dataset._load_image(sid, pno, pbox)
             if res2 is None:
                 pred.append(0.0)
@@ -312,8 +324,10 @@ def main() -> None:
     # --- miss breakdown: undercount (fewer preds than GT) vs threshold reject ---
     undercount = sum(1 for _p, _cy, npred, ngt, _d in misses if npred < ngt)
     near = sum(1 for *_x, d in misses if d != float("inf") and d < 30)
-    print(f"\n  misses: {len(misses)} — undercount(pred<gt) {undercount}, "
-          f"a pred within 30px {near} (matched-but-rejected/dense)")
+    print(
+        f"\n  misses: {len(misses)} — undercount(pred<gt) {undercount}, "
+        f"a pred within 30px {near} (matched-but-rejected/dense)"
+    )
     print("  by vertical position (gt_cy / page_h):")
     ybins = [0] * 10
     for _p, cy, *_x in misses:
@@ -332,17 +346,25 @@ def main() -> None:
     over = [(b, ng, nm) for (b, ng, nm) in page_stats if ng > M]
     clean = [b for (b, _ng, nm) in within if nm == 0]
     dirty = [b for (b, _ng, nm) in within if nm > 0]
-    print(f"\n  darkness vs misses — {len(page_stats)} pages "
-          f"({len(within)} within capacity n_gt<=16, {len(over)} over):")
-    print(f"    within-cap pages WITH a miss:  n={len(dirty)} brightness "
-          f"mean={avg(dirty):.3f} p50={pct(dirty,0.5):.3f}")
-    print(f"    within-cap pages with NO miss: n={len(clean)} brightness "
-          f"mean={avg(clean):.3f} p50={pct(clean,0.5):.3f}")
+    print(
+        f"\n  darkness vs misses — {len(page_stats)} pages "
+        f"({len(within)} within capacity n_gt<=16, {len(over)} over):"
+    )
+    print(
+        f"    within-cap pages WITH a miss:  n={len(dirty)} brightness "
+        f"mean={avg(dirty):.3f} p50={pct(dirty, 0.5):.3f}"
+    )
+    print(
+        f"    within-cap pages with NO miss: n={len(clean)} brightness "
+        f"mean={avg(clean):.3f} p50={pct(clean, 0.5):.3f}"
+    )
     if over:
         ob = [b for (b, _n, _m) in over]
         om = sum(nm for (_b, _n, nm) in over)
-        print(f"    over-capacity pages (>16 staves): n={len(over)} "
-              f"brightness mean={avg(ob):.3f}, total misses on them={om}")
+        print(
+            f"    over-capacity pages (>16 staves): n={len(over)} "
+            f"brightness mean={avg(ob):.3f}, total misses on them={om}"
+        )
     # miss-rate by brightness quartile, within-capacity only
     print("    within-cap miss-rate by brightness quartile (dark→light):")
     sw = sorted(within, key=lambda t: t[0])
@@ -356,8 +378,10 @@ def main() -> None:
             tot_miss = sum(nm for (_b, _n, nm) in chunk)
             br = avg([b for (b, _n, _m) in chunk])
             rate = 100 * tot_miss / max(tot_gt, 1)
-            print(f"      Q{k + 1} brightness~{br:.3f}: "
-                  f"miss {tot_miss}/{tot_gt} ({rate:.1f}%)")
+            print(
+                f"      Q{k + 1} brightness~{br:.3f}: "
+                f"miss {tot_miss}/{tot_gt} ({rate:.1f}%)"
+            )
 
 
 if __name__ == "__main__":

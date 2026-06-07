@@ -25,20 +25,22 @@ from tqdm import tqdm
 
 from kernsheet import KernSheet, KernSheetSource
 from pdmx import PDMX, PdmxSource
-from sheetmusic import Source
+from sheetmusic import LetterboxResize, Source, letterbox_scale
 from staffer import StafferConfig, StafferDataset, StafferModule
 
 _NORM_MEAN, _NORM_STD = 0.9563435316085815, 0.16557540870879858
 
 
 def _make_transform(cfg: StafferConfig) -> v2.Transform:
+    # Mirror StafferDataset.transform: aspect-preserving letterbox, white pad.
     return v2.Compose(
         [
             v2.Grayscale(),
-            v2.Resize(
+            LetterboxResize(
                 cfg.image_shape,
                 interpolation=cfg.interpolation,
                 antialias=cfg.antialias,
+                fill=255,
             ),
             v2.ToDtype(torch.float, scale=True),
             v2.Normalize(mean=[_NORM_MEAN], std=[_NORM_STD]),
@@ -153,6 +155,12 @@ def main() -> None:
         score = source.score(score_id)
         page = score.pages[page_number - 1]
         W, H = page.image_width, page.image_height
+        # Un-normalise predicted boxes to original page pixels (where the GT boxes
+        # live) by inverting StafferDataset's letterbox normalisation: it scales
+        # coords by sx, sy = scale / target_{w,h}, so original = pred / s.
+        th, tw = cfg.image_shape
+        scale = letterbox_scale(H, W, th, tw)
+        sx, sy = scale / tw, scale / th
 
         gt_staves = [stave for system in page.systems for stave in system.staves]
         if not gt_staves:
@@ -167,7 +175,7 @@ def main() -> None:
             continue
 
         gt_cy = [(s.box.top + s.box.bottom) / 2.0 for s in gt_staves]
-        pred_cy = [((t + b) / 2.0) * H for (_, t, _, b) in pred]
+        pred_cy = [((t + b) / 2.0) / sy for (_, t, _, b) in pred]
 
         cost = [[abs(g - p) for p in pred_cy] for g in gt_cy]
         rows, cols = linear_sum_assignment(cost)
@@ -182,10 +190,10 @@ def main() -> None:
         for gi, pi in matched.items():
             pl, pt, pr, pb = pred[pi]
             gt = gt_staves[gi].box
-            dleft.append(pl * W - gt.left)
-            dright.append(pr * W - gt.right)
-            dtop.append(pt * H - gt.top)
-            dbot.append(pb * H - gt.bottom)
+            dleft.append(pl / sx - gt.left)
+            dright.append(pr / sx - gt.right)
+            dtop.append(pt / sy - gt.top)
+            dbot.append(pb / sy - gt.bottom)
 
     print(f"\nBox deltas (pred − GT, px)  staffer={args.staffer}")
     print(
