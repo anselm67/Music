@@ -276,6 +276,29 @@ uv run python scripts/staffer_box_deltas.py \
     --kern-home /home/anselm/datasets/KernSheet</pre>
   </div>
 
+  <!-- ──────────────────────────────────── system_edge_consistency -->
+  <div class="script">
+    <div class="script-header">
+      <span class="script-name">system_edge_consistency.py</span>
+      <span class="badge badge-blue">diagnostic</span>
+      <span class="badge badge-amber">pdmx</span>
+      <span class="badge badge-amber">kernsheet</span>
+    </div>
+    <p class="script-desc">
+      Tests the GT-structure assumption that, within a page, all systems share a
+      left edge (except the first, which may be indented) and a right edge (except
+      the last, which may end short). For each page with ≥3 systems it reports the
+      per-page edge spread (max − min, px) with and without the boundary system, plus
+      the first-system indent and last-system shortfall. Motivates a cross-system
+      edge-consistency loss term. On PDMX the interior edges are pixel-exact; on
+      KernSheet ~80–85% of pages hold within 5px (multi-section pages are the
+      exceptions).
+    </p>
+    <div class="label">Usage</div>
+<pre>uv run python scripts/system_edge_consistency.py --kern-home /home/anselm/datasets/KernSheet
+uv run python scripts/system_edge_consistency.py --home /home/anselm/datasets/PDMX --limit 3000</pre>
+  </div>
+
   <!-- ──────────────────────────────────────── train_scorer_pipeline -->
   <div class="script">
     <div class="script-header">
