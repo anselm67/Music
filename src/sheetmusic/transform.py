@@ -53,3 +53,20 @@ class LetterboxResize:
         return TF.pad(
             image, [0, 0, self.target_w - new_w, self.target_h - new_h], fill=self.fill
         )
+
+
+class PerImageNormalize:
+    """Standardise each image by its OWN mean and std: ``(x - mean) / std``.
+
+    Replaces a fixed global ``v2.Normalize`` so per-image brightness/contrast
+    differences don't reach the model — PDMX's near-white synthetic pages and
+    KernSheet's darker, grayer real scans both arrive centred at 0, unit variance.
+    Operates on the whole tensor; white letterbox padding maps to the same value
+    as the page's white paper (both were the max), so pad semantics are unchanged.
+    """
+
+    def __init__(self, eps: float = 1e-6) -> None:
+        self.eps = eps
+
+    def __call__(self, image: Tensor) -> Tensor:
+        return (image - image.mean()) / (image.std() + self.eps)

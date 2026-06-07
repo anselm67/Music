@@ -25,14 +25,12 @@ from tqdm import tqdm
 
 from kernsheet import KernSheet, KernSheetSource
 from pdmx import PDMX, PdmxSource
-from sheetmusic import LetterboxResize, Source, letterbox_scale
+from sheetmusic import LetterboxResize, PerImageNormalize, Source, letterbox_scale
 from staffer import StafferConfig, StafferDataset, StafferModule
-
-_NORM_MEAN, _NORM_STD = 0.9563435316085815, 0.16557540870879858
 
 
 def _make_transform(cfg: StafferConfig) -> v2.Transform:
-    # Mirror StafferDataset.transform: aspect-preserving letterbox, white pad.
+    # Mirror StafferDataset.transform: letterbox + per-image normalisation.
     return v2.Compose(
         [
             v2.Grayscale(),
@@ -43,7 +41,7 @@ def _make_transform(cfg: StafferConfig) -> v2.Transform:
                 fill=255,
             ),
             v2.ToDtype(torch.float, scale=True),
-            v2.Normalize(mean=[_NORM_MEAN], std=[_NORM_STD]),
+            PerImageNormalize(),
         ]
     )
 

@@ -11,12 +11,13 @@ from torch.utils.data import Dataset, Subset, WeightedRandomSampler
 from torchvision.transforms import v2
 from tqdm import tqdm
 
-from sheetmusic import LetterboxResize, Source, letterbox_scale
+from sheetmusic import LetterboxResize, PerImageNormalize, Source, letterbox_scale
 
 from .staffer_model import StafferConfig
 
-# Page normalisation stats (from running: staffer stats). Exposed so callers
-# that display a transformed page (e.g. `staffer predict`) can de-normalise.
+# Page normalisation is now per-image (PerImageNormalize). These global stats
+# (from `staffer stats`) are kept only so callers that display a transformed page
+# (e.g. `staffer predict`) can map a standardised image back to a viewable range.
 NORM_MEAN = 0.9563435316085815
 NORM_STD = 0.16557540870879858
 
@@ -42,7 +43,7 @@ class StafferDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]]):
                     fill=255,
                 ),
                 v2.ToDtype(torch.float, scale=True),
-                v2.Normalize(mean=[NORM_MEAN], std=[NORM_STD]),
+                PerImageNormalize(),
             ]
         )
         # Build flat list of (score id, page_number) pairs

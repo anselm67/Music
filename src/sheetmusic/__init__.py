@@ -1,6 +1,6 @@
 from .layout import Box, CenteredBox, Page, Score, Staff, System
 from .source import Source
-from .transform import LetterboxResize, letterbox_scale
+from .transform import LetterboxResize, PerImageNormalize, letterbox_scale
 
 __all__ = [
     "Box",
@@ -11,5 +11,6 @@ __all__ = [
     "System",
     "Source",
     "LetterboxResize",
+    "PerImageNormalize",
     "letterbox_scale",
 ]
