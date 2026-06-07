@@ -194,6 +194,26 @@ uv run python scripts/migrate_bars_to_system.py --write   # write in-place</pre>
 <pre>uv run python scripts/migrate_layout_id.py [--home DIR] [--dry-run] [--limit N]</pre>
   </div>
 
+  <!-- ──────────────────────────────────────────────────────── pixel_hist -->
+  <div class="script">
+    <div class="script-header">
+      <span class="script-name">pixel_hist.py</span>
+      <span class="badge badge-blue">diagnostic</span>
+      <span class="badge badge-amber">pdmx</span>
+      <span class="badge badge-amber">kernsheet</span>
+    </div>
+    <p class="script-desc">
+      Compares grayscale pixel-value distributions of PDMX vs KernSheet. Samples
+      <code>N</code> random PNGs from each dataset, accumulates a 256-bin histogram,
+      normalises to a density, and overlays both on one figure (linear + log-y).
+      Surfaces the photometric domain gap: PDMX is near-binary white/black, real
+      KernSheet scans carry a gray pedestal a global <code>Normalize</code> can't
+      remove. Prints per-dataset mean, black-fraction, and white-fraction.
+    </p>
+    <div class="label">Usage</div>
+<pre>uv run python scripts/pixel_hist.py [-n 400] [-o build/pixel_hist.png] [--seed 0]</pre>
+  </div>
+
   <!-- ──────────────────────────────────────────── scorer_error_mix -->
   <div class="script">
     <div class="script-header">
