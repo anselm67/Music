@@ -64,6 +64,29 @@
       font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
       letter-spacing: 0.05em; color: var(--muted); margin: 0.85rem 0 0.2rem;
     }
+
+    .filters {
+      display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center;
+      margin: 0 0 2rem;
+    }
+    .flabel {
+      font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--muted); margin-right: 0.35rem;
+    }
+    .chip {
+      cursor: pointer; font-family: inherit; font-size: 0.78rem; font-weight: 600;
+      padding: 0.2rem 0.7rem; border-radius: 999px;
+      border: 1px solid var(--border); background: var(--surface); color: var(--text);
+      transition: background 0.12s, border-color 0.12s, color 0.12s;
+    }
+    .chip:hover { border-color: var(--slate-bd); }
+    .chip.active {
+      background: var(--slate-bd); border-color: var(--slate-bd); color: #fff;
+    }
+    .script.hidden { display: none; }
+    .no-match {
+      display: none; color: var(--muted); font-style: italic; margin: 0 0 2rem;
+    }
   </style>
 </head>
 <body>
@@ -74,6 +97,11 @@
     <code>uv run python scripts/&lt;name&gt;.py</code> from the repo root.
     Not part of the installable package and not type-checked under <code>mypy</code>.
   </p>
+
+  <div class="filters" id="filters">
+    <span class="flabel">Filter by tag</span>
+  </div>
+  <p class="no-match" id="no-match">No scripts match the selected tags.</p>
 
   <!-- ───────────────────────────────────────────────── eval_predicted_boxes -->
   <div class="script">
@@ -331,5 +359,57 @@ FORCE=1  scripts/train_scorer_pipeline.sh my-model     # retrain stages even if 
   </div>
 
 </main>
+
+<script>
+(function () {
+  const cards = Array.from(document.querySelectorAll('.script'));
+  const bar = document.getElementById('filters');
+  const noMatch = document.getElementById('no-match');
+  const active = new Set();
+
+  // Tags are the badge labels on each card; collect the unique set.
+  const tagSet = new Set();
+  cards.forEach(card => {
+    card._tags = Array.from(card.querySelectorAll('.badge'))
+      .map(b => b.textContent.trim());
+    card._tags.forEach(t => tagSet.add(t));
+  });
+
+  const allChip = document.createElement('button');
+  allChip.className = 'chip active';
+  allChip.textContent = 'All';
+  allChip.addEventListener('click', () => {
+    active.clear();
+    bar.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    allChip.classList.add('active');
+    apply();
+  });
+  bar.appendChild(allChip);
+
+  Array.from(tagSet).sort().forEach(tag => {
+    const chip = document.createElement('button');
+    chip.className = 'chip';
+    chip.textContent = tag;
+    chip.addEventListener('click', () => {
+      if (active.has(tag)) { active.delete(tag); chip.classList.remove('active'); }
+      else { active.add(tag); chip.classList.add('active'); }
+      allChip.classList.toggle('active', active.size === 0);
+      apply();
+    });
+    bar.appendChild(chip);
+  });
+
+  // No selection = show everything; otherwise show cards matching ANY active tag.
+  function apply() {
+    let shown = 0;
+    cards.forEach(card => {
+      const match = active.size === 0 || card._tags.some(t => active.has(t));
+      card.classList.toggle('hidden', !match);
+      if (match) shown++;
+    });
+    noMatch.style.display = shown ? 'none' : 'block';
+  }
+})();
+</script>
 </body>
 </html>
