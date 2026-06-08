@@ -43,21 +43,20 @@ from tqdm import tqdm
 from kernsheet import KernSheet, KernSheetSource
 from noter import NoterConfig, NoterDataset, NoterModule, Vocab
 from pdmx import PDMX, PdmxSource
-from sheetmusic import Box, LetterboxResize, PerImageNormalize, Source, letterbox_scale
+from sheetmusic import Box, PerImageNormalize, Source, letterbox_scale
 from staffer import StafferConfig, StafferModule
 from utils import sequence_edit_distance, strip_eos
 
 
 def make_staffer_transform(cfg: StafferConfig) -> v2.Transform:
-    # Mirror StafferDataset.transform: letterbox + per-image normalisation.
+    # Mirror StafferDataset.transform: stretch resize + per-image normalisation.
     return v2.Compose(
         [
             v2.Grayscale(),
-            LetterboxResize(
+            v2.Resize(
                 cfg.image_shape,
                 interpolation=cfg.interpolation,
                 antialias=cfg.antialias,
-                fill=255,
             ),
             v2.ToDtype(torch.float, scale=True),
             PerImageNormalize(),
@@ -206,15 +205,12 @@ def main() -> None:
         brightness = float(raw.float().mean()) / 255.0
         page_missed = 0
         # Un-normalise staffer-space predictions into the noter-resized page pixels
-        # where the GT boxes live. The two branches letterbox into different
-        # canvases, so go via original px: pred / (scale_s/target_s) → original,
-        # then * scale_n → noter-resized (both StafferDataset & NoterDataset use the
-        # single aspect-preserving letterbox_scale).
+        # where the GT boxes live, via original px. Staffer now STRETCHES: its
+        # normalised coords are orig_px / (w0, h0), so pred * (w0, h0) → original.
+        # Noter still letterboxes by scale_n, so original * scale_n → noter-resized.
         h0, w0 = raw.shape[-2], raw.shape[-1]
-        th_s, tw_s = s_cfg.image_shape
-        scale_s = letterbox_scale(h0, w0, th_s, tw_s)
         scale_n = letterbox_scale(h0, w0, page_h, page_w)
-        convx, convy = tw_s / scale_s * scale_n, th_s / scale_s * scale_n
+        convx, convy = w0 * scale_n, h0 * scale_n
         pred_boxes = staffer_active_boxes(staffer, page_img)
         pred_cy = [((t + b) / 2.0) * convy for (_l, t, _r, b) in pred_boxes]
 

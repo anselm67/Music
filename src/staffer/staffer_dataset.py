@@ -11,7 +11,7 @@ from torch.utils.data import Dataset, Subset, WeightedRandomSampler
 from torchvision.transforms import v2
 from tqdm import tqdm
 
-from sheetmusic import LetterboxResize, PerImageNormalize, Source, letterbox_scale
+from sheetmusic import PerImageNormalize, Source
 
 from .staffer_model import StafferConfig
 
@@ -36,11 +36,10 @@ class StafferDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]]):
         self.transform = v2.Compose(
             [
                 v2.Grayscale(),
-                LetterboxResize(
+                v2.Resize(
                     config.image_shape,
                     interpolation=config.interpolation,
                     antialias=config.antialias,
-                    fill=255,
                 ),
                 v2.ToDtype(torch.float, scale=True),
                 PerImageNormalize(),
@@ -101,13 +100,10 @@ class StafferDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]]):
             sys_boxes = torch.zeros(self.config.num_system_queries, 4)
             staff_boxes = torch.zeros(self.config.num_stave_queries, 4)
             assigns = torch.full((self.config.num_stave_queries,), -1, dtype=torch.long)
-            # Normalise boxes into the letterboxed canvas: scale the original-pixel
-            # coords by the aspect-preserving factor, then by the canvas dims (content
-            # is anchored at the top-left, matching LetterboxResize's bottom/right pad).
+            # Normalise boxes into the stretched canvas: each axis is resized
+            # independently to the target dims, so coords map by their own extent.
             W, H = page.image_width, page.image_height
-            target_h, target_w = self.config.image_shape
-            scale = letterbox_scale(H, W, target_h, target_w)
-            sx, sy = scale / target_w, scale / target_h
+            sx, sy = 1.0 / W, 1.0 / H
             staff_idx = 0
             for sys_idx, system in enumerate(page.systems):
                 if sys_idx >= self.config.num_system_queries:

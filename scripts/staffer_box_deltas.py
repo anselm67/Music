@@ -25,20 +25,19 @@ from tqdm import tqdm
 
 from kernsheet import KernSheet, KernSheetSource
 from pdmx import PDMX, PdmxSource
-from sheetmusic import LetterboxResize, PerImageNormalize, Source, letterbox_scale
+from sheetmusic import PerImageNormalize, Source
 from staffer import StafferConfig, StafferDataset, StafferModule
 
 
 def _make_transform(cfg: StafferConfig) -> v2.Transform:
-    # Mirror StafferDataset.transform: letterbox + per-image normalisation.
+    # Mirror StafferDataset.transform: stretch resize + per-image normalisation.
     return v2.Compose(
         [
             v2.Grayscale(),
-            LetterboxResize(
+            v2.Resize(
                 cfg.image_shape,
                 interpolation=cfg.interpolation,
                 antialias=cfg.antialias,
-                fill=255,
             ),
             v2.ToDtype(torch.float, scale=True),
             PerImageNormalize(),
@@ -154,11 +153,9 @@ def main() -> None:
         page = score.pages[page_number - 1]
         W, H = page.image_width, page.image_height
         # Un-normalise predicted boxes to original page pixels (where the GT boxes
-        # live) by inverting StafferDataset's letterbox normalisation: it scales
-        # coords by sx, sy = scale / target_{w,h}, so original = pred / s.
-        th, tw = cfg.image_shape
-        scale = letterbox_scale(H, W, th, tw)
-        sx, sy = scale / tw, scale / th
+        # live) by inverting StafferDataset's stretch normalisation: it scales
+        # coords by sx, sy = 1/W, 1/H, so original = pred / s.
+        sx, sy = 1.0 / W, 1.0 / H
 
         gt_staves = [stave for system in page.systems for stave in system.staves]
         if not gt_staves:
