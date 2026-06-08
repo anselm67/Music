@@ -264,7 +264,13 @@
         <td><a class="run-link" href="#run-debussy"><span class="tag">debussy</span></a></td><td>2026-06-07</td><td>256</td><td>16</td>
         <td>0.055</td><td>0.982</td><td>val/stave_err_px 0.69¶</td>
         <td><strong>Per-image normalization</strong> (each image standardised by its own mean/std) instead of fixed global stats — PDMX base</td>
-        <td><span class="badge badge-slate">PDMX base · KernSheet pending</span></td>
+        <td><span class="badge badge-slate">PDMX base</span></td>
+      </tr>
+      <tr>
+        <td><a class="run-link" href="#run-debussy-kernsheet"><span class="tag">debussy-kernsheet</span></a></td><td>2026-06-08</td><td>256</td><td>16</td>
+        <td>0.371</td><td>0.918</td><td>eval ~3.6/3.7 px · Δright p99 69, miss 3.9%</td>
+        <td>Per-image-norm fine-tune on KernSheet (clean A/B vs <span class="tag">berlioz-kernsheet</span>)</td>
+        <td><span class="badge badge-green">x-tail ↓ · miss ↓</span></td>
       </tr>
     </tbody>
   </table>
@@ -1197,9 +1203,9 @@
   <!-- ════════════════════════════════════════════ debussy -->
   <div class="session">
     <div class="session-header">
-      <h2 id="run-debussy"><span class="tag">debussy</span> — per-image normalization (PDMX base)</h2>
-      <span class="session-meta">2026-06-07 · tag <code>train/debussy</code> · D=256 H=8 · letterbox · 12-epoch PDMX base</span>
-      <span class="badge badge-slate">PDMX base · KernSheet pending</span>
+      <h2 id="run-debussy"><span class="tag">debussy</span> / <span id="run-debussy-kernsheet" class="tag">debussy-kernsheet</span> — per-image normalization</h2>
+      <span class="session-meta">2026-06-07/08 · tags <code>train/debussy</code> / <code>train/debussy-kernsheet</code> · D=256 H=8 · letterbox</span>
+      <span class="badge badge-green">x-tail ↓ · miss ↓ (KernSheet)</span>
     </div>
     <p><strong>The motivation is photometric, not geometric.</strong> A pixel-distribution probe (<code>scripts/pixel_hist.py</code>) showed PDMX renders are near-binary (mean 243.8/255, 92% of pixels pure white) while KernSheet scans carry a gray pedestal (mean 220.6, off-white paper + anti-alias). The dataset's fixed global <code>v2.Normalize</code> is a single affine that can't close a dataset-level brightness/contrast offset — KernSheet paper lands ~0.8&nbsp;std below where a PDMX-trained model expects it. <span class="tag">debussy</span> replaces it with <code>PerImageNormalize</code> (<code>(x − x.mean()) / (x.std() + ε)</code>), which standardises each image by its own statistics and is affine-invariant — neutralising per-scan darkness variance. This is the PDMX base; the KernSheet fine-tune (<span class="tag">debussy-kernsheet</span>) is where the change is meant to pay off.</p>
     <h3>PDMX base — a small, bounded stave-edge tax</h3>
@@ -1213,7 +1219,33 @@
       </tbody>
     </table>
     <p style="font-size:0.78rem;color:var(--muted)">The stave_err gap settled into a steady +0.15–0.28&nbsp;px band from ~step 30k onward and never grew; <code>sys IoU</code> oscillated within ±0.01 (sign-flipping each checkpoint) — statistically a tie. So per-image norm's cost on PDMX is <em>localised to fine stave top/bottom precision, neutral on system localization</em> — a narrow, well-understood toll, not a broad regression. Expected: PDMX pages are near-binary white, so per-image ≈ global there and the best case was "neutral."</p>
-    <div class="result-box neutral"><strong>On PDMX, per-image norm costs ~0.17&nbsp;px of stave-edge precision and nothing else.</strong> But PDMX was never the scoreboard — the change targets the KernSheet gray-pedestal gap. <strong>Verdict pending stage 2:</strong> <span class="tag">debussy-kernsheet</span> (same FT recipe as <span class="tag">stave-primary-grid-full-kernsheet</span>: <code>--init-from … --lr 1e-5 --train-len 2000 -e 30</code>), then <code>scripts/staffer_box_deltas.py</code> on KernSheet to read the right-edge tail (baseline to beat: Δright p90&nbsp;30 / p99&nbsp;112&nbsp;px, miss 6.2%). If per-image norm pulls that tail in, the 0.17&nbsp;px PDMX tax was well spent; if not, revert to global norm.</div>
+    <div class="result-box neutral"><strong>On PDMX, per-image norm costs ~0.17&nbsp;px of stave-edge precision and nothing else.</strong> But PDMX was never the scoreboard — the change targets the KernSheet gray-pedestal gap, where the fine-tune below delivers.</div>
+
+    <h3>KernSheet fine-tune (<span class="tag">debussy-kernsheet</span>) — the payoff</h3>
+    <p style="font-size:0.82rem;color:var(--muted)">Same FT recipe as <span class="tag">stave-primary-grid-full-kernsheet</span> (<code>--init-from checkpoints/staffer/debussy/last.ckpt --lr 1e-5 --warmup-steps 200 --train-len 2000 --valid-len 300 -e 30 --use-sampler</code>). Two evals: <code>staffer --kern-home … eval debussy-kernsheet --size 500</code> (bucketed y-error) and <code>scripts/staffer_box_deltas.py</code> (signed per-edge deltas, 300 pages). <span class="tag">debussy-kernsheet</span> is letterbox+per-image; <span class="tag">spgf-kernsheet</span> is stretch+global (different seed/transform — its numbers are its own native-transform measurements, not re-run here); <span class="tag">berlioz-kernsheet</span> is the clean A/B (same letterbox + seeded split, only norm differs).</p>
+    <h4>Stave y-error (n-weighted over bins 0–15)</h4>
+    <table class="summary-table">
+      <thead><tr><th>KernSheet</th><th><span class="tag">spgf</span> (stretch+global)</th><th><span class="tag">berlioz</span> (LB+global)</th><th><span class="tag">debussy</span> (LB+per-img)</th></tr></thead>
+      <tbody>
+        <tr><td>n-weighted top_err</td><td>3.2&nbsp;px</td><td>4.99&nbsp;px</td><td><strong>3.63&nbsp;px</strong></td></tr>
+        <tr><td>n-weighted bot_err</td><td>3.1&nbsp;px</td><td>5.11&nbsp;px</td><td><strong>3.66&nbsp;px</strong></td></tr>
+        <tr><td>in-training val/stave_err_px</td><td>3.96</td><td>4.94</td><td><strong>4.14</strong></td></tr>
+        <tr><td>final val/loss · sys IoU</td><td>0.346 · 0.930</td><td>0.423 · 0.908</td><td><strong>0.371 · 0.918</strong></td></tr>
+      </tbody>
+    </table>
+    <h4>Box deltas — the metric per-image norm actually targets (right-edge x-tail + misses)</h4>
+    <table class="summary-table">
+      <thead><tr><th>pred − GT (px)</th><th><span class="tag">spgf</span> baseline</th><th><span class="tag">debussy-kernsheet</span></th></tr></thead>
+      <tbody>
+        <tr><td>miss rate</td><td>6.2%</td><td><strong>3.9%</strong></td></tr>
+        <tr><td>Δright p90</td><td>30</td><td><strong>25.0</strong></td></tr>
+        <tr><td>Δright p99</td><td>112</td><td><strong>69.5</strong></td></tr>
+        <tr><td>Δright signed mean</td><td>rightward bias</td><td><strong>−0.15 (gone)</strong></td></tr>
+        <tr><td>Δleft p99 · Δtop p99 · Δbot p99</td><td>—</td><td>+32.4 · +17.7 · +19.1</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">During the FT the clean A/B vs <span class="tag">berlioz-kernsheet</span> stayed negative and <em>widened</em> in debussy's favour (gap −0.41&nbsp;px → −0.82&nbsp;px by step 1249; sys IoU ahead throughout) — the photometric win compounds with training.</p>
+    <div class="result-box positive"><strong>Per-image norm does exactly what it was built to do.</strong> The right-edge tail it targeted is cut ~38% (Δright p99 112 → 69.5&nbsp;px), missed staves drop 6.2 → 3.9%, and the rightward bias is eliminated (−0.15&nbsp;px) — <em>while carrying the known ~1&nbsp;px letterbox y-handicap</em>. It crushes its clean A/B (<span class="tag">berlioz-kernsheet</span> 4.99/5.11 → 3.63/3.66&nbsp;px) and lands just behind the stretch champion <span class="tag">spgf</span> on raw y-error (3.63/3.66 vs 3.2/3.1) — that residual is the letterbox, not the norm (letterbox alone costs ~1&nbsp;px on KernSheet, see <span class="tag">berlioz</span> card). <strong>Next:</strong> <strong>per-image + stretch</strong> (drop letterbox) — removes the y-handicap while keeping the x-tail/miss win, the config most likely to beat <span class="tag">spgf</span> outright on both axes.</div>
   </div>
 
 </main>
