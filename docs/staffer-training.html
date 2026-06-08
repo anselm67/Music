@@ -260,10 +260,17 @@
         <td>Letterbox fine-tune on KernSheet (vs stretch <span class="tag">…-kernsheet</span>)</td>
         <td><span class="badge badge-amber">negative</span></td>
       </tr>
+      <tr>
+        <td><a class="run-link" href="#run-debussy"><span class="tag">debussy</span></a></td><td>2026-06-07</td><td>256</td><td>16</td>
+        <td>0.055</td><td>0.982</td><td>val/stave_err_px 0.69¶</td>
+        <td><strong>Per-image normalization</strong> (each image standardised by its own mean/std) instead of fixed global stats — PDMX base</td>
+        <td><span class="badge badge-slate">PDMX base · KernSheet pending</span></td>
+      </tr>
     </tbody>
   </table>
   <p style="font-size:0.82rem;color:var(--muted)"><span class="tag">stave-primary-grid-full-kernsheet</span> is evaluated on KernSheet (real scans), not PDMX — its <code>sys IoU</code> 0.930 / stave error are <em>not</em> comparable to the synthetic-domain rows above; the meaningful comparison is its own before/after on KernSheet (see card). <code>sys IoU</code> shown as actual (1 − stored).</p>
   <p style="font-size:0.82rem;color:var(--muted)">† stave L1 not comparable to prior runs: enhanced2-ltrb stave head outputs (top, bottom) directly; prior runs output (cy, h). ‡ <span class="tag">stave-primary</span>'s <code>val/stave_l1</code> is not a clean metric (logging-key collision, see its card), so its stave column reports the eval table's bottom-of-page error instead — directly comparable to the anchor's bins 12–14 (~12–13 px). § <span class="tag">berlioz</span>'s PDMX <code>val/stave_err_px</code> 0.52 vs <span class="tag">stave-primary-grid-full</span>'s 0.41 is <em>not</em> a clean comparison — the <code>random_split</code> was reseeded between the two runs, so they validate on different PDMX pages, and the metric is heavy-tailed; on PDMX the letterbox is vertically identical to stretch (see <span class="tag">berlioz</span> card), so the base is effectively unchanged.</p>
+  <p style="font-size:0.82rem;color:var(--muted)">¶ <span class="tag">debussy</span> vs <span class="tag">berlioz</span> <em>is</em> a clean A/B: both post-date the <code>random_split</code> reseed (commit <code>c271450</code>, 2026-06-05) and share the same letterbox + config, so they validate on the <em>identical</em> PDMX split — the only deliberate difference is per-image vs global normalization. The <code>val/stave_err_px</code> gap 0.69 vs 0.52 (+0.17&nbsp;px) is therefore the real cost of per-image norm on the synthetic domain; <code>sys IoU</code> is a tie (0.982 vs 0.981). Per-image norm was never expected to help PDMX (synthetic pages are near-binary white, where per-image ≈ global) — its target is the KernSheet photometric gap, so the verdict is the upcoming <span class="tag">debussy-kernsheet</span> fine-tune, not this row.</p>
   <div class="result-box neutral" style="font-size:0.84rem"><strong>Model size note.</strong> <span class="tag">basic</span>–<span class="tag">enhanced2-vflip</span> ran at <strong>D=256 · H=8 · mlp=1024</strong>. From <span class="tag">enhanced2-sampler</span> onward the <code>StafferConfig</code> default had silently shrunk to <strong>D=128 · H=4 · mlp=512</strong> (the small-model config, never restored; <code>train</code> has no override flag) — so <span class="tag">enhanced2-sampler</span>, <span class="tag">enhanced2-ltrb</span>, <span class="tag">enhanced2-ltrb-anchor</span>, <span class="tag">enhanced2-ltrb-anchor-iter</span>, <span class="tag">stave-primary</span> and <span class="tag">stave-primary-grid</span> are all <strong>half-size</strong>. The D column above is corrected to reflect the saved <code>hparams.yaml</code>. <em>Consequence:</em> the sys-IoU gap of the ltrb line vs <span class="tag">enhanced2</span> (0.914 vs 0.919) is largely <strong>capacity</strong>, not the ltrb formulation being "harder" — the like-for-like comparisons within the ltrb line (all D=128) remain valid. <span class="tag">stave-primary-grid</span> validated as the best architecture at this budget (sys IoU 0.971; bottom drift flattened to ~2.5 px); the full-size retrain <span class="tag">stave-primary-grid-full</span> (D=256/H=8/mlp=1024) has since landed as the new best — the gain compounds with capacity (sys IoU 0.985; bottom bins down to ~1 px).</div>
 
   <!-- ════════════════════ Comparison charts ════════════════════ -->
@@ -1185,6 +1192,28 @@
     </table>
     <p style="font-size:0.78rem;color:var(--muted)">A per-fill-fraction breakdown showed the regression is <em>not</em> the short, heavily-padded pages (those are fine, ~3&nbsp;px) — it is spread across the canvas-filling majority. On KernSheet's varied page shapes the letterbox introduces variable padding the detector handles less well than the stretch's uniform canvas-fill; the stretch's "distortion" was, for a box detector, a free canvas-normaliser.</p>
     <div class="result-box negative"><strong>Letterbox is a net negative for the staffer, and end-to-end neutral.</strong> The detector is ~1.8&nbsp;px softer on real scans (4.99/5.11 vs 3.2/3.1&nbsp;px) and miscounts a touch more end-to-end (6 vs 3 / 300 pages). The transcription side moved the other way — <a href="noter-training.html#run-berlioz-kernsheet">noter/berlioz-kernsheet</a> is marginally better on val (97.55% vs 97.41%) but tied on free-running (89.4%) — and the <a href="scorer-training.html#run-berlioz">scorer</a> nets to a wash (90.8% vs <span class="tag">ravel</span> 90.7%, within sampling noise). So un-stretching helps transcription at best marginally and hurts detection measurably. <strong>Next:</strong> the remove-letterbox control — recover <span class="tag">stave-primary-grid-full</span> by reverting to stretch — and, if pursued, keep letterbox on the noter crops only.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ debussy -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-debussy"><span class="tag">debussy</span> — per-image normalization (PDMX base)</h2>
+      <span class="session-meta">2026-06-07 · tag <code>train/debussy</code> · D=256 H=8 · letterbox · 12-epoch PDMX base</span>
+      <span class="badge badge-slate">PDMX base · KernSheet pending</span>
+    </div>
+    <p><strong>The motivation is photometric, not geometric.</strong> A pixel-distribution probe (<code>scripts/pixel_hist.py</code>) showed PDMX renders are near-binary (mean 243.8/255, 92% of pixels pure white) while KernSheet scans carry a gray pedestal (mean 220.6, off-white paper + anti-alias). The dataset's fixed global <code>v2.Normalize</code> is a single affine that can't close a dataset-level brightness/contrast offset — KernSheet paper lands ~0.8&nbsp;std below where a PDMX-trained model expects it. <span class="tag">debussy</span> replaces it with <code>PerImageNormalize</code> (<code>(x − x.mean()) / (x.std() + ε)</code>), which standardises each image by its own statistics and is affine-invariant — neutralising per-scan darkness variance. This is the PDMX base; the KernSheet fine-tune (<span class="tag">debussy-kernsheet</span>) is where the change is meant to pay off.</p>
+    <h3>PDMX base — a small, bounded stave-edge tax</h3>
+    <p>Clean A/B against <span class="tag">berlioz</span> (same seeded split + letterbox + config; only the norm differs). The gap held flat through the whole run — never diverging — and landed exactly where the trajectory pointed:</p>
+    <table class="summary-table">
+      <thead><tr><th>PDMX (final)</th><th><span class="tag">berlioz</span> (global norm)</th><th><span class="tag">debussy</span> (per-image)</th><th>Δ</th></tr></thead>
+      <tbody>
+        <tr><td>val/stave_err_px</td><td>0.521</td><td><strong>0.688</strong></td><td>+0.167 px</td></tr>
+        <tr><td>sys IoU</td><td>0.9811</td><td><strong>0.9820</strong></td><td>+0.0009 (tie)</td></tr>
+        <tr><td>val/loss</td><td>0.057</td><td>0.055</td><td>−0.002</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">The stave_err gap settled into a steady +0.15–0.28&nbsp;px band from ~step 30k onward and never grew; <code>sys IoU</code> oscillated within ±0.01 (sign-flipping each checkpoint) — statistically a tie. So per-image norm's cost on PDMX is <em>localised to fine stave top/bottom precision, neutral on system localization</em> — a narrow, well-understood toll, not a broad regression. Expected: PDMX pages are near-binary white, so per-image ≈ global there and the best case was "neutral."</p>
+    <div class="result-box neutral"><strong>On PDMX, per-image norm costs ~0.17&nbsp;px of stave-edge precision and nothing else.</strong> But PDMX was never the scoreboard — the change targets the KernSheet gray-pedestal gap. <strong>Verdict pending stage 2:</strong> <span class="tag">debussy-kernsheet</span> (same FT recipe as <span class="tag">stave-primary-grid-full-kernsheet</span>: <code>--init-from … --lr 1e-5 --train-len 2000 -e 30</code>), then <code>scripts/staffer_box_deltas.py</code> on KernSheet to read the right-edge tail (baseline to beat: Δright p90&nbsp;30 / p99&nbsp;112&nbsp;px, miss 6.2%). If per-image norm pulls that tail in, the 0.17&nbsp;px PDMX tax was well spent; if not, revert to global norm.</div>
   </div>
 
 </main>
