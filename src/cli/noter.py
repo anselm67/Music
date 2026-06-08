@@ -13,7 +13,6 @@ import click
 import cv2
 import lightning as L
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import torch
 from lightning.pytorch.callbacks import Callback, EarlyStopping, ModelCheckpoint
@@ -25,8 +24,6 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from noter import (
-    NORM_MEAN,
-    NORM_STD,
     NoterConfig,
     NoterDataModule,
     NoterDataset,
@@ -36,7 +33,7 @@ from noter import (
 )
 from kernsheet import KernSheet, KernSheetSource
 from pdmx import PDMX, PdmxSource
-from sheetmusic import Source
+from sheetmusic import Source, to_display
 from utils import (
     format_sequence_columns,
     log_uncaught_exceptions,
@@ -194,10 +191,7 @@ def show(ctx: ClickContext) -> None:
         index = random.randint(0, len(dataset) - 1)
         score_id, page_number = dataset.items[index][:2]
         img_tensor, _, seq_tensor = dataset[index]
-        # De-normalise to uint8 [0, 255]; a raw normalised float renders as
-        # solid black (dark crops) or blows out to white via cv2's float rescale.
-        img = (img_tensor.squeeze(0).cpu().numpy() * NORM_STD + NORM_MEAN).clip(0, 1)
-        img = (np.stack([img] * 3, axis=-1) * 255).astype(np.uint8)
+        img = to_display(img_tensor)
         tokens = dataset.vocab.i2tok(seq_tensor)
         print(ctx.source.image_path(score_id, page_number))
         print(tokens)
@@ -808,11 +802,7 @@ def predict(ctx: ClickContext, name: str) -> None:
         print(f"\nSimilarity: {similarity:.1%}  (edit {edit_dist} / max {max_cost})")
         print(f"   Avg sim: {avg_similarity:.1%}  ({n_samples} samples)")
 
-        # Denormalize and display.
-        img = image.squeeze(0).cpu().numpy()
-        img = img * NORM_STD + NORM_MEAN
-        img = (np.clip(img, 0.0, 1.0) * 255).astype(np.uint8)
-        cv2.imshow("Staff", np.stack([img] * 3, axis=-1))
+        cv2.imshow("Staff", to_display(image))
 
         if cv2.waitKey(0) == ord("q"):
             break

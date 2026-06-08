@@ -15,12 +15,6 @@ from sheetmusic import LetterboxResize, PerImageNormalize, Source, letterbox_sca
 
 from .staffer_model import StafferConfig
 
-# Page normalisation is now per-image (PerImageNormalize). These global stats
-# (from `staffer stats`) are kept only so callers that display a transformed page
-# (e.g. `staffer predict`) can map a standardised image back to a viewable range.
-NORM_MEAN = 0.9563435316085815
-NORM_STD = 0.16557540870879858
-
 
 class StafferDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]]):
     source: Source

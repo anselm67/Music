@@ -13,12 +13,6 @@ from sheetmusic import Box, LetterboxResize, PerImageNormalize, Source, letterbo
 from .noter_model import NoterConfig
 from .noter_vocab import Vocab
 
-# Page normalisation is now per-image (PerImageNormalize). These global stats
-# are kept ONLY so callers that display a transformed crop (e.g. `noter show`)
-# can approximately de-normalise; the transform no longer applies them.
-NORM_MEAN = 0.9482423663139343
-NORM_STD = 0.17525607175008864
-
 # Per-edge box-jitter spec (sigma_px, clip_px), train-only augmentation modelling
 # the staffer detector's box error measured on KernSheet (scripts/
 # eval_predicted_boxes.py): horizontal error >> vertical, right edge the worst.
