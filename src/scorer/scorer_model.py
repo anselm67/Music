@@ -56,6 +56,10 @@ class ScorerConfig:
     freeze_staffer_steps: int = 500
 
     def __post_init__(self) -> None:
+        # The noter is cropped from the staffer's page, so its page geometry
+        # must follow this scorer's (possibly overridden) staffer canvas — not
+        # whatever default the noter sub-config was built with.
+        self.noter.page_shape = self.staffer.image_shape
         if self.train_len == -1:
             self.train_len = 12500 * self.batch_size
         if self.valid_len == -1:

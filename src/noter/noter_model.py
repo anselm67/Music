@@ -6,6 +6,7 @@ import torch
 from torch import Tensor, nn
 from torchvision.transforms import InterpolationMode
 
+from staffer import StafferConfig
 from utils import current_commit
 
 from .noter_vocab import Vocab
@@ -16,7 +17,14 @@ class NoterConfig:
     id_name: str = "default"
     git_hash: str = current_commit()
 
-    page_shape: list[int] = field(default_factory=lambda: [966, 680])
+    # Derived from the staffer canvas (StafferConfig.image_shape, itself
+    # computed by scale_to_patch): the scorer crops the noter's input from a
+    # page letterboxed to the staffer shape, so the standalone noter must train
+    # on the same page geometry. Sourced here rather than copy-pasting the
+    # computed [960, 688] so the two never drift apart again. NB: when used as a
+    # ScorerConfig sub-config this is force-set to the scorer's staffer canvas
+    # (ScorerConfig.__post_init__), so an explicit value passed there is ignored.
+    page_shape: list[int] = field(default_factory=lambda: StafferConfig().image_shape)
 
     input_shape: list[int] = field(default_factory=lambda: [64, 6 * 128])
     max_chords: int = 8

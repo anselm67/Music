@@ -171,7 +171,7 @@ def main() -> None:
     )
     s_transform = make_staffer_transform(s_cfg)
 
-    page_h, page_w = n_cfg.page_shape  # (966, 680)
+    page_h, page_w = n_cfg.page_shape  # (960, 688)
 
     # Group GT staves (noter items) by page image.
     page_to_idx: dict[tuple[str, int], list[int]] = defaultdict(list)
