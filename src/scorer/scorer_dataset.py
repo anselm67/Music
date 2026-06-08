@@ -14,7 +14,7 @@ from torch.utils.data import Dataset
 from torchvision.transforms import v2
 from tqdm import tqdm
 
-from sheetmusic import LetterboxResize, Source, letterbox_scale
+from sheetmusic import LetterboxResize, PerImageNormalize, Source, letterbox_scale
 
 from noter import SequenceLoader, Vocab
 
@@ -34,8 +34,11 @@ class ScorerDataset(Dataset[Sample]):
         self.config = config
         self.source = source
         self.vocab = vocab
-        # Same page normalisation as the staffer (the page is the staffer's input);
-        # the noter branch recolours crops to its own space inside ScorerModel.crop.
+        # Same page normalisation as the staffer (the page is the staffer's input):
+        # per-image. With the noter canvas now equal to the staffer canvas
+        # (NoterConfig.page_shape == StafferConfig.image_shape), a crop sampled
+        # from this page matches the standalone noter crop exactly, so no recolour
+        # is needed in ScorerModel.crop.
         self.transform = v2.Compose(
             [
                 v2.Grayscale(),
@@ -46,7 +49,7 @@ class ScorerDataset(Dataset[Sample]):
                     fill=255,
                 ),
                 v2.ToDtype(torch.float, scale=True),
-                v2.Normalize(mean=[0.9563435316085815], std=[0.16557540870879858]),
+                PerImageNormalize(),
             ]
         )
         self.load_sequence = SequenceLoader(

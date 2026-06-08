@@ -21,13 +21,6 @@ from utils import current_commit
 from noter import NoterConfig, NoterModel, Vocab
 from staffer import StafferConfig, StafferModel
 
-# Per-model grayscale normalisation (mean, std) — hardcoded in each dataset's
-# v2.Normalize. Staffer normalises the page; the noter was trained on crops
-# normalised with its own stats, so crops are recoloured staffer→noter space
-# before entering the noter branch (a single affine of the same [0,1] image).
-STAFFER_NORM = (0.9563435316085815, 0.16557540870879858)
-NOTER_NORM = (0.9482423663139343, 0.17525607175008864)
-
 
 @dataclass
 class ScorerConfig:
@@ -122,11 +115,6 @@ class ScorerModel(nn.Module):
         self.config = config
         self.staffer = StafferModel(config.staffer)
         self.noter = NoterModel(config.noter)
-        # crop → noter input shape, recoloured into noter normalisation space.
-        std_s, std_n = STAFFER_NORM[1], NOTER_NORM[1]
-        mean_s, mean_n = STAFFER_NORM[0], NOTER_NORM[0]
-        self._renorm_scale = std_s / std_n
-        self._renorm_shift = (mean_s - mean_n) / std_n
 
     def detect(self, image: Tensor) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         """Run the staffer branch: page image → box predictions."""
@@ -146,10 +134,11 @@ class ScorerModel(nn.Module):
         system left (position), not to a spurious scale.
 
         Built with ``affine_grid`` + ``grid_sample`` (not ``torchvision.ops.roi_align``,
-        which does not backprop to box coordinates). Crops are recoloured into the
-        noter's normalisation space. NB: exact for staves where ``3·h ≥ 64px`` (the
-        System2 norm); very short staves get page context instead of white vertical pad
-        — a minor deviation to revisit if it bites.
+        which does not backprop to box coordinates). No recolour is needed: the page
+        is per-image normalised and the noter canvas equals the staffer canvas, so the
+        crop already lives in the noter's input space. NB: exact for staves where
+        ``3·h ≥ 64px`` (the System2 norm); very short staves get page context instead
+        of white vertical pad — a minor deviation to revisit if it bites.
         """
         out_h, out_w = self.config.noter.input_shape
         _, C, H, W = image.shape
@@ -172,14 +161,13 @@ class ScorerModel(nn.Module):
         crops = F.grid_sample(
             src, grid, align_corners=False, padding_mode="border"
         )  # (K, C, out_h, out_w)
-        crops = crops * self._renorm_scale + self._renorm_shift
         # Real stave width in px → masks the right padding, exactly like the noter.
         widths = (right - left).clamp(min=1, max=out_w).long()
         return crops, widths
 
     def forward(
         self,
-        image: Tensor,  # (B, 1, H, W) normalised page (staffer space)
+        image: Tensor,  # (B, 1, H, W) per-image normalised page
         sel_queries: list[Tensor],  # per page: query slots to transcribe (target order)
         sys_ids: list[Tensor],  # per page: owning system index per selected stave
     ) -> tuple[tuple[Tensor, Tensor, Tensor, Tensor, Tensor], Tensor, Tensor]:

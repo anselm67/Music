@@ -26,19 +26,15 @@ from kernsheet import KernSheet, KernSheetSource
 from noter import NoterConfig, Vocab
 from pdmx import PDMX, PdmxSource
 from scorer import (
-    STAFFER_NORM,
     ScorerConfig,
     ScorerDataModule,
     ScorerDataset,
     ScorerModule,
     build_stave_boxes,
 )
-from sheetmusic import Source
+from sheetmusic import Source, to_display
 from staffer import StafferConfig
 from utils import log_uncaught_exceptions, sequence_edit_distance, strip_eos
-
-# STAFFER_NORM = (mean, std) page normalisation; unpacked to denormalise for display.
-PAGE_MEAN, PAGE_STD = STAFFER_NORM
 
 HOME = Path("/home/anselm/datasets/PDMX")
 
@@ -638,11 +634,6 @@ def _load_for_inference(name: str) -> tuple[ScorerConfig, ScorerModule]:
     return config, module
 
 
-def _to_display(image: torch.Tensor) -> np.ndarray:  # type: ignore[type-arg]
-    arr = image.squeeze(0).cpu().numpy() * PAGE_STD + PAGE_MEAN
-    return np.stack([(np.clip(arr, 0.0, 1.0) * 255).astype(np.uint8)] * 3, axis=-1)
-
-
 def _draw_boxes(img: np.ndarray, boxes: torch.Tensor) -> None:  # type: ignore[type-arg]
     for k in range(boxes.shape[0]):
         _, left, top, right, bot = boxes[k].tolist()
@@ -666,7 +657,7 @@ def predict_from_images(
     for path in img_paths:
         image = dataset.transform(decode_image(path.as_posix())).to(module.device)
         boxes, tokens, owners = module.predict(image.unsqueeze(0))
-        img = _to_display(image)
+        img = to_display(image)
         _draw_boxes(img, boxes)
         pred_by_sys = _group_by_system(owners, boxes.shape[0])
         click.clear()
@@ -693,7 +684,7 @@ def predict_from_dataset(
         image, _gt_sys, _gt_stave, gt_assign, stave_tokens = dataset[idx]
         boxes, tokens, owners = module.predict(image.unsqueeze(0).to(module.device))
         num_gt = int((gt_assign != -1).sum())
-        img = _to_display(image)
+        img = to_display(image)
         _draw_boxes(img, boxes)
         gt_by_sys = _group_by_system(gt_assign, num_gt)
         pred_by_sys = _group_by_system(owners, boxes.shape[0])

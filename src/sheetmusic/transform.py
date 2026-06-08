@@ -8,6 +8,7 @@ target, then pads the bottom/right with ``fill`` so the content stays anchored a
 top-left origin (which is what the datasets' box normalisation assumes).
 """
 
+import numpy as np
 import torchvision.transforms.v2.functional as TF
 from torch import Tensor
 from torchvision.transforms.functional import InterpolationMode
@@ -70,3 +71,17 @@ class PerImageNormalize:
 
     def __call__(self, image: Tensor) -> Tensor:
         return (image - image.mean()) / (image.std() + self.eps)
+
+
+def to_display(image: Tensor) -> np.ndarray:  # type: ignore[type-arg]
+    """Map a ``(1, H, W)`` normalised tensor to a viewable ``(H, W, 3)`` uint8 array.
+
+    The display inverse of ``PerImageNormalize``: per-image normalisation leaves
+    no fixed stats to invert, so a min-max stretch maps the page back to grayscale
+    (brightest→white, darkest→black) regardless of the page's brightness. Shared by
+    every CLI that shows a transformed page/crop (staffer/noter/scorer).
+    """
+    arr = image.squeeze(0).detach().cpu().numpy()
+    lo, hi = arr.min(), arr.max()
+    arr = (arr - lo) / (hi - lo + 1e-6)
+    return np.stack([(arr * 255).astype(np.uint8)] * 3, axis=-1)
