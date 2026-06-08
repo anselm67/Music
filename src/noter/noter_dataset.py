@@ -8,13 +8,14 @@ from torchvision.transforms import v2
 from torchvision.transforms.functional import crop
 from tqdm import tqdm
 
-from sheetmusic import Box, LetterboxResize, Source, letterbox_scale
+from sheetmusic import Box, LetterboxResize, PerImageNormalize, Source, letterbox_scale
 
 from .noter_model import NoterConfig
 from .noter_vocab import Vocab
 
-# Crop normalisation stats (from running: noter stats). Exposed so callers
-# that display a transformed crop (e.g. `noter show`) can de-normalise.
+# Page normalisation is now per-image (PerImageNormalize). These global stats
+# are kept ONLY so callers that display a transformed crop (e.g. `noter show`)
+# can approximately de-normalise; the transform no longer applies them.
 NORM_MEAN = 0.9482423663139343
 NORM_STD = 0.17525607175008864
 
@@ -105,10 +106,9 @@ class NoterDataset(Dataset):
                     antialias=config.antialias,
                     fill=1.0,
                 ),
-                v2.Normalize(mean=[NORM_MEAN], std=[NORM_STD]),
+                PerImageNormalize(),
             ]
         )
-        self.image_pad_value = (1.0 - NORM_MEAN) / NORM_STD
         self.load_sequence = SequenceLoader(
             source, vocab, config.max_seqlen, config.max_chords
         )
@@ -179,6 +179,11 @@ class NoterDataset(Dataset):
         except Exception as e:
             logging.error(f"{score_id}: {e}")
             return None
+        # Per-image norm makes "normalised white" page-dependent, so the crop
+        # window must pad with this page's white rather than a fixed constant.
+        # LetterboxResize fills raw 1.0 (the max raw value), so after the norm
+        # the page max IS its normalised white.
+        image_pad_value = float(tensor.max())
         height, width = self.config.input_shape
         _, page_height, page_width = tensor.shape
         # Center the staff vertically in the fixed-height window. A real staff
@@ -193,7 +198,7 @@ class NoterDataset(Dataset):
         # page) pads white via the canvas, not black (crop() zero-pads = ink).
         crop_width = min(box.width, page_width - box.left)
         tensor = crop(tensor, src_top, box.left, src_bot - src_top, crop_width)
-        image = torch.full((1, height, width), self.image_pad_value)
+        image = torch.full((1, height, width), image_pad_value)
         _, cropped_height, cropped_width = tensor.shape
         y0 = src_top - crop_top
         image[:, y0 : y0 + cropped_height, :cropped_width] = tensor
