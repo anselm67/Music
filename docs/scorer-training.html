@@ -125,28 +125,28 @@
     </thead>
     <tbody>
       <tr>
-        <td><span class="tag">merge1</span></td><td>PDMX</td><td>2026-06-02</td><td>8</td>
+        <td><a class="run-link" href="#run-merge1"><span class="tag">merge1</span></a></td><td>PDMX</td><td>2026-06-02</td><td>8</td>
         <td>99.57%</td><td>0.971</td><td>0.054 px</td>
         <td>97.7% · 0/500 miscount</td>
         <td>First joint staffer+noter training; from standalone best checkpoints</td>
         <td><span class="badge badge-green">PDMX best</span></td>
       </tr>
       <tr>
-        <td><span class="tag">boulez</span></td><td>KernSheet</td><td>2026-06-04</td><td>8</td>
+        <td><a class="run-link" href="#run-boulez"><span class="tag">boulez</span></a></td><td>KernSheet</td><td>2026-06-04</td><td>8</td>
         <td>97.28%<sup>†</sup></td><td>0.938<sup>†</sup></td><td>5.25 px<sup>†</sup></td>
         <td>89.5% · 12/300 miscount</td>
         <td>Unfreeze staffer @ step 500 (joint det + tr fine-tune)</td>
         <td><span class="badge badge-slate">superseded</span></td>
       </tr>
       <tr>
-        <td><span class="tag">walton</span></td><td>KernSheet</td><td>2026-06-04</td><td>8</td>
+        <td><a class="run-link" href="#run-walton"><span class="tag">walton</span></a></td><td>KernSheet</td><td>2026-06-04</td><td>8</td>
         <td>96.54%<sup>†</sup></td><td>0.927<sup>†</sup></td><td>4.53 px<sup>†</sup></td>
         <td>87.2% · 32/300 miscount</td>
         <td>Staffer frozen throughout</td>
         <td><span class="badge badge-amber">freeze ablation</span></td>
       </tr>
       <tr>
-        <td><span class="tag">ravel</span></td><td>KernSheet</td><td>2026-06-04</td><td>20</td>
+        <td><a class="run-link" href="#run-ravel"><span class="tag">ravel</span></a></td><td>KernSheet</td><td>2026-06-04</td><td>20</td>
         <td>97.51%<sup>†</sup></td><td>0.945<sup>†</sup></td><td>5.57 px<sup>†</sup></td>
         <td><strong>90.7%</strong> · 3/300 miscount</td>
         <td>boulez recipe, 20 epochs (longer joint training)</td>
@@ -166,7 +166,7 @@
   <!-- ════════════════════════ merge1 ════════════════════════ -->
   <div class="session">
     <div class="session-header">
-      <h2><span class="tag">merge1</span></h2>
+      <h2 id="run-merge1"><span class="tag">merge1</span></h2>
       <span class="session-meta">2026-06-02 · tag: <code>train/merge1</code> · 8 epochs · initialized from stave-primary-grid-full + enhanced3</span>
     </div>
 
@@ -260,7 +260,7 @@
   <!-- ════════════════════════ boulez & walton (KernSheet) ════════════════════════ -->
   <div class="session">
     <div class="session-header">
-      <h2><span class="tag">boulez</span>, <span class="tag">walton</span> &amp; <span class="tag">ravel</span> — KernSheet fine-tune</h2>
+      <h2 id="run-boulez"><span class="tag">boulez</span>, <span id="run-walton" class="tag">walton</span> &amp; <span id="run-ravel" class="tag">ravel</span> — KernSheet fine-tune</h2>
       <span class="session-meta">2026-06-04 · tags <code>train/boulez</code> / <code>train/walton</code> / <code>train/ravel</code> · from <code>stave-primary-grid-full-kernsheet</code> + <code>enhanced3-center+jitter-kernsheet</code> · shared 5543 vocab</span>
     </div>
 
