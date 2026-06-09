@@ -92,6 +92,87 @@
      following the format of the entries that follow. Keep newest-first order.
      ════════════════════════════════════════════════════════════════════════ -->
 
+<!-- ── System-level constraint layer: barline-count reranking ──────────── -->
+<article class="entry">
+  <h2>A system-level constraint layer over noter output, starting with barline count</h2>
+  <div class="entry-meta">
+    <span>2026-06-09</span>
+    <span class="badge deferred">Exploring</span>
+    <span class="ref">scripts/noter_bar_recall.py</span>
+  </div>
+
+  <h3>Context</h3>
+  <p>
+    Noter decodes each staff independently, so the spines of a system can drift out of
+    structural agreement (the classic autoregressive desync — a dropped or doubled event
+    slips every later token, cf. the <code>.</code>-token entry below). The idea: a
+    <strong>symbolic step after noter that projects a system's predicted tokens onto the
+    manifold of musically-legal scores</strong> — a verifier/reranker (and later a
+    repair/constrained-decode path) over the beam candidates noter already produces.
+  </p>
+  <p>
+    First candidate constraint was the <strong>bar-duration invariant</strong> (every bar
+    in a spine sums to the meter; all spines of a system agree). We <em>rejected it as the
+    first lever</em>: it needs <code>Fraction</code> duration arithmetic, the meter, and
+    correct parsing of every duration token (tuplets, dots, gracenotes, OOV) — fragile.
+    Simpler and catching the same failure: <strong>barline count/position</strong>. Within a
+    system every spine shares the barline skeleton, so <code>#bars</code> is a cross-staff
+    invariant; you just count <code>=</code> tokens in slot 0 (the primary/structural stream
+    beam search already ranks over). No durations, no meter.
+  </p>
+
+  <h3>Decision (under evaluation)</h3>
+  <p>
+    Start with <strong>reranking</strong>, not constrained decoding or repair: score each
+    candidate by <code>logprob − λ·violations</code> and pick the joint per-system assignment
+    that maximises it (<code>λ</code> = nats of model confidence traded per violation; the
+    cross-spine term couples the staves so they can't be ranked independently). Rerank's
+    ceiling is the <em>beam recall</em>: it can only pick a clean decode if one is in the
+    top-K. So before writing it, measure that ceiling — <code>noter_bar_recall.py</code> runs
+    beam search returning <em>all</em> candidates and asks, of staves whose <code>beam[0]</code>
+    has the wrong bar count, what fraction have a correct-count candidate in the beam.
+  </p>
+
+  <div class="outcome">
+    <strong>Where we stand (beam-recall diagnostic, <code>enhanced3-center+jitter-kernsheet</code>,
+    clean GT-box val).</strong>
+    <strong>The ceiling rises monotonically with beam width (~+13 pts per doubling, no
+    saturation)</strong> — the first low number was a beam-diversity artifact; recoverability
+    scales with width, so the clean candidate usually exists but sits deeper in the
+    distribution.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>beam width</th><th>N</th><th>argmax correct</th><th>violating</th>
+        <th>rerank ceiling (recoverable / violating)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>8</td><td>400</td><td>97.0%</td><td>3.0% (12)</td><td><strong>16.7%</strong> (2/12)</td></tr>
+      <tr><td>16</td><td>2000</td><td>95.2%</td><td>4.8% (95)</td><td><strong>29.5%</strong> (28/95)</td></tr>
+      <tr><td>32</td><td>2000</td><td>95.5%</td><td>4.5% (91)</td><td><strong>42.9%</strong> (39/91)</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Errors are mostly <strong>±1 barline (~60–67%)</strong>, the dominant single case being
+    <code>+1</code> (one spurious barline) — a rerank/repair-friendly regime, not gross
+    collapse. Errors are mostly <strong>±1 barline (67%)</strong>,
+    the dominant single case being <code>+1</code> (one spurious barline, 41/91) — a
+    rerank/repair-friendly regime, not gross collapse.
+  </div>
+
+  <div class="bad">
+    <strong>Open / unresolved.</strong> (1) Ceiling is still &lt;50%: even an oracle reranker
+    leaves ~57% of violations unfixable (no clean candidate in the beam) — those need a wider
+    beam, <strong>localized repair</strong>, or <strong>cross-spine length coupling during
+    decode</strong>. (2) This is the <em>clean-val</em> domain (only 4.5% violation). The
+    payoff is on the <strong>scanned / predicted-box</strong> domain (staffer boxes feeding
+    noter), where desync is far more common — that measurement is the decisive next step and
+    hasn't been run. No code beyond the diagnostic has been committed.
+  </div>
+</article>
+
 <!-- ── Beam search decoding in scorer ──────────────────────────────────── -->
 <article class="entry">
   <h2>Beam search over slot 0 in scorer inference</h2>
