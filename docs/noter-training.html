@@ -166,7 +166,7 @@
         <td><a class="run-link" href="#run-enhanced3-center+jitter-kernsheet"><span class="tag">enhanced3-center+jitter-kernsheet</span></a></td><td>2026-06-04</td><td>12</td>
         <td>97.41%</td><td>0.1097</td>
         <td>KernSheet fine-tune of the centered+jitter base; <strong>no added jitter</strong> (thirds boxes already imprecise)</td>
-        <td><span class="badge badge-green">KernSheet best</span></td>
+        <td><span class="badge badge-slate">prev stretch best</span></td>
       </tr>
       <tr>
         <td><a class="run-link" href="#run-berlioz"><span class="tag">berlioz</span></a></td><td>2026-06-06</td><td>12</td>
@@ -179,6 +179,18 @@
         <td>97.55%</td><td>0.1015</td>
         <td>Letterbox KernSheet fine-tune; edges <span class="tag">center+jitter-kernsheet</span> on val but tied free-running</td>
         <td><span class="badge badge-slate">letterbox expt</span></td>
+      </tr>
+      <tr>
+        <td><a class="run-link" href="#run-debussy"><span class="tag">debussy</span></a></td><td>2026-06-09</td><td>12</td>
+        <td>99.41%</td><td>0.0238</td>
+        <td><strong>Per-image</strong> normalization (replaces global <code>Normalize</code>) on the letterbox base — page-level, the noter half of the per-image <span class="tag">scorer</span> rebuild</td>
+        <td><span class="badge badge-slate">base · ≈ berlioz</span></td>
+      </tr>
+      <tr>
+        <td><a class="run-link" href="#run-debussy-kernsheet"><span class="tag">debussy-kernsheet</span></a></td><td>2026-06-09</td><td>12</td>
+        <td>97.72%</td><td>0.0947</td>
+        <td>Per-image KernSheet fine-tune; <strong>beats berlioz on every metric</strong> — val acc, loss, and free-running similarity (90.7% vs 89.4%)</td>
+        <td><span class="badge badge-green">KernSheet best</span></td>
       </tr>
     </tbody>
   </table>
@@ -635,6 +647,26 @@
     </table>
     <p style="font-size:0.78rem;color:var(--muted)">Val numbers are each run's own teacher-forced validation (PDMX nearly identical under letterbox vs stretch, so the base tie is expected). Free-running = <code>noter --kern-home … eval berlioz-kernsheet --size 500</code> (greedy edit-distance similarity). *The reference free-running figure is loose — it comes from the predicted-box diagnostic on GT crops, a slightly different tool, so read the two as tied rather than a clean −0.4%. As with all KernSheet rows these are unseeded splits and the old model can't be re-eval'd under the current letterbox code without being out-of-distribution.</p>
     <div class="result-box neutral"><strong>The noter is marginally better on val, tied on free-running — a faint positive, not a clear win.</strong> Teacher-forced val edges the stretch baseline (KernSheet 97.55% vs 97.41%, lower loss; PDMX a tie), but the honest free-running number lands on top of it (89.4% vs ≈ 89.8%). So un-stretching helps transcription at most slightly. It is <em>not</em> enough to carry the experiment: the <a href="staffer-training.html#run-berlioz-kernsheet">staffer</a> got measurably worse under letterbox and the <a href="scorer-training.html#run-berlioz">scorer</a> nets to a wash (90.8% vs <span class="tag">ravel</span> 90.7%). The lineage is being reverted, so <span class="tag">enhanced3-center+jitter-kernsheet</span> remains the production noter (it pairs with the stretch staffer); <span class="tag">berlioz-kernsheet</span> only works with the letterbox pipeline. If letterbox is ever revisited, the right scope is <em>noter crops only</em>, stretch for the staffer.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ debussy / debussy-kernsheet -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-debussy"><span class="tag">debussy</span> / <span id="run-debussy-kernsheet" class="tag">debussy-kernsheet</span> — per-image normalization</h2>
+      <span class="session-meta">2026-06-09 · tags <code>train/debussy</code> / <code>train/debussy-kernsheet</code> · the noter side of the per-image <span class="tag">scorer</span> rebuild</span>
+      <span class="badge badge-green">KernSheet best</span>
+    </div>
+    <p>The page transform's global <code>v2.Normalize</code> (one PDMX-derived affine, mean 0.948 / std 0.175) is replaced by <strong>per-image normalization</strong> — <code>(x − x.mean()) / (x.std() + ε)</code> over each page. The motivation is photometric: PDMX is near-binary white-on-black, but real KernSheet scans carry a gray paper pedestal that a single global affine pushes into the model's "faint ink" band. Per-image norm equalizes each page's contrast before it reaches the encoder, so the gray pedestal stops being an out-of-distribution shift. It's applied at the <strong>page</strong> level (then the staff is cropped out); because the <span class="tag">scorer</span> canvas now matches the noter canvas, a <code>grid_sample</code> crop equals the standalone noter crop exactly under per-image norm — which let the scorer's recolour bridge be deleted. Otherwise the recipe is identical to <span class="tag">berlioz</span> (letterbox, same seeded split), so this is a clean per-image-vs-global A/B.</p>
+    <table class="summary-table">
+      <thead><tr><th>Per-image vs global norm (both letterbox)</th><th><span class="tag">berlioz</span> (global)</th><th><span class="tag">debussy</span> (per-image)</th></tr></thead>
+      <tbody>
+        <tr><td>PDMX base · val acc / loss</td><td>99.56% / 0.0167</td><td>99.41% / 0.0238</td></tr>
+        <tr><td>KernSheet FT · val acc / loss</td><td>97.55% / 0.1015</td><td><strong>97.72%</strong> / <strong>0.0947</strong></td></tr>
+        <tr><td>KernSheet free-running similarity</td><td>89.4%</td><td><strong>90.7%</strong></td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">Free-running = <code>noter --kern-home … eval debussy-kernsheet --size 500</code> (greedy edit-distance similarity; min 32.6% / avg 90.7% / max 100%). Val numbers are each run's own teacher-forced validation under <code>manual_seed(42)</code> — same split for both, so the only moving part is the norm.</p>
+    <div class="result-box positive"><strong>Per-image norm wins on every KernSheet metric — the real-scan payoff the staffer also showed.</strong> The trade is in-domain: per-image <em>costs</em> 0.15% on the PDMX base (99.41% vs 99.56%), expected since PDMX is near-binary so per-image ≈ global there and PDMX was never the target. On KernSheet the sign flips and grows — the FT passed berlioz's converged val by epoch 7 and finished ahead on teacher-forced val (+0.17% acc, −0.0068 loss) <em>and</em> the honest free-running number (90.7% vs 89.4%, +1.3%). Unlike <span class="tag">berlioz</span> (a letterbox wash that was reverted), <span class="tag">debussy</span> is the keeper: it is the production KernSheet noter and the noter half of the per-image <span class="tag">scorer</span> re-merge.</div>
   </div>
 
 </main>
