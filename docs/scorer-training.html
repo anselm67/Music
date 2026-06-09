@@ -159,9 +159,16 @@
         <td><strong>Letterbox</strong> page transform (vs <span class="tag">ravel</span> stretch); ravel recipe otherwise</td>
         <td><span class="badge badge-amber">letterbox · wash</span></td>
       </tr>
+      <tr>
+        <td><a class="run-link" href="#run-debussy"><span class="tag">debussy</span></a></td><td>KernSheet</td><td>2026-06-09</td><td>20</td>
+        <td>97.60%<sup>†</sup></td><td>0.934<sup>†</sup></td><td>5.00 px<sup>†</sup></td>
+        <td>91.1%<sup>‡</sup> · 9/300 miscount</td>
+        <td><strong>Per-image</strong> normalization (vs <span class="tag">berlioz</span> letterbox+global); whole pipeline rebuilt per-image</td>
+        <td><span class="badge badge-green">per-image · keeper</span></td>
+      </tr>
     </tbody>
   </table>
-  <p class="subtitle" style="margin-top:-1rem"><sup>†</sup> on an unseeded validation split; see note above. <sup>‡</sup> <span class="tag">berlioz</span>'s eval sim is from <code>scorer eval</code> on a random (unseeded) 300 pages, <em>not</em> the page-matched 300-page eval the other rows share — so read it as <strong>tied</strong> with <span class="tag">ravel</span>, not a precise +0.1%.</p>
+  <p class="subtitle" style="margin-top:-1rem"><sup>†</sup> on an unseeded validation split; see note above. <sup>‡</sup> from <code>scorer eval</code> on a random (unseeded) 300 pages under the <strong>center-y Hungarian</strong> matcher — <em>not</em> the legacy top-to-bottom page-matched eval the <span class="tag">boulez</span>/<span class="tag">walton</span>/<span class="tag">ravel</span> rows share (those over-penalize miscounts). Under the same center-y matcher the three later runs rank <span class="tag">debussy</span> 91.1% ≥ <span class="tag">berlioz</span> 90.8% ≥ <span class="tag">ravel</span> 89.6% (each its own unseeded draw, so ~1% gaps are soft); <span class="tag">ravel</span>'s 90.7%/3-miscount row above is the legacy-matcher figure, not comparable to these. See the <a href="#run-debussy"><span class="tag">debussy</span></a> card.</p>
 
   <!-- ════════════════════════ merge1 ════════════════════════ -->
   <div class="session">
@@ -323,6 +330,27 @@
       </tbody>
     </table>
     <div class="result-box neutral"><strong>End-to-end the letterbox is a wash — and not worth its cost.</strong> Transcription similarity is statistically indistinguishable from <span class="tag">ravel</span> (90.8% unseeded vs 90.7% page-matched — within the noise between two different 300-page draws), but <span class="tag">berlioz</span> miscounts <em>more</em> (6 vs 3 / 300), inheriting the weaker detector. The trade is now clear: un-stretching helps the <a href="noter-training.html#run-berlioz-kernsheet">noter</a> at most marginally (val edge, free-running tie) and hurts the <a href="staffer-training.html#run-berlioz-kernsheet">staffer</a> measurably (~1.8 px softer on real scans), and the two cancel. <strong>ravel stays the KernSheet best.</strong> The letterbox is being reverted; if revisited, the right scope is the noter crop only, with a stretched (or otherwise canvas-filling) page for the detector.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ debussy -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-debussy"><span class="tag">debussy</span> — per-image normalization, end-to-end</h2>
+      <span class="session-meta">2026-06-09 · tag <code>train/debussy</code> · 20 ep · ravel recipe on a fully per-image-retrained <span class="tag">staffer</span>+<span class="tag">noter</span></span>
+      <span class="badge badge-green">per-image · keeper</span>
+    </div>
+    <p><span class="tag">debussy</span> is the end-to-end merge of the <strong>per-image normalization</strong> rebuild — <code>(x − x.mean())/(x.std()+ε)</code> per page, replacing the single global <code>v2.Normalize</code>, to close the photometric gap between PDMX's near-binary white and the gray paper pedestal of real KernSheet scans. Both halves were rebuilt under it (PDMX base + KernSheet fine-tune: <a href="staffer-training.html#run-debussy-kernsheet">staffer/debussy-kernsheet</a>, <a href="noter-training.html#run-debussy-kernsheet">noter/debussy-kernsheet</a>) on the <strong>letterbox</strong> page transform, then merged and fine-tuned with the <span class="tag">ravel</span> 20-epoch recipe. Because the page-level per-image norm makes the scorer's <code>grid_sample</code> crop identical to the standalone noter crop, the old recolour bridge (<code>_renorm_scale/_renorm_shift</code>) was deleted in the merge.</p>
+    <table class="summary-table">
+      <thead><tr><th>End-to-end (KernSheet)</th><th><span class="tag">ravel</span> (stretch+global)</th><th><span class="tag">berlioz</span> (letterbox+global)</th><th><span class="tag">debussy</span> (letterbox+per-image)</th></tr></thead>
+      <tbody>
+        <tr><td>matched-stave similarity (center-y matcher)<sup>‡</sup></td><td>89.6%</td><td>90.8%</td><td><strong>91.1%</strong></td></tr>
+        <tr><td>miscount pages (same eval)<sup>‡</sup></td><td>9 / 300</td><td><strong>6 / 300</strong></td><td>9 / 300</td></tr>
+        <tr><td>staffer (KS stave err, top/bot)</td><td><strong>3.2 / 3.1 px</strong></td><td>4.99 / 5.11 px</td><td>3.63 / 3.66 px</td></tr>
+        <tr><td>noter (KS free-running sim)</td><td>≈ 89.8%</td><td>89.4%</td><td><strong>90.7%</strong></td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)"><sup>‡</sup> All three eval-sim / miscount figures are from <code>scorer eval --size 300</code> under the <strong>center-y Hungarian</strong> matcher — the consistent comparator — but each on its <em>own</em> unseeded 300-page draw (different pages per run), so treat ~1 % gaps as soft and miscount differences as partly the draw. <span class="tag">ravel</span>'s often-quoted <strong>90.7 % / 3-miscount</strong> figure is the <em>legacy top-to-bottom</em> page-matched eval (boulez/walton/ravel table), which over-penalizes miscounts and isn't the same metric; under the center-y matcher <span class="tag">ravel</span> is 89.6 % / 9.</p>
+    <div class="result-box positive"><strong>Per-image leads the band end-to-end and wins cleanly upstream.</strong> Under the consistent center-y matcher the three rank <span class="tag">debussy</span> 91.1 % ≥ <span class="tag">berlioz</span> 90.8 % ≥ <span class="tag">ravel</span> 89.6 % — so once <span class="tag">ravel</span> is measured by the same matcher (not its legacy top-to-bottom 90.7 %), <span class="tag">debussy</span> <em>edges</em> it by ~1.5 %, and the earlier miscount worry dissolves (both 9/300 under center-y; the "3" was the legacy matcher on different pages). The fully clean, in-domain-comparable signals are the standalone halves, and per-image takes them: the <a href="noter-training.html#run-debussy-kernsheet">noter</a> free-running similarity is the best of the three (90.7 % vs ravel ≈89.8 % / berlioz 89.4 %) and the <a href="staffer-training.html#run-debussy-kernsheet">staffer</a> box-deltas beat <span class="tag">berlioz</span> decisively (3.63/3.66 vs 4.99/5.11 px), trailing only <span class="tag">ravel</span>'s letterbox-free detector. Caveat: the end-to-end numbers are unseeded different draws, so the ~1 % gaps aren't sealed wins. Net: <span class="tag">debussy</span> is the production end-to-end model — per-image real-scan robustness proven upstream, no transcription regression, and the band leader under the honest matcher; detector counting (where <span class="tag">berlioz</span>'s 6/300 hints headroom) is the next lever.</div>
   </div>
 
 </main>
