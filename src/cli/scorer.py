@@ -634,12 +634,21 @@ def _load_for_inference(name: str) -> tuple[ScorerConfig, ScorerModule]:
     return config, module
 
 
-def _draw_boxes(img: np.ndarray, boxes: torch.Tensor) -> None:  # type: ignore[type-arg]
+def _draw_boxes(  # type: ignore[type-arg]
+    img: np.ndarray, boxes: torch.Tensor, owners: torch.Tensor
+) -> None:
     for k in range(boxes.shape[0]):
         _, left, top, right, bot = boxes[k].tolist()
         cv2.rectangle(
             img, (int(left), int(top)), (int(right), int(bot)), (0, 255, 0), 1
         )
+    # A vertical bar to the left of each system, grouping its staves.
+    for staves in _group_by_system(owners, boxes.shape[0]).values():
+        edges = boxes[staves]
+        x = max(0, int(edges[:, 1].min().item()) - 4)
+        top = int(edges[:, 2].min().item())
+        bot = int(edges[:, 4].max().item())
+        cv2.line(img, (x, top), (x, bot), (255, 0, 0), 2)
 
 
 def _group_by_system(owners: torch.Tensor, count: int) -> dict[int, list[int]]:
@@ -658,7 +667,7 @@ def predict_from_images(
         image = dataset.transform(decode_image(path.as_posix())).to(module.device)
         boxes, tokens, owners = module.predict(image.unsqueeze(0))
         img = to_display(image)
-        _draw_boxes(img, boxes)
+        _draw_boxes(img, boxes, owners)
         pred_by_sys = _group_by_system(owners, boxes.shape[0])
         click.clear()
         print(f"{path}: detected {boxes.shape[0]} staves")
@@ -685,7 +694,7 @@ def predict_from_dataset(
         boxes, tokens, owners = module.predict(image.unsqueeze(0).to(module.device))
         num_gt = int((gt_assign != -1).sum())
         img = to_display(image)
-        _draw_boxes(img, boxes)
+        _draw_boxes(img, boxes, owners)
         gt_by_sys = _group_by_system(gt_assign, num_gt)
         pred_by_sys = _group_by_system(owners, boxes.shape[0])
         num_systems = (
