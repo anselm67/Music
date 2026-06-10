@@ -214,7 +214,11 @@ class ScorerModule(L.LightningModule):
 
     @torch.no_grad()
     def predict(
-        self, image: Tensor, use_beam: bool = True
+        self,
+        image: Tensor,
+        use_beam: bool = True,
+        barline_ids: set[int] | None = None,
+        beam_width: int = 4,
     ) -> tuple[Tensor, Tensor, Tensor]:
         """End-to-end inference for a single page: detect → crop → transcribe.
 
@@ -223,6 +227,9 @@ class ScorerModule(L.LightningModule):
           staves top-to-bottom; ``tokens`` ``(K, T, max_chords)`` — generated ids,
           SOS stripped; ``owners`` ``(K,)`` — system index per stave.
           ``K`` is the detected stave count (0 if none fired).
+
+        When ``barline_ids`` is given, decode with the per-system agreement reranker
+        (``_generate_rerank``, which implies beam search); otherwise beam/greedy.
         """
         stave_tb, stave_logits, boundary_logits, sys_lr, _ = self.model.detect(image)
         sel, owners = active_grouping(
@@ -237,8 +244,15 @@ class ScorerModule(L.LightningModule):
             )
             return boxes, tokens, torch.empty(0, dtype=torch.long, device=image.device)
         crops, widths = self.model.crop(image, boxes)
-        generate = self._generate_beam if use_beam else self._generate_greedy
-        return boxes, generate(crops, widths), owners
+        if barline_ids is not None:
+            tokens = self._generate_rerank(
+                crops, widths, owners, barline_ids, beam_width
+            )
+        elif use_beam:
+            tokens = self._generate_beam(crops, widths, beam_width)
+        else:
+            tokens = self._generate_greedy(crops, widths)
+        return boxes, tokens, owners
 
     @torch.no_grad()
     def _generate_greedy(self, crops: Tensor, widths: Tensor) -> Tensor:
@@ -287,10 +301,21 @@ class ScorerModule(L.LightningModule):
         )
 
     @torch.no_grad()
-    def _beam_single(self, crop: Tensor, width: Tensor, B: int) -> Tensor:
-        """Beam search for one stave crop → (1, T, max_chords)."""
+    def _beam_some(
+        self, crop: Tensor, width: Tensor, beam_width: int, keep: int
+    ) -> tuple[Tensor, Tensor]:
+        """Beam search for one stave crop → the top-``keep`` candidates + scores.
+
+        Beams over slot 0 (the primary/structural token governing null records and
+        sequence length); slots 1+ greedy from the selected beam. Returns
+        ``(cands, scores)``, best-first, with ``keep <= beam_width``: ``cands``
+        ``(keep, max_seqlen-1, max_chords)`` is SOS-stripped and PAD-padded so
+        independent staves concatenate; ``scores`` ``(keep,)`` is the slot-0 logprob.
+        """
+        assert keep <= beam_width
         c = self.config.noter
         device = crop.device
+        B = beam_width
 
         memory, src_pad = self.model.noter.encode(crop, width)
         memory = memory.repeat_interleave(B, dim=0)  # (B, S, D)
@@ -319,8 +344,11 @@ class ScorerModule(L.LightningModule):
             slot0_lp[done] = float("-inf")
             slot0_lp[done, Vocab.EOS] = 0.0
 
-            # (B, V) candidates → keep top B
-            top_scores, top_idx = (scores.unsqueeze(-1) + slot0_lp).view(B * V).topk(B)
+            # (B, V) candidates → keep top B, best-first (the rerank relies on
+            # the returned candidates being sorted by score).
+            top_scores, top_idx = (
+                (scores.unsqueeze(-1) + slot0_lp).view(B * V).topk(B, sorted=True)
+            )
             beam_from = top_idx // V
             token0 = top_idx % V
 
@@ -337,15 +365,92 @@ class ScorerModule(L.LightningModule):
             if bool(done.all()):
                 break
 
-        best = generated[0:1, 1:]  # (1, T, max_chords); strip SOS
+        cands = generated[:keep, 1:]  # (keep, T, max_chords); strip SOS
         # Pad to max_seqlen - 1 so staves can be concatenated across independent runs.
-        pad_len = c.max_seqlen - 1 - best.shape[1]
+        pad_len = c.max_seqlen - 1 - cands.shape[1]
         if pad_len > 0:
             pad = torch.full(
-                (1, pad_len, c.max_chords), Vocab.PAD, dtype=torch.long, device=device
+                (keep, pad_len, c.max_chords),
+                Vocab.PAD,
+                dtype=torch.long,
+                device=device,
             )
-            best = torch.cat([best, pad], dim=1)
-        return best
+            cands = torch.cat([cands, pad], dim=1)
+        return cands, scores[:keep]
+
+    @torch.no_grad()
+    def _beam_single(self, crop: Tensor, width: Tensor, B: int) -> Tensor:
+        """Beam search for one stave crop → best candidate ``(1, max_seqlen-1, mc)``."""
+        cands, _ = self._beam_some(crop, width, B, 1)
+        return cands
+
+    @torch.no_grad()
+    def _generate_rerank(
+        self,
+        crops: Tensor,
+        widths: Tensor,
+        owners: Tensor,
+        barline_ids: set[int],
+        beam_width: int = 4,
+    ) -> Tensor:
+        """Per-system agreement rerank over slot-0 beam candidates.
+
+        Each stave keeps its top-``keep`` beam candidates + scores. The staves of a
+        system (sharing an ``owners`` index) must share one barline skeleton, so pick
+        the barline signature present in *every* stave's candidates that maximises the
+        summed logprob, and emit each stave's best candidate for it. Falls back to each
+        stave's argmax (beam 0) when the staves share no signature. Returns
+        ``(K, max_seqlen-1, max_chords)`` in stave order, like ``_generate_beam``.
+        """
+        cands: list[Tensor] = []
+        scores: list[Tensor] = []
+        for k in range(crops.shape[0]):
+            ck, sk = self._beam_some(
+                crops[k : k + 1], widths[k : k + 1], beam_width, beam_width
+            )
+            cands.append(ck)
+            scores.append(sk)
+
+        def signature(seq: Tensor) -> tuple[int, ...]:
+            """Timestep indices carrying a barline in slot 0, up to EOS."""
+            positions: list[int] = []
+            for t in range(seq.shape[0]):
+                tok = int(seq[t, 0].item())
+                if tok == Vocab.EOS:
+                    break
+                if tok in barline_ids:
+                    positions.append(t)
+            return tuple(positions)
+
+        chosen = [0] * crops.shape[0]  # candidate index per stave; default = argmax
+        by_sys: dict[int, list[int]] = {}
+        for k in range(crops.shape[0]):
+            by_sys.setdefault(int(owners[k].item()), []).append(k)
+
+        for ks in by_sys.values():
+            if len(ks) < 2:
+                continue  # no cross-staff agreement to enforce
+            # per stave: barline signature -> (best logprob, candidate index)
+            best: list[dict[tuple[int, ...], tuple[float, int]]] = []
+            for k in ks:
+                d: dict[tuple[int, ...], tuple[float, int]] = {}
+                for b in range(cands[k].shape[0]):
+                    sig = signature(cands[k][b])
+                    sc = float(scores[k][b].item())
+                    if sig not in d or sc > d[sig][0]:
+                        d[sig] = (sc, b)
+                best.append(d)
+            sets = [set(d) for d in best]
+            common = sets[0].intersection(*sets[1:])
+            if not common:
+                continue  # no shared skeleton → keep each stave's argmax
+            target = max(common, key=lambda s: sum((d[s][0] for d in best), 0.0))
+            for k, d in zip(ks, best):
+                chosen[k] = d[target][1]
+
+        return torch.cat(
+            [cands[k][chosen[k] : chosen[k] + 1] for k in range(crops.shape[0])], dim=0
+        )
 
     @classmethod
     def load_from_checkpoints(
