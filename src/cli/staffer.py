@@ -298,13 +298,6 @@ def stats(ctx: ClickContext, num_workers: int) -> None:
     default=-1,
     help="Override the number of warmup steps.",
 )
-@click.option(
-    "--compile/--no-compile",
-    "compiled",
-    default=False,
-    help="torch.compile the model's training forward. Inference stays eager; "
-    "checkpoints are interoperable either way.",
-)
 @click.pass_obj
 def train(
     ctx: ClickContext,
@@ -319,7 +312,6 @@ def train(
     valid_len: int,
     lr: float | None,
     warmup_steps: int,
-    compiled: bool,
 ) -> None:
     """Trains and/or resume training of a Staffer model instance.
 
@@ -420,7 +412,7 @@ def train(
 
     torch.serialization.add_safe_globals([InterpolationMode])
 
-    module = StafferModule(config, compiled=compiled)
+    module = StafferModule(config)
     if init_from is not None:
         if ckpt_path is not None:
             logging.warning(f"Resuming from {ckpt_path}; ignoring --init-from")
