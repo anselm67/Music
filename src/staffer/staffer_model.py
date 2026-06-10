@@ -58,6 +58,9 @@ class StafferConfig:
         return int(round(ret / self.patch_size) * self.patch_size)
 
     def __post_init__(self) -> None:
+        assert self.embed_dim % self.num_heads == 0, (
+            f"embed_dim={self.embed_dim} not divisible by num_heads={self.num_heads}"
+        )
         self.image_shape = [
             self.scale_to_patch(self.max_height),
             self.scale_to_patch(self.max_width),

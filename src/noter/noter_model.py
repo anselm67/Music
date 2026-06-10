@@ -59,6 +59,9 @@ class NoterConfig:
     max_steps: int = field(init=False)
 
     def __post_init__(self) -> None:
+        assert self.embed_dim % self.num_head == 0, (
+            f"embed_dim={self.embed_dim} not divisible by num_head={self.num_head}"
+        )
         if self.patch_height == -1:
             self.patch_height = self.input_shape[0]
         if self.train_len == -1:
