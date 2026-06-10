@@ -672,10 +672,13 @@ def predict_from_images(
     module: ScorerModule,
     dataset: ScorerDataset,
     img_paths: tuple[Path, ...],
+    barline_ids: set[int] | None,
 ) -> None:
     for path in img_paths:
         image = dataset.transform(decode_image(path.as_posix())).to(module.device)
-        boxes, tokens, owners = module.predict(image.unsqueeze(0))
+        boxes, tokens, owners = module.predict(
+            image.unsqueeze(0), barline_ids=barline_ids
+        )
         img = to_display(image)
         _draw_boxes(img, boxes, owners)
         pred_by_sys = _group_by_system(owners, boxes.shape[0])
@@ -696,12 +699,15 @@ def predict_from_images(
 def predict_from_dataset(
     module: ScorerModule,
     dataset: ScorerDataset,
+    barline_ids: set[int] | None,
 ) -> None:
     indices = list(range(len(dataset)))
     random.shuffle(indices)
     for idx in indices:
         image, _gt_sys, _gt_stave, gt_assign, stave_tokens = dataset[idx]
-        boxes, tokens, owners = module.predict(image.unsqueeze(0).to(module.device))
+        boxes, tokens, owners = module.predict(
+            image.unsqueeze(0).to(module.device), barline_ids=barline_ids
+        )
         num_gt = int((gt_assign != -1).sum())
         img = to_display(image)
         _draw_boxes(img, boxes, owners)
@@ -738,8 +744,15 @@ def predict_from_dataset(
     nargs=-1,
     type=click.Path(file_okay=True, exists=True, readable=True, path_type=Path),
 )
+@click.option(
+    "--rerank",
+    is_flag=True,
+    help="Decode with the per-system cross-staff barline-agreement reranker.",
+)
 @click.pass_obj
-def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
+def predict(
+    ctx: ClickContext, name: str, img_paths: tuple[Path, ...], rerank: bool
+) -> None:
     """Detects, crops, and transcribes staves on a list of images or random pages.
 
     NAME: The model version to use to make the predictions.
@@ -748,12 +761,13 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
     """
     config, module = _load_for_inference(name)
     vocab = Vocab.load(ctx.home / "build/vocab.json")
+    barline_ids = vocab.barline_ids() if rerank else None
     dataset = ScorerDataset(config, ctx.source, vocab)
     cv2.namedWindow("Page")
     if img_paths:
-        predict_from_images(module, dataset, img_paths)
+        predict_from_images(module, dataset, img_paths, barline_ids)
     else:
-        predict_from_dataset(module, dataset)
+        predict_from_dataset(module, dataset, barline_ids)
     cv2.destroyAllWindows()
 
 
@@ -766,28 +780,58 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
     show_default=True,
     help="Number of random pages to evaluate.",
 )
+@click.option(
+    "--rerank",
+    is_flag=True,
+    help="Decode with the per-system cross-staff barline-agreement reranker.",
+)
+@click.option(
+    "--seed",
+    type=int,
+    default=0,
+    show_default=True,
+    help="Seed for the page sample — fixed by default so runs (e.g. --rerank "
+    "on/off) hit identical pages; change it for a different draw.",
+)
+@click.option(
+    "--beam",
+    type=int,
+    default=8,
+    show_default=True,
+    help="Beam width for slot-0 decoding (shared by the beam and rerank paths).",
+)
 @click.pass_obj
-def run_eval(ctx: ClickContext, name: str, size: int) -> None:
+def run_eval(
+    ctx: ClickContext, name: str, size: int, rerank: bool, seed: int, beam: int
+) -> None:
     """Evaluates end-to-end transcription on N random pages.
 
     Reports token similarity on predicted vs GT staves matched by center-y
     (Hungarian), plus detection counts so geometric slop and miss/extra are
-    visible separately.
+    visible separately. ``--rerank`` enables the per-system agreement reranker;
+    the page sample is seeded (``--seed``, default 0) so the rerank-on/off runs are
+    directly comparable.
 
     NAME: The model version to evaluate.
     """
     config, module = _load_for_inference(name)
     vocab = Vocab.load(ctx.home / "build/vocab.json")
+    barline_ids = vocab.barline_ids() if rerank else None
     dataset = ScorerDataset(config, ctx.source, vocab)
     n = min(size, len(dataset))
-    indices = random.sample(range(len(dataset)), n)
+    rng = random.Random(seed)
+    indices = rng.sample(range(len(dataset)), n)
 
     similarities: list[float] = []
     total_gt, total_pred, pages_miscount = 0, 0, 0
     for idx in tqdm(indices, desc="Evaluating"):
         image, _gt_sys, gt_stave, gt_assign, stave_tokens = dataset[idx]
         num_gt = int((gt_assign != -1).sum())
-        boxes, tokens, _owners = module.predict(image.unsqueeze(0).to(module.device))
+        boxes, tokens, _owners = module.predict(
+            image.unsqueeze(0).to(module.device),
+            barline_ids=barline_ids,
+            beam_width=beam,
+        )
         num_pred = tokens.shape[0]
         total_gt += num_gt
         total_pred += num_pred
@@ -805,7 +849,7 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
     if not similarities:
         print("No matched staves to evaluate.")
         return
-    print(f"\nEvaluated {n} pages from '{name}':")
+    print(f"\nEvaluated {n} pages from '{name}'{' [rerank]' if rerank else ''}:")
     print(f"  staves: {total_pred} predicted / {total_gt} GT")
     print(f"  pages with miscount: {pages_miscount} / {n}")
     print(f"  matched-stave similarity  min {min(similarities):.1%}")
