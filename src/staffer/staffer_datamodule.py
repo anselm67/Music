@@ -52,6 +52,7 @@ class StafferDataModule(L.LightningDataModule):
                 sampler=build_sampler(self.train_ds, self.config.bottom_bias),
                 num_workers=self.num_workers,
                 pin_memory=True,
+                persistent_workers=self.num_workers > 0,
             )
         else:
             logging.info(f"train_dataloader: {self.num_workers} workers no sampler.")
@@ -61,6 +62,7 @@ class StafferDataModule(L.LightningDataModule):
                 shuffle=True,
                 num_workers=self.num_workers,
                 pin_memory=True,
+                persistent_workers=self.num_workers > 0,
             )
 
     def val_dataloader(self) -> DataLoader:
@@ -70,6 +72,7 @@ class StafferDataModule(L.LightningDataModule):
             shuffle=False,
             num_workers=4,
             pin_memory=True,
+            persistent_workers=True,
         )
 
 

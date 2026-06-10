@@ -55,6 +55,7 @@ class NoterDataModule(L.LightningDataModule):
             shuffle=True,
             num_workers=self.num_workers,
             pin_memory=True,
+            persistent_workers=self.num_workers > 0,
         )
 
     def val_dataloader(self) -> DataLoader:
@@ -64,4 +65,5 @@ class NoterDataModule(L.LightningDataModule):
             shuffle=False,
             num_workers=self.num_workers,
             pin_memory=True,
+            persistent_workers=self.num_workers > 0,
         )

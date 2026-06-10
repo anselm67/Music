@@ -55,25 +55,27 @@ class StafferModule(L.LightningModule):
             assign_q,
         )
 
-        # IoU metrics — the system box is derived from its staves' hull.
-        sys_iou = self._mean_sys_iou(
-            pred_stave_tb, pred_sys_lr, gt_sys_boxes, gt_assign, assign_q
-        )
-        stave_err_px = (
-            self._mean_stave_l1(pred_stave_tb, gt_stave_boxes, assign_q)
-            * self.config.image_shape[0]
-        )
-
         self.log(f"{stage}/loss", loss.total(), prog_bar=True)
-        self.log(f"{stage}/sys_iou", sys_iou)
-        # The clean mean stave-edge error in px. Logged under a distinct key from
-        # the `stave_l1` loss term below: LossDict has a `stave_l1` field, so the
-        # fields(loss) loop also emits `{stage}/stave_l1`. They previously shared
-        # the key — Lightning silently kept the (multiplied) loss term and the
-        # clean metric was lost. See docs/staffer-training.html.
-        self.log(f"{stage}/stave_err_px", stave_err_px)
         for f in fields(loss):
             self.log(f"{stage}/{f.name}", getattr(loss, f.name))
+
+        # The IoU / stave-edge metrics drive no gradient — they exist only for
+        # logging, yet their per-item Python loops plus a .item() sync cost real
+        # train-step wall-clock. Compute them on val only. (The clean stave_err_px
+        # is logged under a key distinct from the `stave_l1` loss term emitted by
+        # the fields(loss) loop above: LossDict has a `stave_l1` field, so sharing
+        # the key made Lightning silently keep the multiplied loss term and lose
+        # the clean metric. See docs/staffer-training.html.)
+        if stage == "val":
+            sys_iou = self._mean_sys_iou(
+                pred_stave_tb, pred_sys_lr, gt_sys_boxes, gt_assign, assign_q
+            )
+            stave_err_px = (
+                self._mean_stave_l1(pred_stave_tb, gt_stave_boxes, assign_q)
+                * self.config.image_shape[0]
+            )
+            self.log(f"{stage}/sys_iou", sys_iou)
+            self.log(f"{stage}/stave_err_px", stave_err_px)
 
         if stage == "train":
             self.log("train/lr", self.trainer.optimizers[0].param_groups[0]["lr"])
