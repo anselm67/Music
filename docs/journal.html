@@ -55,6 +55,7 @@
     .badge.accepted  { background: var(--green-bg); border-color: var(--green-bd); color: var(--green-tx); }
     .badge.superseded{ background: var(--slate-bg); border-color: var(--slate-bd); color: var(--slate-tx); }
     .badge.deferred  { background: var(--amber-bg); border-color: var(--amber-bd); color: var(--amber-tx); }
+    .badge.rejected  { background: var(--rose-bg);  border-color: var(--rose-bd);  color: var(--rose-tx); }
     .ref { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; }
 
     .rationale-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 0.75rem 0; }
@@ -91,6 +92,57 @@
      <article class="entry"> … </article> block directly below this comment,
      following the format of the entries that follow. Keep newest-first order.
      ════════════════════════════════════════════════════════════════════════ -->
+
+<!-- ── torch.compile: opt-in --compile flag, then reverted ── -->
+<article class="entry">
+  <h2><code>torch.compile</code> on the training forward — added, measured, reverted</h2>
+  <div class="entry-meta">
+    <span>2026-06-10</span>
+    <span class="badge rejected">Reverted</span>
+    <span class="ref">aa617e9 (add) · f9d8e81 (revert)</span>
+  </div>
+
+  <h3>Context</h3>
+  <p>
+    An opt-in <code>--compile/--no-compile</code> flag was added to all three <code>train</code>
+    commands (staffer/noter/scorer), <code>torch.compile</code>-ing only the training forward path
+    while inference stayed eager. The wiring itself was clean: a keep-original pattern stored the
+    compiled callable off-module via <code>object.__setattr__</code> so <code>state_dict</code> kept
+    no <code>_orig_mod.</code> prefix and checkpoints loaded strict in both directions.
+  </p>
+
+  <h3>Decision</h3>
+  <p>
+    <strong>Reverted.</strong> The mechanism worked; the speed didn't. The bar for keeping
+    <code>torch.compile</code> is <em>not</em> "it compiles cleanly and the checkpoints interop" —
+    it's <strong>"it makes training faster."</strong> It did the opposite.
+  </p>
+
+  <div class="bad">
+    <strong>Result — staffer training was <em>slower</em> compiled.</strong> ~3.0 it/s with
+    <code>--compile</code> vs ~3.6 it/s eager — a persistent ~17% regression, measured in
+    steady state (not warmup, which would only cost the first few steps). A loss that survives
+    past warmup means compile is doing actively worse work every step.
+  </div>
+
+  <h3>Why it lost here</h3>
+  <ul>
+    <li><strong>Wrong regime.</strong> <code>torch.compile</code> pays off on large,
+      compute-bound, fixed-shape models. Staffer is a small D=256 ViT detector on a 4060/5060 Ti —
+      closer to launch-/memory-bound, where default-mode fusion buys little.</li>
+    <li><strong>Shape variance is the likely killer.</strong> Staffer trains on full page images;
+      if dimensions vary batch-to-batch, Dynamo either recompiles per shape or falls into
+      dynamic-shape mode — guard overhead every step <em>and</em> less-fused kernels. Diagnose with
+      <code>TORCH_LOGS=recompiles</code>.</li>
+  </ul>
+  <p>
+    Not a fundamental dead end — it was never A/B'd on <strong>noter</strong>, whose fixed
+    (64×768) crops are exactly the no-shape-variance regime compile likes. If revisited, start
+    there, and try <code>mode="reduce-overhead"</code> (CUDA graphs claw back launch overhead on
+    small models) only once shapes are confirmed static. The lesson banked: <em>a perf feature
+    that doesn't measurably improve perf is dead weight, however cleanly it's engineered.</em>
+  </p>
+</article>
 
 <!-- ── System-level constraint layer: cross-staff barline-position agreement ── -->
 <article class="entry">
