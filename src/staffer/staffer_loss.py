@@ -184,9 +184,18 @@ class StafferLoss(nn.Module):
         sys_obj = torch.tensor(0.0, device=device)
         sys_giou = torch.tensor(0.0, device=device)
 
+        # Per-item system count = highest GT system index + 1. Padding is -1, so
+        # the row max equals the max valid index. Done once as a batched .tolist()
+        # (a single GPU->CPU sync) instead of an .item() per item inside the loop.
+        # gt_assign is stacked (B, M) in production; stack the list the tests pass.
+        assign_t = (
+            gt_assign if isinstance(gt_assign, Tensor) else torch.stack(gt_assign)
+        )
+        num_gt_sys_all = (assign_t.max(dim=1).values + 1).tolist()
+
         for i in range(B):
             q = assign_q[i]
-            num_gt_sys = int(gt_assign[i][gt_assign[i] != -1].max().item()) + 1
+            num_gt_sys = num_gt_sys_all[i]
             sys_idx = torch.arange(num_gt_sys, device=device)
 
             stave_l1 = stave_l1 + self._tb_l1(pred_stave_tb[i], gt_stave_boxes[i], q)

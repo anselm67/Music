@@ -36,10 +36,13 @@ class StafferModule(L.LightningModule):
         ) = self.model(images)
 
         # Route each GT stave to the query whose fixed anchor sits nearest it. The
-        # same assignment drives both the loss and the IoU/L1 metrics.
+        # same assignment drives both the loss and the IoU/L1 metrics. Count the GT
+        # staves per item in one batched .tolist() (a single GPU->CPU sync) rather
+        # than an int(...) sync per item inside the comprehension.
         anchor_c = self.model.heads.anchor_centers()
+        num_gt = (gt_assign != -1).sum(dim=1).tolist()
         assign_q = [
-            assign_staves(anchor_c, gt_stave_boxes[i], int((gt_assign[i] != -1).sum()))
+            assign_staves(anchor_c, gt_stave_boxes[i], num_gt[i])
             for i in range(len(gt_assign))
         ]
 
