@@ -412,6 +412,13 @@ def grow_checkpoint(src_ckpt: Path, out_ckpt: Path, vocab_path: Path) -> None:
     "the larger KernSheet vocab to pre-train a PDMX base that fine-tunes on "
     "KernSheet without checkpoint surgery (the extra rows stay unlearned).",
 )
+@click.option(
+    "--compile/--no-compile",
+    "compiled",
+    default=False,
+    help="torch.compile the model's training forward. Inference stays eager; "
+    "checkpoints are interoperable either way.",
+)
 @click.pass_obj
 def train(
     ctx: ClickContext,
@@ -427,6 +434,7 @@ def train(
     warmup_steps: int,
     jitter: float | None,
     vocab_path: Path | None,
+    compiled: bool,
 ) -> None:
     """Trains and/or resumes training of a Noter model instance.
 
@@ -528,7 +536,7 @@ def train(
         enable_progress_bar=not hide_progress,
     )
 
-    module = NoterModule(config)
+    module = NoterModule(config, compiled=compiled)
     if init_from is not None:
         if ckpt_path is not None:
             logging.warning(f"Resuming from {ckpt_path}; ignoring --init-from")

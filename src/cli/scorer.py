@@ -271,6 +271,13 @@ def check(ctx: ClickContext) -> None:
     help="Vocab JSON to train against (default: <home>/build/vocab.json). Pass the "
     "larger KernSheet vocab so the merge matches its KernSheet-fine-tuned branches.",
 )
+@click.option(
+    "--compile/--no-compile",
+    "compiled",
+    default=False,
+    help="torch.compile the detector + transcriber sub-calls used in training. "
+    "Inference stays eager; checkpoints are interoperable either way.",
+)
 @click.pass_obj
 def train(
     ctx: ClickContext,
@@ -287,6 +294,7 @@ def train(
     warmup_steps: int,
     freeze_staffer_steps: int,
     vocab_path: Path | None,
+    compiled: bool,
 ) -> None:
     """Trains and/or resumes training of a Scorer model instance.
 
@@ -304,7 +312,7 @@ def train(
         logging.info(f"Resuming training from {candidate}")
         ckpt_path = candidate
         config = config_from_checkpoint(candidate)
-        module = ScorerModule(config)
+        module = ScorerModule(config, compiled=compiled)
         if (
             train_len > 0
             or valid_len > 0
@@ -335,7 +343,9 @@ def train(
             if not path.exists():
                 raise click.UsageError(f"{label} checkpoint not found: {path}")
         logging.info(f"Initialising branches from {staffer_ckpt} and {noter_ckpt}")
-        module = ScorerModule.load_from_checkpoints(config, staffer_ckpt, noter_ckpt)
+        module = ScorerModule.load_from_checkpoints(
+            config, staffer_ckpt, noter_ckpt, compiled=compiled
+        )
 
     config.max_steps = epochs * (config.train_len // config.batch_size)
     logging.info(

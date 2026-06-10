@@ -1,4 +1,5 @@
 import math
+from collections.abc import Callable
 
 import lightning as L
 import torch
@@ -14,8 +15,9 @@ from .noter_vocab import Vocab
 
 class NoterModule(L.LightningModule):
     _causal_mask_buf: Tensor
+    _forward: Callable[[Tensor, Tensor, Tensor, Tensor, Tensor], Tensor]
 
-    def __init__(self, config: NoterConfig) -> None:
+    def __init__(self, config: NoterConfig, compiled: bool = False) -> None:
         super().__init__()
         self.config = config
         self.model = NoterModel(config)
@@ -26,6 +28,14 @@ class NoterModule(L.LightningModule):
                 diagonal=1
             ),
         )
+        # Optionally-compiled training forward, stored without registering it as a
+        # child module (see StafferModule for why object.__setattr__): keeps
+        # state_dict = {model.*} so compiled-train and eager-predict checkpoints load
+        # into each other. Inference (predict) keeps using self.model.encode/decode
+        # eagerly — its autoregressive loop has a growing T that would only churn.
+        object.__setattr__(
+            self, "_forward", torch.compile(self.model) if compiled else self.model
+        )
 
     def _causal_mask(self, size: int) -> Tensor:
         return self._causal_mask_buf[:size, :size]
@@ -35,7 +45,9 @@ class NoterModule(L.LightningModule):
         tgt_pad_mask = (target == Vocab.PAD).all(
             dim=-1
         )  # (B, T) — True if all chord slots are PAD
-        return self.model(source, source_widths, target, attention_mask, tgt_pad_mask)
+        return self._forward(
+            source, source_widths, target, attention_mask, tgt_pad_mask
+        )
 
     def _step(self, batch: tuple, stage: str) -> Tensor:
         source, source_widths, target = batch

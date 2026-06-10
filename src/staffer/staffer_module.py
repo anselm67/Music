@@ -1,6 +1,7 @@
 """Lignhtning module for the Staffer model."""
 
 import math
+from collections.abc import Callable
 from dataclasses import fields
 
 import lightning as L
@@ -15,14 +16,27 @@ from .staffer_model import StafferConfig, StafferModel
 
 
 class StafferModule(L.LightningModule):
-    def __init__(self, config: StafferConfig) -> None:
+    _forward: Callable[[Tensor], tuple[Tensor, Tensor, Tensor, Tensor, Tensor]]
+
+    def __init__(self, config: StafferConfig, compiled: bool = False) -> None:
         super().__init__()
         self.config = config
         self.model = StafferModel(config)
         self.loss_fn = StafferLoss(config)
         self.save_hyperparameters(config.asdict())
+        # Store the (optionally compiled) forward callable WITHOUT registering it as
+        # a child module. torch.compile returns an nn.Module wrapping self.model, so a
+        # normal attribute would duplicate every weight under a `_forward._orig_mod.`
+        # prefix in state_dict — breaking strict load between a compiled-train and an
+        # eager-predict checkpoint. object.__setattr__ keeps state_dict = {model.*}
+        # only; weights are shared, so loads into self.model are seen by this caller.
+        object.__setattr__(
+            self, "_forward", torch.compile(self.model) if compiled else self.model
+        )
 
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+        # Eager on purpose: training goes through _step -> self._forward; forward()
+        # is the inference entry and must stay uncompiled (compiled is train-only).
         return self.model(x)
 
     def _step(self, batch: tuple, stage: str) -> Tensor:
@@ -33,7 +47,7 @@ class StafferModule(L.LightningModule):
             pred_boundary_logits,
             pred_sys_lr,
             pred_sys_logits,
-        ) = self.model(images)
+        ) = self._forward(images)
 
         # Route each GT stave to the query whose fixed anchor sits nearest it. The
         # same assignment drives both the loss and the IoU/L1 metrics. Count the GT

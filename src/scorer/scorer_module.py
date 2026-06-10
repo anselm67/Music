@@ -1,6 +1,7 @@
 """Lightning module for the Scorer end-to-end model: joint detection + transcription."""
 
 import math
+from collections.abc import Callable
 from dataclasses import fields
 from pathlib import Path
 
@@ -91,8 +92,11 @@ def active_grouping(
 
 class ScorerModule(L.LightningModule):
     _causal_mask_buf: Tensor
+    _detect: Callable[[Tensor], tuple[Tensor, Tensor, Tensor, Tensor, Tensor]]
+    _encode: Callable[[Tensor, Tensor], tuple[Tensor, Tensor]]
+    _decode: Callable[[Tensor, Tensor, Tensor, Tensor, Tensor], Tensor]
 
-    def __init__(self, config: ScorerConfig) -> None:
+    def __init__(self, config: ScorerConfig, compiled: bool = False) -> None:
         super().__init__()
         self.config = config
         self.model = ScorerModel(config)
@@ -109,6 +113,31 @@ class ScorerModule(L.LightningModule):
         self._staffer_frozen = config.freeze_staffer_steps > 0
         if self._staffer_frozen:
             self.model.staffer.requires_grad_(False)
+        # Optionally-compiled handles for the three sub-calls the training _step
+        # makes (the joint forward is never called whole in training). Stored
+        # without registering as child modules (see StafferModule for why
+        # object.__setattr__): keeps state_dict = {model.*} so a compiled-train
+        # checkpoint loads into an eager module. Inference (predict / beam) keeps
+        # using self.model.* eagerly — its autoregressive loops would only churn.
+        object.__setattr__(
+            self,
+            "_detect",
+            torch.compile(self.model.staffer) if compiled else self.model.staffer,
+        )
+        object.__setattr__(
+            self,
+            "_encode",
+            torch.compile(self.model.noter.encode)
+            if compiled
+            else self.model.noter.encode,
+        )
+        object.__setattr__(
+            self,
+            "_decode",
+            torch.compile(self.model.noter.decode)
+            if compiled
+            else self.model.noter.decode,
+        )
 
     def _causal_mask(self, size: int) -> Tensor:
         return self._causal_mask_buf[:size, :size]
@@ -118,7 +147,7 @@ class ScorerModule(L.LightningModule):
         B = image.shape[0]
 
         # --- Detection (staffer) ---
-        stave_tb, stave_logits, boundary_logits, sys_lr, sys_logits = self.model.detect(
+        stave_tb, stave_logits, boundary_logits, sys_lr, sys_logits = self._detect(
             image
         )
 
@@ -154,10 +183,10 @@ class ScorerModule(L.LightningModule):
         accuracy = torch.zeros((), device=image.device)
         if targets.shape[0] > 0:
             crops, widths = self.model.crop(image, boxes)
-            memory, src_pad = self.model.noter.encode(crops, widths)
+            memory, src_pad = self._encode(crops, widths)
             tgt_in, labels = targets[:, :-1], targets[:, 1:]
             tgt_pad = (tgt_in == Vocab.PAD).all(dim=-1)
-            logits = self.model.noter.decode(
+            logits = self._decode(
                 tgt_in, memory, self._causal_mask(tgt_in.shape[1]), tgt_pad, src_pad
             )
             K, T, H, V = logits.shape
@@ -349,7 +378,11 @@ class ScorerModule(L.LightningModule):
 
     @classmethod
     def load_from_checkpoints(
-        cls, config: ScorerConfig, staffer_ckpt: Path, noter_ckpt: Path
+        cls,
+        config: ScorerConfig,
+        staffer_ckpt: Path,
+        noter_ckpt: Path,
+        compiled: bool = False,
     ) -> "ScorerModule":
         """Build a Scorer and load both standalone checkpoints whole.
 
@@ -358,7 +391,7 @@ class ScorerModule(L.LightningModule):
         state dict straight into the matching Scorer sub-module — every key transfers.
         """
         torch.serialization.add_safe_globals([InterpolationMode])
-        module = cls(config)
+        module = cls(config, compiled=compiled)
 
         def submodel_state(ckpt: Path) -> dict[str, Tensor]:
             sd = torch.load(ckpt, weights_only=False, map_location="cpu")["state_dict"]
