@@ -786,7 +786,7 @@ def predict(
 @click.option(
     "--beam",
     type=int,
-    default=4,
+    default=8,
     show_default=True,
     help="Beam width for slot-0 decoding (shared by the beam and rerank paths).",
 )

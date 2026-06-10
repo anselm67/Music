@@ -218,7 +218,7 @@ class ScorerModule(L.LightningModule):
         image: Tensor,
         use_beam: bool = True,
         barline_ids: set[int] | None = None,
-        beam_width: int = 4,
+        beam_width: int = 8,
     ) -> tuple[Tensor, Tensor, Tensor]:
         """End-to-end inference for a single page: detect → crop → transcribe.
 
@@ -283,7 +283,7 @@ class ScorerModule(L.LightningModule):
 
     @torch.no_grad()
     def _generate_beam(
-        self, crops: Tensor, widths: Tensor, beam_width: int = 4
+        self, crops: Tensor, widths: Tensor, beam_width: int = 8
     ) -> Tensor:
         """Autoregressively decode token sequences for K staff crops (beam search).
 
@@ -391,7 +391,7 @@ class ScorerModule(L.LightningModule):
         widths: Tensor,
         owners: Tensor,
         barline_ids: set[int],
-        beam_width: int = 4,
+        beam_width: int = 8,
     ) -> Tensor:
         """Per-system agreement rerank over slot-0 beam candidates.
 
