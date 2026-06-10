@@ -92,84 +92,101 @@
      following the format of the entries that follow. Keep newest-first order.
      ════════════════════════════════════════════════════════════════════════ -->
 
-<!-- ── System-level constraint layer: barline-count reranking ──────────── -->
+<!-- ── System-level constraint layer: cross-staff barline-position agreement ── -->
 <article class="entry">
-  <h2>A system-level constraint layer over noter output, starting with barline count</h2>
+  <h2>A system-level constraint layer over the scorer: cross-staff barline-position agreement</h2>
   <div class="entry-meta">
-    <span>2026-06-09</span>
+    <span>2026-06-10</span>
     <span class="badge deferred">Exploring</span>
-    <span class="ref">scripts/noter_bar_recall.py</span>
+    <span class="ref">scripts/scorer_system_agreement.py · debussy scorer</span>
   </div>
 
   <h3>Context</h3>
   <p>
-    Noter decodes each staff independently, so the spines of a system can drift out of
-    structural agreement (the classic autoregressive desync — a dropped or doubled event
-    slips every later token, cf. the <code>.</code>-token entry below). The idea: a
-    <strong>symbolic step after noter that projects a system's predicted tokens onto the
-    manifold of musically-legal scores</strong> — a verifier/reranker (and later a
-    repair/constrained-decode path) over the beam candidates noter already produces.
-  </p>
-  <p>
-    First candidate constraint was the <strong>bar-duration invariant</strong> (every bar
-    in a spine sums to the meter; all spines of a system agree). We <em>rejected it as the
-    first lever</em>: it needs <code>Fraction</code> duration arithmetic, the meter, and
-    correct parsing of every duration token (tuplets, dots, gracenotes, OOV) — fragile.
-    Simpler and catching the same failure: <strong>barline count/position</strong>. Within a
-    system every spine shares the barline skeleton, so <code>#bars</code> is a cross-staff
-    invariant; you just count <code>=</code> tokens in slot 0 (the primary/structural stream
-    beam search already ranks over). No durations, no meter.
+    The scorer decodes each staff of a system independently, so its spines can drift out of
+    structural agreement (the classic autoregressive desync — a dropped or doubled event slips
+    every later token, cf. the <code>.</code>-token entry below). The idea: a step at the
+    <strong>system level that reranks the joint beam combination of a system's staves toward
+    mutual structural consistency</strong>. Within a system every spine shares the barline
+    skeleton, so <strong>barline positions are a cross-staff invariant</strong> — the natural
+    first constraint.
   </p>
 
-  <h3>Decision (under evaluation)</h3>
+  <h3>Decision &amp; method</h3>
   <p>
-    Start with <strong>reranking</strong>, not constrained decoding or repair: score each
-    candidate by <code>logprob − λ·violations</code> and pick the joint per-system assignment
-    that maximises it (<code>λ</code> = nats of model confidence traded per violation; the
-    cross-spine term couples the staves so they can't be ranked independently). Rerank's
-    ceiling is the <em>beam recall</em>: it can only pick a clean decode if one is in the
-    top-K. So before writing it, measure that ceiling — <code>noter_bar_recall.py</code> runs
-    beam search returning <em>all</em> candidates and asks, of staves whose <code>beam[0]</code>
-    has the wrong bar count, what fraction have a correct-count candidate in the beam.
+    Start with <strong>reranking</strong>, not constrained decoding or repair, and measure it on
+    the right unit and the right model. Two throwaway noter-level scripts (a per-stave bar-<em>count</em>
+    recall probe and a per-system GT-box agreement probe) were written and then <strong>dropped</strong>:
+    both wired <code>noter</code> to GT crops and grouped staves by a GT bar-range key — exactly the
+    structure predicted boxes perturb. The <strong>debussy scorer is already the end-to-end
+    predicted-box pipeline</strong> (detect → crop → transcribe), and its <code>predict()</code>
+    returns <code>owners</code> — the detected system index per stave — so it hands us the honest,
+    detection-derived grouping for free. <code>scripts/scorer_system_agreement.py</code> runs it
+    and, per predicted system, measures:
+  </p>
+  <ol>
+    <li><strong>Disagreement rate</strong> — how often a system's staves disagree on barline
+      positions at the beam-0 (argmax) decode; <em>staff-vs-staff</em>, no GT, the rerank's target set.</li>
+    <li><strong>Consistency ceiling</strong> — does a signature present in <em>every</em> stave's
+      candidate set exist (a mutually-consistent combo reachable in the beams)? Also GT-free.</li>
+    <li><strong>Correctness &amp; the agreement↔correctness gap</strong> — on systems whose staves
+      cleanly match GT staves (center-y Hungarian, no miss/extra): is GT reachable, and is the
+      <em>logprob-best consistent</em> combo actually GT? A low gap ⇒ staves agree on a <em>shared</em>
+      error — the key risk for an agreement-only objective.</li>
+  </ol>
+  <p>
+    Signature = the set of timestep <em>indices</em> carrying a <code>=</code> (both spines share one
+    record-row timeline, so a barline lands on the same row in each). It is brittle by design: a
+    single early <code>.</code>-insertion shifts every later index, so "disagreement" mixes genuine
+    structural desync with benign off-by-one shifts. Code prerequisite, shared with the reranker:
+    <code>ScorerModule._beam_single</code> returns only <code>beam[0]</code>, so the script carries a
+    <code>beam_all</code> that surfaces all candidates + cumulative slot-0 logprobs.
   </p>
 
   <div class="outcome">
-    <strong>Where we stand (beam-recall diagnostic, <code>enhanced3-center+jitter-kernsheet</code>,
-    clean GT-box val).</strong>
-    <strong>The ceiling rises monotonically with beam width (~+13 pts per doubling, no
-    saturation)</strong> — the first low number was a beam-diversity artifact; recoverability
-    scales with width, so the clean candidate usually exists but sits deeper in the
-    distribution.
-  </p>
+    <strong>Result — <code>debussy</code> scorer, 500 KernSheet pages, beam 16.</strong> Detection
+    is a non-factor (5681 predicted / 5670 GT staves, 5 miscount pages, 2789/2816 systems cleanly
+    GT-aligned) — so this is almost purely a transcription-desync signal. The system count
+    partitions exactly: <code>agree + disagree</code>, and within the clean subset
+    <code>correct + agree-but-wrong + disagree</code>.
+  </div>
   <table>
     <thead>
-      <tr>
-        <th>beam width</th><th>N</th><th>argmax correct</th><th>violating</th>
-        <th>rerank ceiling (recoverable / violating)</th>
-      </tr>
+      <tr><th>metric</th><th>count</th><th>rate</th><th>reading</th></tr>
     </thead>
     <tbody>
-      <tr><td>8</td><td>400</td><td>97.0%</td><td>3.0% (12)</td><td><strong>16.7%</strong> (2/12)</td></tr>
-      <tr><td>16</td><td>2000</td><td>95.2%</td><td>4.8% (95)</td><td><strong>29.5%</strong> (28/95)</td></tr>
-      <tr><td>32</td><td>2000</td><td>95.5%</td><td>4.5% (91)</td><td><strong>42.9%</strong> (39/91)</td></tr>
+      <tr><td><strong>predicted multi-stave systems</strong></td><td><strong>2816</strong></td><td>—</td><td>partitions into ↓</td></tr>
+      <tr><td>├─ argmax AGREE</td><td>629</td><td>22.3%</td><td>the two spines' positions are identical</td></tr>
+      <tr><td>└─ argmax DISAGREE</td><td>2187</td><td><strong>77.7%</strong></td><td>staff-vs-staff; what the rerank can act on</td></tr>
+      <tr><td>&nbsp;&nbsp;&nbsp;consistent combo in beam-16</td><td>1648</td><td>58.5%</td><td>agreement ceiling (46.6% of the 2187 disagreeing)</td></tr>
+      <tr><td><strong>cleanly GT-aligned systems</strong></td><td><strong>2789</strong></td><td>—</td><td>partitions into ↓</td></tr>
+      <tr><td>├─ argmax jointly correct</td><td>500</td><td>17.9%</td><td>agree AND == GT (exact positions)</td></tr>
+      <tr><td>├─ agree but WRONG</td><td>128</td><td>4.6%</td><td>staves share an error — the reranker's floor</td></tr>
+      <tr><td>└─ disagree</td><td>2161</td><td>77.5%</td><td>can't be jointly correct</td></tr>
+      <tr><td>&nbsp;&nbsp;&nbsp;GT reachable in beam-16</td><td>1086</td><td><strong>38.9%</strong></td><td>correctness ceiling</td></tr>
+      <tr><td>&nbsp;&nbsp;&nbsp;rerank pick correct</td><td>944</td><td><strong>33.8%</strong></td><td>logprob-best consistent combo</td></tr>
     </tbody>
   </table>
   <p>
-    Errors are mostly <strong>±1 barline (~60–67%)</strong>, the dominant single case being
-    <code>+1</code> (one spurious barline) — a rerank/repair-friendly regime, not gross
-    collapse. Errors are mostly <strong>±1 barline (67%)</strong>,
-    the dominant single case being <code>+1</code> (one spurious barline, 41/91) — a
-    rerank/repair-friendly regime, not gross collapse.
-  </div>
+    <strong>Reading.</strong> Agreement-reranking lifts exact joint-correctness <strong>17.9% →
+    33.8%</strong> (×1.89), capturing <strong>86.9%</strong> of the 38.9% reachable ceiling. So when
+    a consistent combo exists, the logprob tie-break usually lands on the truth — the signal is real
+    and a reranker is worth building. The <strong>shared-error floor it cannot beat is 4.6%</strong>
+    (systems whose spines already agree on the same wrong timeline; reranking-for-agreement leaves
+    them).
+  </p>
 
   <div class="bad">
-    <strong>Open / unresolved.</strong> (1) Ceiling is still &lt;50%: even an oracle reranker
-    leaves ~57% of violations unfixable (no clean candidate in the beam) — those need a wider
-    beam, <strong>localized repair</strong>, or <strong>cross-spine length coupling during
-    decode</strong>. (2) This is the <em>clean-val</em> domain (only 4.5% violation). The
-    payoff is on the <strong>scanned / predicted-box</strong> domain (staffer boxes feeding
-    noter), where desync is far more common — that measurement is the decisive next step and
-    hasn't been run. No code beyond the diagnostic has been committed.
+    <strong>Two ceilings cap it.</strong> (1) Of the 2187 disagreeing systems only ~1019
+    (<strong>46.6%</strong>) have <em>any</em> consistent combo in beam-16 — the rest need a wider
+    beam, localized repair, or cross-spine coupling during decode. (2) Even a perfect
+    agreement-reranker tops out at <strong>38.9% exact joint-correctness</strong>; the other ~61% are
+    unreachable by reranking alone. Open: build the reranker (<code>logprob − λ·disagreement</code>,
+    joint per system); sweep beam width (does the 46.6% move?); and add a coarser secondary signature
+    (bar-count, or position match modulo a global offset) to split real structural desync from
+    off-by-one shifts — the exact-index signature is brittle to a single early <code>.</code>
+    insertion. The now-dropped per-stave noter probe gave a comparable bound (clean GT-box val:
+    recall ceiling 16.7%@8 → 29.5%@16 → 42.9%@32). No rerank code committed yet.
   </div>
 </article>
 

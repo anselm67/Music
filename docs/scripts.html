@@ -222,31 +222,36 @@ uv run python scripts/migrate_bars_to_system.py --write   # write in-place</pre>
 <pre>uv run python scripts/migrate_layout_id.py [--home DIR] [--dry-run] [--limit N]</pre>
   </div>
 
-  <!-- ──────────────────────────────────────────────────── noter_bar_recall -->
+  <!-- ─────────────────────────────────────────────── scorer_system_agreement -->
   <div class="script">
     <div class="script-header">
-      <span class="script-name">noter_bar_recall.py</span>
+      <span class="script-name">scorer_system_agreement.py</span>
       <span class="badge badge-blue">diagnostic</span>
-      <span class="badge badge-blue">noter</span>
+      <span class="badge badge-blue">scorer</span>
       <span class="badge badge-amber">kernsheet</span>
     </div>
     <p class="script-desc">
-      Beam-recall diagnostic for the barline-count invariant — measures the ceiling
-      of a rerank step that penalises barline-count disagreement. On the KernSheet
-      noter val split it runs beam search returning <em>all</em> candidates (not just
-      the best), and asks: of the staves whose best (<code>beam[0]</code>) decode has
-      the wrong number of barlines, what fraction have a candidate with the right
-      count somewhere in the top-K beam? Within a system every spine shares the
-      barline skeleton, so bar count is a cross-staff invariant and GT gives the
-      per-system target; barlines live in slot 0 (the primary/structural token beam
-      ranks over), so counting <code>=</code> tokens in the slot-0 stream is all it
-      needs — no durations, no meter. Reports argmax-correct %, violating %,
-      recoverable % (the rerank ceiling), and the signed bar-count delta histogram.
+      Per-system cross-staff barline-<em>agreement</em> diagnostic on the end-to-end
+      scorer (debussy) — the measurement behind a system-level reranker that would
+      favour beam combinations whose staves agree on barline positions. Runs the real
+      predicted-box pipeline (detect → crop → transcribe) and groups staves by the
+      scorer's own <code>owners</code> (detection-derived, not a GT key). Within a
+      system every spine shares the same record rows, so a barline falls on the same
+      timestep index in each stave; the signature is the set of <code>=</code> positions
+      (catches a shared count with a shifted bar). Per predicted multi-stave system it
+      reports: argmax disagreement rate (what the rerank can act on), the consistency
+      ceiling (a signature present in every stave's candidate set), and — on systems
+      whose staves cleanly match GT staves by center-y (Hungarian, no miss/extra) —
+      the correctness ceiling and the agreement↔correctness gap (is the logprob-best
+      consistent combo actually GT, or do the staves agree on a shared error). Carries
+      a <code>beam_all</code> that returns all candidates + slot-0 logprobs, since
+      <code>ScorerModule._beam_single</code> keeps only the best (the reranker needs
+      the full beam too).
     </p>
     <div class="label">Usage</div>
-<pre>uv run python scripts/noter_bar_recall.py \
-    --noter enhanced3-center+jitter-kernsheet \
-    --kern-home /home/anselm/datasets/KernSheet --limit 400 --beam 8</pre>
+<pre>uv run python scripts/scorer_system_agreement.py \
+    --scorer debussy --kern-home /home/anselm/datasets/KernSheet \
+    --pages 300 --beam 16 --device cuda</pre>
   </div>
 
   <!-- ──────────────────────────────────────────────────────── pixel_hist -->
