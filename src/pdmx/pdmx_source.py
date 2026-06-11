@@ -14,7 +14,7 @@ from torch import Tensor
 from torchvision.io import decode_image
 
 from kern import KernReader
-from sheetmusic import Score
+from sheetmusic import Page, Score
 
 from .pdmx import PDMX
 
@@ -28,6 +28,9 @@ class PdmxSource:
             mxl = row["mxl"]
             if isinstance(mxl, str):
                 yield self.score(mxl)
+
+    def pages(self, id: str) -> list[Page]:
+        return self.score(id).pages
 
     def score(self, id: str) -> Score:
         mxl_file = self.pdmx.home / id

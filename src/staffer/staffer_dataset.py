@@ -45,7 +45,7 @@ class StafferDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]]):
         self.items = []
         for score in tqdm(source.scores(), desc="Loading dataset"):
             part_count = max(score.staff_count, 1) // max(score.system_count, 1)
-            for page in score.pages:
+            for page in source.pages(score.id):
                 if not page.systems:  # skip blank/cover pages (no GT to supervise)
                     continue
                 raw = max(
@@ -90,7 +90,10 @@ class StafferDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]]):
             # Converts the Score to expected ground truth tensors.
             is_ok = True
             score = self.source.score(score_id)
+            # items() enrols only source.pages() (validated, for KernSheet) by their
+            # page_number; the lookup below relies on pages being dense 1-based.
             page = score.pages[page_number - 1]
+            assert page.page_number == page_number
 
             sys_boxes = torch.zeros(self.config.num_system_queries, 4)
             staff_boxes = torch.zeros(self.config.num_stave_queries, 4)

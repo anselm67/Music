@@ -58,7 +58,7 @@ class ScorerDataset(Dataset[Sample]):
         logging.info("Initializing ScorerDataset...")
         self.items = []
         for score in tqdm(source.scores(), desc="Loading scorer dataset"):
-            for page in score.pages:
+            for page in source.pages(score.id):
                 if not page.systems:  # skip blank/cover pages (no GT to supervise)
                     continue
                 self.items.append((score.id, page.page_number))
@@ -82,7 +82,10 @@ class ScorerDataset(Dataset[Sample]):
                 continue
 
             score = self.source.score(score_id)
+            # items() enrols only source.pages() (validated, for KernSheet) by their
+            # page_number; the lookup below relies on pages being dense 1-based.
             page = score.pages[page_number - 1]
+            assert page.page_number == page_number
             W, H = page.image_width, page.image_height
             # Letterboxed-canvas normalisation (see StafferDataset): scale by the
             # aspect-preserving factor, then by the canvas dims (content top-left).

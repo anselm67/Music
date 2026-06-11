@@ -111,7 +111,7 @@ class NoterDataset(Dataset):
         self.items = []
         target_h, target_w = config.page_shape
         for score in tqdm(source.scores(), desc="Loading noter dataset"):
-            for page in score.pages:
+            for page in source.pages(score.id):
                 # Letterbox the boxes by the same single scale the image transform
                 # uses, so crop coords land on the (aspect-preserved) staff.
                 scale = letterbox_scale(
