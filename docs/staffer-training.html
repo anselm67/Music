@@ -272,8 +272,15 @@
         <td>Per-image-norm fine-tune on KernSheet (clean A/B vs <span class="tag">berlioz-kernsheet</span>)</td>
         <td><span class="badge badge-green">x-tail ↓ · miss ↓</span></td>
       </tr>
+      <tr>
+        <td><a class="run-link" href="#run-debussy-mixed"><span class="tag">debussy-mixed</span></a></td><td>2026-06-11</td><td>256</td><td>16</td>
+        <td>0.293∥</td><td>0.934∥</td><td>KS 3.5/3.6 px · PDMX 1.2 px (recovered)</td>
+        <td><strong>Rehearsal fine-tune</strong>: KernSheet + PDMX mixed at the source layer (67% KS) to undo catastrophic forgetting</td>
+        <td><span class="badge badge-green">forgetting ↓</span></td>
+      </tr>
     </tbody>
   </table>
+  <p style="font-size:0.82rem;color:var(--muted)">∥ <span class="tag">debussy-mixed</span> validates on the <em>mixed</em> stream (~67% KernSheet + 33% PDMX), so its <code>val/loss</code> 0.293 and <code>sys IoU</code> 0.934 sit between pure-PDMX (<span class="tag">debussy</span> 0.982) and pure-KernSheet (<span class="tag">debussy-kernsheet</span> 0.918) and are not comparable to either single-domain row — the per-domain eval table in its card is the meaningful read.</p>
   <p style="font-size:0.82rem;color:var(--muted)"><span class="tag">stave-primary-grid-full-kernsheet</span> is evaluated on KernSheet (real scans), not PDMX — its <code>sys IoU</code> 0.930 / stave error are <em>not</em> comparable to the synthetic-domain rows above; the meaningful comparison is its own before/after on KernSheet (see card). <code>sys IoU</code> shown as actual (1 − stored).</p>
   <p style="font-size:0.82rem;color:var(--muted)">† stave L1 not comparable to prior runs: enhanced2-ltrb stave head outputs (top, bottom) directly; prior runs output (cy, h). ‡ <span class="tag">stave-primary</span>'s <code>val/stave_l1</code> is not a clean metric (logging-key collision, see its card), so its stave column reports the eval table's bottom-of-page error instead — directly comparable to the anchor's bins 12–14 (~12–13 px). § <span class="tag">berlioz</span>'s PDMX <code>val/stave_err_px</code> 0.52 vs <span class="tag">stave-primary-grid-full</span>'s 0.41 is <em>not</em> a clean comparison — the <code>random_split</code> was reseeded between the two runs, so they validate on different PDMX pages, and the metric is heavy-tailed; on PDMX the letterbox is vertically identical to stretch (see <span class="tag">berlioz</span> card), so the base is effectively unchanged.</p>
   <p style="font-size:0.82rem;color:var(--muted)">¶ <span class="tag">debussy</span> vs <span class="tag">berlioz</span> <em>is</em> a clean A/B: both post-date the <code>random_split</code> reseed (commit <code>c271450</code>, 2026-06-05) and share the same letterbox + config, so they validate on the <em>identical</em> PDMX split — the only deliberate difference is per-image vs global normalization. The <code>val/stave_err_px</code> gap 0.69 vs 0.52 (+0.17&nbsp;px) is therefore the real cost of per-image norm on the synthetic domain; <code>sys IoU</code> is a tie (0.982 vs 0.981). Per-image norm was never expected to help PDMX (synthetic pages are near-binary white, where per-image ≈ global) — its target is the KernSheet photometric gap, so the verdict is the upcoming <span class="tag">debussy-kernsheet</span> fine-tune, not this row.</p>
@@ -1276,6 +1283,37 @@
       <p style="font-size:0.78rem;color:var(--muted)">¹ <span class="tag">spgf-repro</span> was killed at ~8.7k once it had overlaid <span class="tag">spgf</span> to noise (4.41 vs 4.59 @8k) — the seed verdict needed no more. Worktree at <code>~/projects/Music-spgf</code> (branch <code>spgf-repro</code>, per-image edit left uncommitted); logs/checkpoints symlinked into main.</p>
       <div class="result-box neutral"><strong>Verdict: per-image norm is the cause of the PDMX stave-edge tax — nothing else.</strong> The two per-image runs <span class="tag">spgf-perimg</span> (old code) and <span class="tag">debussy-stretch</span> (current code) converge to within 0.07&nbsp;px (2.63 vs 2.57 @20k), so the <strong>current-code refactor is exonerated</strong>; and <span class="tag">spgf-repro</span> overlaid <span class="tag">spgf</span>, so the <strong>split seed is exonerated</strong>. Both per-image runs sit a steady ~+0.4&nbsp;px above the global-norm <span class="tag">spgf</span> track — that gap <em>is</em> the norm. <strong>Decision: keep letterbox + per-image (= <span class="tag">debussy</span>).</strong> The PDMX tax is real but small and on a domain that was never the scoreboard; per-image's KernSheet win (x-tail p99 112→69.5, miss 6.2→3.9%) stands, and per-image already neutralised berlioz's letterbox penalty (4.99→3.63), so letterbox's geometric honesty is kept at no measured KernSheet cost. The stretch variant (<span class="tag">debussy-stretch</span>) <em>might</em> recover the inferred ~0.5&nbsp;px letterbox y-residual, but that was never measured on a KernSheet fine-tune and isn't worth another cycle — the norm question is settled and the stretch question is parked.</div>
     </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ debussy-mixed -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-debussy-mixed"><span class="tag">debussy-mixed</span> — rehearsal fine-tune (undo catastrophic forgetting)</h2>
+      <span class="session-meta">2026-06-11 · tag <code>train/debussy-mixed</code> · D=256 H=8 · letterbox + per-image · init from <span class="tag">debussy</span></span>
+      <span class="badge badge-green">forgetting ↓ · KernSheet unharmed</span>
+    </div>
+    <p><strong>The problem this fixes.</strong> Fine-tuning the PDMX base on the small (~2.3k-page) KernSheet corpus buys real-scan accuracy but <em>erodes PDMX competence</em> — classic catastrophic forgetting. <strong>Rehearsal</strong> is the fix: mix PDMX back into the fine-tune stream so the network keeps rehearsing what 500k synthetic pages taught while it learns the new domain. The mixing happens at the <strong>source layer</strong> (<code>MixedSource</code> / <code>PdmxSource.mix</code>): PDMX stays the primary corpus and KernSheet is injected as the secondary to hold a target fraction of each epoch, so the whole split / jitter / bottom-bias-sampler pipeline is reused untouched and the sampler naturally rehearses PDMX deep pages. Recipe mirrors <span class="tag">debussy-kernsheet</span> with one new flag: <code>--kern-sheet /home/anselm/datasets/KernSheet 0.67</code> (67% KernSheet = 2:1 KS:PDMX), <code>--init-from checkpoints/staffer/debussy/last.ckpt --lr 1e-5 --warmup-steps 200 --train-len 3000 --valid-len 450 -e 30 --use-sampler --csv Staff16.csv</code>.</p>
+
+    <h3>The forgetting, then the recovery — stave y-error (n-weighted over bins 0–15, 500 samples)</h3>
+    <p style="font-size:0.82rem;color:var(--muted)">Five evals span the full before/after on <em>both</em> domains. The PDMX column is the forgetting test (does rehearsal pull the KS-only fine-tune back toward the base?); the KernSheet column is the no-regression test (does keeping PDMX cost any real-scan accuracy?).</p>
+    <table class="summary-table">
+      <thead><tr><th>eval domain · model</th><th>top_err</th><th>bot_err</th><th>mean</th></tr></thead>
+      <tbody>
+        <tr><td><strong>PDMX</strong> · <span class="tag">debussy</span> (base, never FT'd)</td><td>0.83</td><td>0.97</td><td><strong>0.90&nbsp;px</strong></td></tr>
+        <tr><td><strong>PDMX</strong> · <span class="tag">debussy-kernsheet</span> (KS-only FT)</td><td>1.69</td><td>1.76</td><td><strong>1.73&nbsp;px</strong> ← forgot</td></tr>
+        <tr><td><strong>PDMX</strong> · <span class="tag">debussy-mixed</span> (rehearsal)</td><td>1.21</td><td>1.23</td><td><strong>1.22&nbsp;px</strong> ← recovered</td></tr>
+        <tr><td colspan="4" style="height:0.4rem;border:0"></td></tr>
+        <tr><td><strong>KernSheet</strong> · <span class="tag">debussy-kernsheet</span> (KS-only FT)</td><td>3.70</td><td>3.96</td><td><strong>3.83&nbsp;px</strong></td></tr>
+        <tr><td><strong>KernSheet</strong> · <span class="tag">debussy-mixed</span> (rehearsal)</td><td>3.49</td><td>3.61</td><td><strong>3.55&nbsp;px</strong> ← slightly better</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">In-training validation runs on the mixed (~67% KS) stream: <code>val/loss</code> 0.293, <code>val/stave_err_px</code> 3.31, <code>sys IoU</code> 0.934 (flat from ~epoch 23). Evals: PDMX via <code>staffer --csv Staff16.csv -n 2000 eval &lt;name&gt; --size 500</code>; KernSheet via <code>staffer --kern-home ~/datasets/KernSheet eval &lt;name&gt; --size 500</code>.</p>
+
+    <h3>What the numbers say</h3>
+    <p><strong>The forgetting is real and broad, not just deep-page drift.</strong> The KS-only fine-tune (<span class="tag">debussy-kernsheet</span>) nearly <em>doubled</em> PDMX stave error — 0.90&nbsp;→&nbsp;1.73&nbsp;px (+0.83) — and the damage is spread across the canvas, not confined to the rare deep-page slots: bin&nbsp;0 bot jumps 0.2&nbsp;→&nbsp;2.7&nbsp;px, bin&nbsp;1 top 0.5&nbsp;→&nbsp;2.7&nbsp;px. 500k PDMX pages of learned precision, partly overwritten by 2.3k KernSheet pages.</p>
+    <p><strong>Rehearsal recovers ~61% of it.</strong> Mixing PDMX back in pulls PDMX error to 1.22&nbsp;px — recovering 0.51 of the 0.83&nbsp;px lost. It still pays a ~0.32&nbsp;px tax vs the pristine base (mostly in the deep bins 12–14, 2.4–3.9&nbsp;px, where PDMX no longer gets the network's full attention), which is the expected and cheap price of sharing capacity across two domains.</p>
+    <p><strong>And it costs nothing on KernSheet — it slightly helps.</strong> Real-scan error actually improves 3.83&nbsp;→&nbsp;3.55&nbsp;px (−0.28), most visibly at bin&nbsp;9 (5.3/5.0&nbsp;→&nbsp;3.4/2.9&nbsp;px) — likely the regularising effect of the larger, more varied mixed stream. So rehearsal is not a KernSheet-vs-PDMX trade-off here; it is a strict improvement on the KS-only fine-tune that <em>also</em> restores most PDMX competence.</p>
+    <div class="result-box positive"><strong>One model now does both domains — no catastrophic forgetting.</strong> PDMX competence is largely restored (1.73&nbsp;→&nbsp;1.22&nbsp;px, ~61% of the loss recovered) at a small bounded tax over the base (+0.32&nbsp;px), while KernSheet is unharmed and marginally better (3.83&nbsp;→&nbsp;3.55&nbsp;px). <span class="tag">debussy-mixed</span> is the staffer to carry into the scorer joint fine-tune; the same <code>--kern-sheet</code> rehearsal path applies to the noter and scorer runs next.</div>
   </div>
 
 </main>
