@@ -533,3 +533,23 @@ class TestRunCommand:
 
         # The exception is logged inside run_command, not propagated.
         assert editor.run_command(ord("s")) is True
+
+
+class TestRecomputeBars:
+    """The 'c' key replaces the current system's bars with detector output."""
+
+    def test_recompute_replaces_bars_from_image(self) -> None:
+        editor = _editor([_page([_sys(100, 250, [10, 500])])])
+        # White page with black barlines spanning the system band [100, 250].
+        img = np.full((800, 600, 3), 255, np.uint8)
+        for x in (40, 300, 560):
+            img[100:250, x : x + 1] = 0
+        editor.images[0] = img
+
+        editor.recompute_bars()
+
+        assert editor.system.bars == [40, 300, 560]
+
+    def test_recompute_noop_without_system(self) -> None:
+        editor = _editor([_page([_sys(100, 250, [10, 500])])], system_index=-1)
+        editor.recompute_bars()  # must not raise

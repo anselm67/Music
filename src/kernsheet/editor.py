@@ -15,7 +15,7 @@ import cv2
 from cv2.typing import MatLike
 
 from kern import KernReader
-from kernsheet import KernSheet
+from kernsheet import ClassicalStaffer, KernSheet
 from sheetmusic import Box, Page, Score, Staff, System
 
 
@@ -619,7 +619,14 @@ class StaffEditor:
             print(line)
 
     def recompute_bars(self) -> None:
-        logging.warning("recompute_bars: not implemented.")
+        if self.system_index < 0:
+            return
+        bars = ClassicalStaffer().detect_bars(
+            self.image, self.system.top, self.system.bottom
+        )
+        self.replace_system(bars=bars)
+        self.bar_index = min(self.bar_index, len(bars) - 1) if bars else -1
+        print(f"Recomputed {len(bars)} barline(s) for system {self.system_index + 1}.")
 
     def toggle_fast_mode(self) -> None:
         self.fast_mode = not self.fast_mode

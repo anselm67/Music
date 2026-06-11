@@ -99,6 +99,25 @@ class ClassicalStaffer:
         bar_peaks, _ = find_peaks(x_proj, distance=50, height=peak_height)
         return [int(p) for p in bar_peaks]
 
+    def _close_vertical(self, ink: MatLike) -> MatLike:
+        """Bridge vertical gaps so barlines read as solid columns for find_bars."""
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 5))
+        return cv2.morphologyEx(ink, cv2.MORPH_CLOSE, kernel)
+
+    def detect_bars(self, page_image: MatLike, top: int, bottom: int) -> list[int]:
+        """Barline x-positions within the page's horizontal band ``[top:bottom]``.
+
+        Exposed for the editor's recompute-bars: it runs the same vertical-projection
+        bar finder used during full detection, on a band the caller already has staff
+        boxes for — no staff detection repeated. ``page_image`` is taken as-is (no
+        resize/deskew), so ``top``/``bottom`` are pixel rows in its own frame.
+        """
+        gray = page_image
+        if gray.ndim == 3:
+            gray = cv2.cvtColor(gray, cv2.COLOR_BGR2GRAY)
+        ink = cv2.bitwise_not(self._denoise(gray))
+        return self._find_bars(self._close_vertical(ink)[top:bottom, :])
+
     def _filter_staff_peaks(
         self, staff_peaks: NDArray[np.int_], peak_heights: list[float]
     ) -> list[int]:
@@ -183,9 +202,7 @@ class ClassicalStaffer:
             staff_lines = staff_lines[:usable]
 
         # Vertical close → image used to locate barlines within each band.
-        v_ink = cv2.morphologyEx(
-            ink, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (1, 5))
-        )
+        v_ink = self._close_vertical(ink)
 
         systems = []
         for base in range(0, len(staff_lines), LINES_PER_SYSTEM):

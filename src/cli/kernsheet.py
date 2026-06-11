@@ -140,6 +140,66 @@ def edit(ctx: ClickContext, prefix: str, edit_all: bool, fast: bool) -> None:
 
 
 @click.command()
+@click.argument("prefix", type=str, required=False, default="")
+@click.option(
+    "--write",
+    "-w",
+    is_flag=True,
+    default=False,
+    show_default=True,
+    help="Write layout/ files (otherwise a dry-run report only).",
+)
+@click.option(
+    "--width",
+    type=int,
+    default=1200,
+    show_default=True,
+    help="Render/processing width for the detector.",
+)
+@click.pass_obj
+def detect(ctx: ClickContext, prefix: str, write: bool, width: int) -> None:
+    """Generate a layout via ClassicalStaffer for every catalog score that has none.
+
+    Runs the cv2 projection-profile detector on each PDF and writes an UN-validated
+    Score under layout/ for review in the editor. Only scores with no existing layout
+    (and a usable pdf + write target) are touched; pass PREFIX to restrict to entries
+    whose key starts with it. Dry-run by default; pass -w to write.
+    """
+    from kernsheet import ClassicalStaffer
+
+    ks = ctx.kern_sheet
+    staffer = ClassicalStaffer(width=width)
+    todo = [
+        (key, score)
+        for key, entry in ks.catalog.entries.items()
+        for score in entry.scores
+        if (not prefix or key.startswith(prefix))
+        and not ks.layout_path(score).is_file()
+        and score.json_path
+        and score.pdf_path
+        and ks.pdf_path(score).is_file()
+    ]
+    ok = failed = 0
+    for _, score in todo:
+        try:
+            result = staffer.detect(ks.pdf_path(score), score.id)
+        except Exception as e:
+            failed += 1
+            logging.error(f"detect {score.id}: {e}")
+            continue
+        print(
+            f"  {score.id}: {result.page_count}p "
+            f"{result.system_count}sys {result.staff_count}staves"
+            + ("" if write else " (dry-run)")
+        )
+        if write:
+            ks.save_score(score.id, result)
+        ok += 1
+    verb = "written" if write else "detected (dry-run; pass -w to write)"
+    print(f"\n{ok} score(s) {verb}, {failed} failed, of {len(todo)} candidate(s).")
+
+
+@click.command()
 @click.pass_obj
 def stats(ctx: ClickContext) -> None:
     """Layout statistics over the migrated KernSheet scores."""
@@ -193,6 +253,7 @@ def check(ctx: ClickContext, verbose: bool) -> None:
 cli.add_command(migrate)
 cli.add_command(make)
 cli.add_command(edit)
+cli.add_command(detect)
 cli.add_command(stats)
 cli.add_command(check)
 
