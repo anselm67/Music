@@ -271,6 +271,16 @@ def check(ctx: ClickContext) -> None:
     help="Vocab JSON to train against (default: <home>/build/vocab.json). Pass the "
     "larger KernSheet vocab so the merge matches its KernSheet-fine-tuned branches.",
 )
+@click.option(
+    "--kern-sheet",
+    "kern_sheet",
+    type=(click.Path(exists=True, file_okay=False, path_type=Path), float),
+    default=None,
+    help="Rehearsal fine-tune: mix a KernSheet corpus into the (PDMX) training "
+    "stream to fight catastrophic forgetting. Takes KERNSHEET_ROOT and a MIX "
+    "fraction in (0,1) = KernSheet's share of each epoch (0.5 -> half KS, half "
+    "PDMX). PDMX stays primary from the global options.",
+)
 @click.pass_obj
 def train(
     ctx: ClickContext,
@@ -287,6 +297,7 @@ def train(
     warmup_steps: int,
     freeze_staffer_steps: int,
     vocab_path: Path | None,
+    kern_sheet: tuple[Path, float] | None,
 ) -> None:
     """Trains and/or resumes training of a Scorer model instance.
 
@@ -399,9 +410,24 @@ def train(
         enable_progress_bar=not hide_progress,
     )
 
+    source = ctx.source
+    if kern_sheet is not None:
+        if not isinstance(ctx.source, PdmxSource):
+            raise click.UsageError(
+                "--kern-sheet mixes KernSheet into a PDMX run; drop --kern-home "
+                "so PDMX is the primary source."
+            )
+        ks_root, mix = kern_sheet
+        if not 0.0 < mix < 1.0:
+            raise click.UsageError(f"--kern-sheet MIX must be in (0, 1), got {mix}")
+        source = ctx.source.mix(KernSheetSource(KernSheet(ks_root)), mix)
+        logging.info(
+            f"Rehearsal mix: {mix:.2f} KernSheet ({ks_root}) + {1 - mix:.2f} PDMX"
+        )
+
     trainer.fit(
         module,
-        ScorerDataModule(config, ctx.source, vocab, num_workers=num_workers),
+        ScorerDataModule(config, source, vocab, num_workers=num_workers),
         ckpt_path=ckpt_path,
     )
 

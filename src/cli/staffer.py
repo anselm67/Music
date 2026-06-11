@@ -298,6 +298,16 @@ def stats(ctx: ClickContext, num_workers: int) -> None:
     default=-1,
     help="Override the number of warmup steps.",
 )
+@click.option(
+    "--kern-sheet",
+    "kern_sheet",
+    type=(click.Path(exists=True, file_okay=False, path_type=Path), float),
+    default=None,
+    help="Rehearsal fine-tune: mix a KernSheet corpus into the (PDMX) training "
+    "stream to fight catastrophic forgetting of the deep-page stave slots. Takes "
+    "KERNSHEET_ROOT and a MIX fraction in (0,1) = KernSheet's share of each epoch "
+    "(0.5 -> half KS, half PDMX). PDMX stays primary from the global options.",
+)
 @click.pass_obj
 def train(
     ctx: ClickContext,
@@ -312,6 +322,7 @@ def train(
     valid_len: int,
     lr: float | None,
     warmup_steps: int,
+    kern_sheet: tuple[Path, float] | None,
 ) -> None:
     """Trains and/or resume training of a Staffer model instance.
 
@@ -426,9 +437,24 @@ def train(
                 ) from e
             logging.info(f"Initialized weights from {init_from}")
 
+    source = ctx.source
+    if kern_sheet is not None:
+        if not isinstance(ctx.source, PdmxSource):
+            raise click.UsageError(
+                "--kern-sheet mixes KernSheet into a PDMX run; drop --kern-home "
+                "so PDMX is the primary source."
+            )
+        ks_root, mix = kern_sheet
+        if not 0.0 < mix < 1.0:
+            raise click.UsageError(f"--kern-sheet MIX must be in (0, 1), got {mix}")
+        source = ctx.source.mix(KernSheetSource(KernSheet(ks_root)), mix)
+        logging.info(
+            f"Rehearsal mix: {mix:.2f} KernSheet ({ks_root}) + {1 - mix:.2f} PDMX"
+        )
+
     trainer.fit(
         module,
-        StafferDataModule(config, ctx.source, use_sampler, num_workers=num_workers),
+        StafferDataModule(config, source, use_sampler, num_workers=num_workers),
         ckpt_path=ckpt_path,
     )
 
