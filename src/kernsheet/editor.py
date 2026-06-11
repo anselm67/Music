@@ -15,7 +15,7 @@ import cv2
 from cv2.typing import MatLike
 
 from kern import KernReader
-from kernsheet import KernSheet
+from kernsheet import ClassicalStaffer, KernSheet
 from sheetmusic import Box, Page, Score, Staff, System
 
 
@@ -95,6 +95,21 @@ class StaffEditor:
             replace(staff, box=staff.box.up(delta)) for staff in self.system.staves
         ]
         self.page.systems[self.system_index] = replace(self.system, staves=new_staves)
+
+    def resize_system(self, delta: int) -> None:
+        # Grows/shrinks the system downward, spreading the height change equally:
+        # every staff's height changes by delta px, and staff i is shifted down by
+        # i*delta so the staves stay stacked without overlap. The system top stays
+        # fixed; the bottom moves by staff_count * delta.
+        if self.system_index < 0 or self.system.staff_count == 0:
+            return
+        staves = []
+        for i, staff in enumerate(self.system.staves):
+            box = staff.box
+            top = box.top + i * delta
+            bottom = box.bottom + (i + 1) * delta
+            staves.append(replace(staff, box=Box((box.left, top), (box.right, bottom))))
+        self.replace_system(staves=staves)
 
     @property
     def bar_number(self) -> int:
@@ -520,14 +535,31 @@ class StaffEditor:
                     self.save()
                 return True
             elif key == ord("1"):
-                logging.warning(f"{self.id}: delete score not implemented.")
-                return True
+                if self.confirm(f"Delete score {self.id}?"):
+                    self.delete_score()
+                    return True
+            elif key == ord("2"):
+                if self.confirm(f"Delete entry {self.key} and all its files?"):
+                    self.delete_entry()
+                    return True
             else:
                 print(f"Unknown key: '{key}', press 'h' for help.")
 
     def save(self) -> None:
         self.kern_sheet.save_score(self.id, self.score)
         print(f"{self.score.page_count} pages reviewed and saved.")
+
+    def confirm(self, prompt: str) -> bool:
+        print(f"{prompt} (y/n)")
+        return cv2.waitKey() == ord("y")
+
+    def delete_score(self) -> None:
+        self.kern_sheet.delete_score(self.key, self.kern_sheet.id2score[self.id])
+        print(f"Deleted score {self.id} from the catalog.")
+
+    def delete_entry(self) -> None:
+        self.kern_sheet.delete_entry(self.key)
+        print(f"Deleted entry {self.key} and its files from the catalog.")
 
     KEY_NAMES = {
         81: "Left",
@@ -547,11 +579,14 @@ class StaffEditor:
             else:
                 return "???"
 
-        # These following three commands don't have actions:
+        # These following commands don't have actions:
         # they all quit the currrent editor, which actions can't do.
         print(f"{key_name(ord('q')):<8}Quits the editor.")
         print(f"{key_name(ord('n')):<8}Moves to next score.")
         print(f"{key_name(ord('1')):<8}Deletes this score from the catalog.")
+        print(
+            f"{key_name(ord('2')):<8}Deletes this entry and its files from the catalog."
+        )
         for key_code, action in self.actions.items():
             print(f"{key_name(key_code):<8}{action.help}")
 
@@ -584,7 +619,14 @@ class StaffEditor:
             print(line)
 
     def recompute_bars(self) -> None:
-        logging.warning("recompute_bars: not implemented.")
+        if self.system_index < 0:
+            return
+        bars = ClassicalStaffer().detect_bars(
+            self.image, self.system.top, self.system.bottom
+        )
+        self.replace_system(bars=bars)
+        self.bar_index = min(self.bar_index, len(bars) - 1) if bars else -1
+        print(f"Recomputed {len(bars)} barline(s) for system {self.system_index + 1}.")
 
     def toggle_fast_mode(self) -> None:
         self.fast_mode = not self.fast_mode
@@ -635,15 +677,15 @@ class StaffEditor:
             Action("p", self.prev, "Moves to previous page."),
             Action("j", lambda: self.move_bar(-2), "Moves the selected bar left."),
             Action("l", lambda: self.move_bar(2), "Moves the selected bar right."),
-            Action(  # TODO extend bottom of last system's staff
+            Action(
                 "e",
-                lambda: self.replace_system(bottom=self.system.bottom + 1),
+                lambda: self.resize_system(1),
                 "Extends the selected system down.",
             ),
-            Action(  # TODO reduce bottom of last system staff
+            Action(
                 "r",
-                lambda: self.replace_system(bottom=self.system.bottom - 1),
-                "Shrinks the selected staff up.",
+                lambda: self.resize_system(-1),
+                "Shrinks the selected system up.",
             ),
             Action(
                 "i",

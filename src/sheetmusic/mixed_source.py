@@ -13,7 +13,7 @@ from pathlib import Path
 
 from torch import Tensor
 
-from .layout import Score
+from .layout import Page, Score
 from .source import Source
 
 
@@ -66,6 +66,10 @@ class MixedSource:
             while emitted_secondary < target:
                 yield self._tag(1, next(secondary_scores))
                 emitted_secondary += 1
+
+    def pages(self, id: str) -> list[Page]:
+        child, rest = self._route(id)
+        return child.pages(rest)
 
     def score(self, id: str) -> Score:
         head, _, rest = id.partition(self.SEP)

@@ -13,7 +13,7 @@ from pathlib import Path
 from torch import Tensor
 from torchvision.io import decode_image
 
-from sheetmusic import Score
+from sheetmusic import Page, Score
 
 from .kernsheet import KernSheet
 
@@ -24,10 +24,14 @@ class KernSheetSource:
 
     def scores(self) -> Iterator[Score]:
         for _, score in self.kern_sheet.items():
-            # is_file (not exists): an unmigrated score has an empty json_path,
-            # whose layout_path resolves to the layout/ directory — which exists.
-            if self.kern_sheet.layout_path(score).is_file():
-                yield self.kern_sheet.load_score(score.id)
+            yield self.kern_sheet.load_score(score.id)
+
+    def pages(self, id: str) -> list[Page]:
+        # Training/eval feed: drop the un-validated pages (the layouts `kernsheet
+        # detect` generates start validated=False) so they don't leak in until a
+        # human has reviewed them in the editor. Valid pages of a partly-reviewed
+        # score are still kept.
+        return [page for page in self.score(id).pages if page.validated]
 
     def score(self, id: str) -> Score:
         return self.kern_sheet.load_score(id)

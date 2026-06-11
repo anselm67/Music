@@ -13,12 +13,21 @@ from typing import Iterable, Protocol
 
 from torch import Tensor
 
-from .layout import Score
+from .layout import Page, Score
 
 
 class Source(Protocol):
     def scores(self) -> Iterable[Score]:
         """Enumerate the dataset's scores (layout included). Frugal: yield lazily."""
+        ...
+
+    def pages(self, id: str) -> list[Page]:
+        """The score's pages eligible for training/eval.
+
+        Lets a source withhold pages the datasets must not learn from: KernSheet drops
+        pages still awaiting human validation (e.g. ``kernsheet detect`` output), PDMX
+        returns every page. Datasets enumerate pages through this, not ``Score.pages``.
+        """
         ...
 
     def score(self, id: str) -> Score:

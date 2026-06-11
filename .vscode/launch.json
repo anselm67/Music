@@ -242,7 +242,8 @@
             "python": "${workspaceFolder}/.venv/bin/python",
             "args": [
                 "edit",
-                "bach/inventions/inven01"
+                "--all",
+                "bach/inventions/inven"
             ]
         },
     ]

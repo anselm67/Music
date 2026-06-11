@@ -8,7 +8,7 @@ import pytest
 import torch
 from torch import Tensor
 
-from sheetmusic import MixedSource, Score
+from sheetmusic import MixedSource, Page, Score
 
 
 class FakeSource:
@@ -22,6 +22,9 @@ class FakeSource:
     def scores(self) -> Iterator[Score]:
         for i in range(self.n):
             yield Score(id=f"{self.tag}-{i}", pages=[])
+
+    def pages(self, id: str) -> list[Page]:
+        return self.score(id).pages
 
     def score(self, id: str) -> Score:
         return Score(id=id, pages=[])

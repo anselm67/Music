@@ -26,7 +26,7 @@ def _catalog(tmp_path: Path, entries: dict) -> None:
     (tmp_path / "catalog.json").write_text(json.dumps({"entries": entries}))
 
 
-def _page(page_number: int, width: int = 40) -> Page:
+def _page(page_number: int, width: int = 40, validated: bool = True) -> Page:
     return Page(
         page_number=page_number,
         image_width=width,
@@ -38,7 +38,7 @@ def _page(page_number: int, width: int = 40) -> Page:
                 staves=[Staff(box=Box((0, 0), (10, 10)))],
             )
         ],
-        validated=True,
+        validated=validated,
     )
 
 
@@ -93,6 +93,29 @@ def test_scores_skips_unmigrated_empty_json_path(tmp_path: Path) -> None:
     src = KernSheetSource(KernSheet(tmp_path))
 
     assert [s.id for s in src.scores()] == ["a/b/work"]
+
+
+def test_pages_filters_unvalidated(tmp_path: Path) -> None:
+    # scores() yields every migrated score; pages() is the training/eval feed and
+    # drops un-validated pages (kernsheet detect writes them validated=False) while
+    # keeping the valid pages of a partly-reviewed score.
+    _catalog(
+        tmp_path,
+        {
+            "a/done": _entry(_score("a/done.json", "a/done.pdf")),
+            "a/fresh": _entry(_score("a/fresh.json", "a/fresh.pdf")),
+            "a/mixed": _entry(_score("a/mixed.json", "a/mixed.pdf")),
+        },
+    )
+    _write_layout(tmp_path, "a/done", [_page(1), _page(2)])  # all validated
+    _write_layout(tmp_path, "a/fresh", [_page(1, validated=False)])  # detect output
+    _write_layout(tmp_path, "a/mixed", [_page(1), _page(2, validated=False)])
+    src = KernSheetSource(KernSheet(tmp_path))
+
+    assert {s.id for s in src.scores()} == {"a/done", "a/fresh", "a/mixed"}
+    assert [p.page_number for p in src.pages("a/done")] == [1, 2]
+    assert src.pages("a/fresh") == []
+    assert [p.page_number for p in src.pages("a/mixed")] == [1]
 
 
 def test_records_keyed_by_entry_not_edition(tmp_path: Path) -> None:
