@@ -105,7 +105,14 @@ def make(ctx: ClickContext) -> None:
 
 
 @click.command()
-@click.argument("key")
+@click.argument("prefix", type=str, required=False, default="")
+@click.option(
+    "--all",
+    "edit_all",
+    is_flag=True,
+    default=False,
+    help="Edit all scores, even validated ones.",
+)
 @click.option(
     "--fast",
     "-f",
@@ -114,18 +121,16 @@ def make(ctx: ClickContext) -> None:
     help="Fast mode: auto-save and validate pages on jumps.",
 )
 @click.pass_obj
-def edit(ctx: ClickContext, key: str, fast: bool) -> None:
-    """Open the interactive layout editor on score ID (press 'h' for help)."""
+def edit(ctx: ClickContext, prefix: str, edit_all: bool, fast: bool) -> None:
+    """Open the layout editor on every score whose catalog key starts with PREFIX
+    (all scores when PREFIX is omitted). Validated scores are skipped unless --all
+    is given. Press 'h' in the editor for help."""
     from kernsheet.editor import StaffEditor
 
-    if key not in ctx.kern_sheet.catalog.entries:
-        raise click.ClickException(f"no catalog entry for {key!r}")
-    ids = ctx.kern_sheet.get_kern_scores(key)
-    idx = 0
-    while ids:
-        if not StaffEditor(ctx.kern_sheet, key, ids[idx].id).edit(fast_mode=fast):
-            break
-        idx = (idx + 1) % len(ids)
+    ks = ctx.kern_sheet
+    for key, score in ks.items(prefix, valid=edit_all):
+        if not StaffEditor(ks, key, score.id).edit(fast_mode=fast):
+            return
 
 
 @click.command()

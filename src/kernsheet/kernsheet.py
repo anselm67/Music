@@ -94,9 +94,27 @@ class KernSheet:
     def relative(self, path: Path) -> str:
         return str(path.relative_to(self.home))
 
-    def items(self) -> Iterator[tuple[str, KernScore]]:
+    def items(
+        self, prefix: str | None = None, valid: bool = True
+    ) -> Iterator[tuple[str, KernScore]]:
+        """Yield ``(key, score)`` pairs for migrated scores in the catalog.
+
+        prefix: if given, restrict to entries whose key starts with it.
+        valid: when False, skip scores whose layout is already fully validated,
+            yielding only those still needing review. Scores without a usable
+            layout on disk (unmigrated, or a recorded path whose file is gone)
+            are always skipped.
+        """
         for key, entry in self.catalog.entries.items():
+            if prefix and not key.startswith(prefix):
+                continue
             for score in entry.scores:
+                if not self.layout_path(score).is_file():
+                    continue
+                if not valid and all(
+                    page.validated for page in self.load_score(score.id).pages
+                ):
+                    continue
                 yield key, score
 
     def get_kern_scores(self, key: str) -> list[KernScore]:
