@@ -128,8 +128,14 @@ def edit(ctx: ClickContext, prefix: str, edit_all: bool, fast: bool) -> None:
     from kernsheet.editor import StaffEditor
 
     ks = ctx.kern_sheet
-    for key, score in ks.items(prefix, valid=edit_all):
-        if not StaffEditor(ks, key, score.id).edit(fast_mode=fast):
+    # Materialise the worklist up front: editing a score can delete it (or its
+    # whole entry) from the catalog, which would otherwise mutate the dict the
+    # items() generator is walking. Re-check existence before opening each one.
+    worklist = [(key, score.id) for key, score in ks.items(prefix, valid=edit_all)]
+    for key, score_id in worklist:
+        if not ks.has_score(score_id):
+            continue  # deleted earlier this session (the score or its whole entry)
+        if not StaffEditor(ks, key, score_id).edit(fast_mode=fast):
             return
 
 

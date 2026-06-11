@@ -535,14 +535,31 @@ class StaffEditor:
                     self.save()
                 return True
             elif key == ord("1"):
-                logging.warning(f"{self.id}: delete score not implemented.")
-                return True
+                if self.confirm(f"Delete score {self.id}?"):
+                    self.delete_score()
+                    return True
+            elif key == ord("2"):
+                if self.confirm(f"Delete entry {self.key} and all its files?"):
+                    self.delete_entry()
+                    return True
             else:
                 print(f"Unknown key: '{key}', press 'h' for help.")
 
     def save(self) -> None:
         self.kern_sheet.save_score(self.id, self.score)
         print(f"{self.score.page_count} pages reviewed and saved.")
+
+    def confirm(self, prompt: str) -> bool:
+        print(f"{prompt} (y/n)")
+        return cv2.waitKey() == ord("y")
+
+    def delete_score(self) -> None:
+        self.kern_sheet.delete_score(self.key, self.kern_sheet.id2score[self.id])
+        print(f"Deleted score {self.id} from the catalog.")
+
+    def delete_entry(self) -> None:
+        self.kern_sheet.delete_entry(self.key)
+        print(f"Deleted entry {self.key} and its files from the catalog.")
 
     KEY_NAMES = {
         81: "Left",
@@ -562,11 +579,14 @@ class StaffEditor:
             else:
                 return "???"
 
-        # These following three commands don't have actions:
+        # These following commands don't have actions:
         # they all quit the currrent editor, which actions can't do.
         print(f"{key_name(ord('q')):<8}Quits the editor.")
         print(f"{key_name(ord('n')):<8}Moves to next score.")
         print(f"{key_name(ord('1')):<8}Deletes this score from the catalog.")
+        print(
+            f"{key_name(ord('2')):<8}Deletes this entry and its files from the catalog."
+        )
         for key_code, action in self.actions.items():
             print(f"{key_name(key_code):<8}{action.help}")
 

@@ -453,6 +453,36 @@ class TestIoCommands:
 
         kern_sheet.save_score.assert_called_once_with(editor.id, editor.score)
 
+    def test_delete_score_removes_from_catalog(self) -> None:
+        kern_sheet = MagicMock()
+        editor = _editor(
+            [_page([_sys(100, 250, [10, 200, 400])])], kern_sheet=kern_sheet
+        )
+
+        editor.delete_score()  # '1'
+
+        kern_sheet.delete_score.assert_called_once_with(
+            editor.key, kern_sheet.id2score[editor.id]
+        )
+
+    def test_delete_entry_removes_entry(self) -> None:
+        kern_sheet = MagicMock()
+        editor = _editor(
+            [_page([_sys(100, 250, [10, 200, 400])])], kern_sheet=kern_sheet
+        )
+
+        editor.delete_entry()  # '2'
+
+        kern_sheet.delete_entry.assert_called_once_with(editor.key)
+
+    def test_confirm_true_only_on_y(self) -> None:
+        editor = _editor([_page([_sys(100, 250, [10, 200, 400])])])
+
+        with patch("kernsheet.editor.cv2.waitKey", return_value=ord("y")):
+            assert editor.confirm("Delete?") is True
+        with patch("kernsheet.editor.cv2.waitKey", return_value=ord("n")):
+            assert editor.confirm("Delete?") is False
+
     def test_recompute_bars_is_a_harmless_stub(self) -> None:
         editor = _editor([_page([_sys(100, 250, [10, 200, 400])])])
 

@@ -135,12 +135,47 @@ class KernSheet:
     def load_tokens(self, id: str) -> KernReader:
         return KernReader(self.tokens_path(self.id2key[id]))
 
+    def has_score(self, id: str) -> bool:
+        """True while ``id`` is a live catalog score; cleared by the deletes
+        below (and by deleting its whole entry), so callers holding a stale id
+        can skip it."""
+        return id in self.id2score
+
     def delete_score(self, key: str, score: KernScore) -> None:
+        """Remove a single score (one edition) from its entry, deleting its own
+        layout file. When it was the entry's last score, drop the whole entry via
+        :meth:`delete_entry`."""
         entry = self.catalog.entries.get(key)
-        if entry:
-            entry.scores = [s for s in entry.scores if s != score]
+        if entry is None:
+            return
+        entry.scores = [s for s in entry.scores if s != score]
+        self._unlink(self.layout_path(score))
+        self.id2score.pop(score.id, None)
+        self.id2key.pop(score.id, None)
+        if not entry.scores:
+            self.delete_entry(key)
+        else:
             self.save_catalog()
-        # TODO Delete removed score associated files.
+
+    def delete_entry(self, key: str) -> None:
+        """Remove an entry and the files it uniquely owns: each remaining score's
+        layout, plus the entry's ``.krn`` and tokens. Shared PDFs (referenced by
+        other entries) and the regenerable ``build/png`` cache are left alone."""
+        entry = self.catalog.entries.pop(key, None)
+        if entry is None:
+            return
+        for score in entry.scores:
+            self._unlink(self.layout_path(score))
+            self.id2score.pop(score.id, None)
+            self.id2key.pop(score.id, None)
+        self._unlink(self.kern_path(key))
+        self._unlink(self.tokens_path(key))
+        self.save_catalog()
+
+    @staticmethod
+    def _unlink(path: Path) -> None:
+        if path.is_file():
+            path.unlink()
 
     def check(self, verbose: bool = False) -> None:
         """Validate catalog integrity against the filesystem."""
