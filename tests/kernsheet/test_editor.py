@@ -24,8 +24,8 @@ def _sys(top: int, bottom: int, bars: list[int]) -> System:
         bar_numbers=[1],
         bars=list(bars),
         staves=[
-            Staff(box=Box((left, top), (right, top + third))),
-            Staff(box=Box((left, bottom - third), (right, bottom))),
+            Staff(box=Box(left, top, right, top + third)),
+            Staff(box=Box(left, bottom - third, right, bottom)),
         ],
     )
 
@@ -136,9 +136,9 @@ class TestResizeSystem:
                             bar_numbers=[1],
                             bars=[10, 500],
                             staves=[
-                                Staff(box=Box((10, 100), (500, 140))),
-                                Staff(box=Box((10, 200), (500, 240))),
-                                Staff(box=Box((10, 300), (500, 340))),
+                                Staff(box=Box(10, 100, 500, 140)),
+                                Staff(box=Box(10, 200, 500, 240)),
+                                Staff(box=Box(10, 300, 500, 340)),
                             ],
                         )
                     ]

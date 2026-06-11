@@ -23,7 +23,7 @@ def _page(page_number: int) -> Page:
                 bar_numbers=[1],
                 bars=[0, 10],
                 svg_bar_numbers=[1],
-                staves=[Staff(box=Box((0, 0), (10, 10)))],
+                staves=[Staff(box=Box(0, 0, 10, 10))],
             )
         ],
         validated=True,

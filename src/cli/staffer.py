@@ -624,7 +624,7 @@ def config_from_checkpoint(checkpoint_path: Path) -> StafferConfig:
 def unbox(size: tuple[int, int], t: Tensor) -> Box:
     left, top, right, bot = t.tolist()
     W, H = size
-    return Box((int(left * W), int(top * H)), (int(right * W), int(bot * H)))
+    return Box(int(left * W), int(top * H), int(right * W), int(bot * H))
 
 
 @click.command()

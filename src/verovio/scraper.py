@@ -78,7 +78,7 @@ class LayoutExtractor:
         bar_count = self.check_multirest(staff_group)
         return (
             1 if bar_count is None else bar_count,
-            Box((left, top), (right, bottom)),
+            Box(left, top, right, bottom),
         )
 
     def check_bar_number(self, measure_group: Element) -> int | None:
@@ -124,8 +124,9 @@ class LayoutExtractor:
         staves: list[Staff] = list()
         all_bars: list[list[int]] = list()
         for _, bar_boxes in sorted(boxes.items()):
+            first, last = bar_boxes[0], bar_boxes[-1]
             staves.append(
-                Staff(box=Box(bar_boxes[0].top_left, bar_boxes[-1].bot_right))
+                Staff(box=Box(first.left, first.top, last.right, last.bottom))
             )
             all_bars.append([bar_boxes[0].left, *(x.right for x in bar_boxes)])
         if not staves:

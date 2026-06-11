@@ -209,7 +209,7 @@ class NoterDataset(Dataset):
         right = max(left + 1, box.right + delta("right"))
         top = max(0, box.top + delta("top"))
         bottom = max(top + 1, box.bottom + delta("bot"))
-        return Box((left, top), (right, bottom))
+        return Box(left, top, right, bottom)
 
     def __getitem__(self, idx: int) -> tuple[Tensor, Tensor, Tensor]:
         while True:

@@ -108,7 +108,7 @@ class StaffEditor:
             box = staff.box
             top = box.top + i * delta
             bottom = box.bottom + (i + 1) * delta
-            staves.append(replace(staff, box=Box((box.left, top), (box.right, bottom))))
+            staves.append(replace(staff, box=Box(box.left, top, box.right, bottom)))
         self.replace_system(staves=staves)
 
     @property
@@ -387,8 +387,8 @@ class StaffEditor:
             bar_numbers=[],
             bars=[],
             staves=[
-                Staff(Box((top, left), (top + height, right))),
-                Staff(Box((bottom - height, left), (bottom, right))),
+                Staff(Box(left, top, right, top + height)),
+                Staff(Box(left, bottom - height, right, bottom)),
             ],
         )
 

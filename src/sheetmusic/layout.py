@@ -9,26 +9,37 @@ from utils import from_json
 type CenteredBox = tuple[float, float, float, float]
 
 
+def _box_to_disk(box: dict[str, Any]) -> dict[str, Any]:
+    """Serialise a Box dict to the on-disk (top_left, bot_right) point format."""
+    return {
+        "top_left": [box["left"], box["top"]],
+        "bot_right": [box["right"], box["bottom"]],
+    }
+
+
+def _box_from_disk(box: dict[str, Any]) -> dict[str, Any]:
+    """Parse the on-disk (top_left, bot_right) point format into Box fields."""
+    left, top = box["top_left"]
+    right, bottom = box["bot_right"]
+    return {"left": left, "top": top, "right": right, "bottom": bottom}
+
+
 @dataclass(frozen=True)
 class Box:
-    top_left: tuple[int, int]
-    bot_right: tuple[int, int]
+    left: int
+    top: int
+    right: int
+    bottom: int
 
     @property
-    def top(self) -> int:
-        return self.top_left[1]
+    def top_left(self) -> tuple[int, int]:
+        """Top-left corner as an (x, y) point (e.g. for cv2.rectangle)."""
+        return (self.left, self.top)
 
     @property
-    def bottom(self) -> int:
-        return self.bot_right[1]
-
-    @property
-    def left(self) -> int:
-        return self.top_left[0]
-
-    @property
-    def right(self) -> int:
-        return self.bot_right[0]
+    def bot_right(self) -> tuple[int, int]:
+        """Bottom-right corner as an (x, y) point (e.g. for cv2.rectangle)."""
+        return (self.right, self.bottom)
 
     @property
     def width(self) -> int:
@@ -39,7 +50,7 @@ class Box:
         return self.bottom - self.top
 
     def up(self, delta: int) -> "Box":
-        return Box((self.left, self.top - delta), (self.right, self.bottom - delta))
+        return Box(self.left, self.top - delta, self.right, self.bottom - delta)
 
     def to_cxcywh(self, image_width: int, image_height: int) -> CenteredBox:
         cx = (self.left + self.right) / 2 / image_width
@@ -50,11 +61,10 @@ class Box:
 
     def scale(self, w_scale: float, h_scale: float) -> "Box":
         return Box(
-            top_left=(int(self.top_left[0] * w_scale), int(self.top_left[1] * h_scale)),
-            bot_right=(
-                int(self.bot_right[0] * w_scale),
-                int(self.bot_right[1] * h_scale),
-            ),
+            int(self.left * w_scale),
+            int(self.top * h_scale),
+            int(self.right * w_scale),
+            int(self.bottom * h_scale),
         )
 
     def contains(self, xy: tuple[int, int]) -> bool:
@@ -69,7 +79,7 @@ class Box:
         top = int((cy - h / 2) * size[1])
         right = int((cx + w / 2) * size[0])
         bot = int((cy + h / 2) * size[1])
-        return Box((left, top), (right, bot))
+        return Box(left, top, right, bot)
 
 
 @dataclass(frozen=True)
@@ -117,8 +127,9 @@ class System:
     box: Box = field(init=False)
 
     def __post_init__(self) -> None:
+        first, last = self.staves[0].box, self.staves[-1].box
         object.__setattr__(
-            self, "box", Box(self.staves[0].box.top_left, self.staves[-1].box.bot_right)
+            self, "box", Box(first.left, first.top, last.right, last.bottom)
         )
 
     @property
@@ -156,6 +167,8 @@ class System:
     def asdict(self) -> dict[str, object]:
         obj = asdict(self)
         obj.pop("box", None)
+        for staff in obj["staves"]:
+            staff["box"] = _box_to_disk(staff["box"])
         return obj
 
     def scale(self, w_scale: float, h_scale: float) -> "System":
@@ -239,10 +252,13 @@ class Score:
 
     def asdict(self) -> dict[str, object]:
         obj = asdict(self)
-        # Hack out the 'box' attribute from all systems.
+        # Hack out the 'box' attribute from all systems; serialise staff boxes in
+        # the on-disk (top_left, bot_right) point format.
         for page in obj["pages"]:
             for system in page["systems"]:
                 system.pop("box", None)
+                for staff in system["staves"]:
+                    staff["box"] = _box_to_disk(staff["box"])
         return obj
 
     def resize(self, width: int, height: int) -> "Score":
@@ -250,4 +266,10 @@ class Score:
 
     @staticmethod
     def from_json(obj: Any) -> "Score":
+        # On-disk staff boxes use the (top_left, bot_right) point format; rewrite
+        # them into Box fields before generic dataclass deserialisation.
+        for page in obj["pages"]:
+            for system in page["systems"]:
+                for staff in system["staves"]:
+                    staff["box"] = _box_from_disk(staff["box"])
         return cast(Score, from_json(Score, obj))

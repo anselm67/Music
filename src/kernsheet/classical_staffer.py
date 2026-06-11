@@ -210,8 +210,8 @@ class ClassicalStaffer:
             bars = self._find_bars(v_ink[lines[0] : lines[-1], :])
             left = bars[0] if bars else 0
             right = bars[-1] if bars else image_width
-            treble = Staff(Box((left, lines[0]), (right, lines[4])))
-            bass = Staff(Box((left, lines[5]), (right, lines[9])))
+            treble = Staff(Box(left, lines[0], right, lines[4]))
+            bass = Staff(Box(left, lines[5], right, lines[9]))
             bar_count = max(len(bars) - 1, 0)
             bar_numbers = list(range(next_bar, next_bar + bar_count)) or [next_bar]
             next_bar += bar_count

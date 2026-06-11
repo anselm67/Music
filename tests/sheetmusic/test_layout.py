@@ -1,5 +1,4 @@
 from sheetmusic import Box, Page, Score, Staff, System
-from utils import from_json
 
 
 class TestScore:
@@ -8,7 +7,7 @@ class TestScore:
             bar_numbers=[1],
             bars=[1, 2],
             svg_bar_numbers=[],
-            staves=[Staff(box=Box((0, 0), (10, 10)))],
+            staves=[Staff(box=Box(0, 0, 10, 10))],
         )
         page = Page(
             page_number=1,
@@ -20,7 +19,7 @@ class TestScore:
         )
         score = Score(id="id", pages=[page])
         text = score.asdict()
-        saved = from_json(Score, text)
+        saved = Score.from_json(text)
         assert saved == score
 
     def test_computed_properties(self) -> None:
@@ -29,11 +28,11 @@ class TestScore:
             bars=[1, 2],
             svg_bar_numbers=[],
             staves=[
-                Staff(box=Box((0, 0), (10, 10))),
-                Staff(box=Box((10, 0), (20, 10))),
+                Staff(box=Box(0, 0, 10, 10)),
+                Staff(box=Box(10, 0, 20, 10)),
             ],
         )
-        assert system.box == Box((0, 0), (20, 10))
+        assert system.box == Box(0, 0, 20, 10)
         page = Page(
             page_number=1,
             image_width=10,
@@ -51,7 +50,7 @@ class TestScale:
             bar_numbers=[1],
             bars=[1, 2],
             svg_bar_numbers=[],
-            staves=[Staff(box=Box((0, 0), (10, 10)))],
+            staves=[Staff(box=Box(0, 0, 10, 10))],
         )
         page = Page(
             page_number=1,
@@ -69,5 +68,5 @@ class TestScale:
             assert p.system_count == s.system_count
             for ps, ss in zip(p.systems, s.systems):
                 assert ps.bar_count == ss.bar_count
-                assert ss.box == Box((0, 0), (20, 20))
+                assert ss.box == Box(0, 0, 20, 20)
                 assert ss.bars == [x * 2 for x in ps.bars]
