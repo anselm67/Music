@@ -96,6 +96,21 @@ class StaffEditor:
         ]
         self.page.systems[self.system_index] = replace(self.system, staves=new_staves)
 
+    def resize_system(self, delta: int) -> None:
+        # Grows/shrinks the system downward, spreading the height change equally:
+        # every staff's height changes by delta px, and staff i is shifted down by
+        # i*delta so the staves stay stacked without overlap. The system top stays
+        # fixed; the bottom moves by staff_count * delta.
+        if self.system_index < 0 or self.system.staff_count == 0:
+            return
+        staves = []
+        for i, staff in enumerate(self.system.staves):
+            box = staff.box
+            top = box.top + i * delta
+            bottom = box.bottom + (i + 1) * delta
+            staves.append(replace(staff, box=Box((box.left, top), (box.right, bottom))))
+        self.replace_system(staves=staves)
+
     @property
     def bar_number(self) -> int:
         bar_number = self.bar_offset
@@ -635,15 +650,15 @@ class StaffEditor:
             Action("p", self.prev, "Moves to previous page."),
             Action("j", lambda: self.move_bar(-2), "Moves the selected bar left."),
             Action("l", lambda: self.move_bar(2), "Moves the selected bar right."),
-            Action(  # TODO extend bottom of last system's staff
+            Action(
                 "e",
-                lambda: self.replace_system(bottom=self.system.bottom + 1),
+                lambda: self.resize_system(1),
                 "Extends the selected system down.",
             ),
-            Action(  # TODO reduce bottom of last system staff
+            Action(
                 "r",
-                lambda: self.replace_system(bottom=self.system.bottom - 1),
-                "Shrinks the selected staff up.",
+                lambda: self.resize_system(-1),
+                "Shrinks the selected system up.",
             ),
             Action(
                 "i",
