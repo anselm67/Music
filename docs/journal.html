@@ -167,7 +167,7 @@
 </article>
 
 <!-- ── PDMX-rehearsal mixing to fight KernSheet catastrophic forgetting ── -->
-<article class="entry">
+<article class="entry" id="rehearsal-mixing">
   <h2>Rehearsal mixing: PDMX as a secondary stream in every KernSheet fine-tune</h2>
   <div class="entry-meta">
     <span>2026-06-11</span>
@@ -237,10 +237,13 @@
     So rehearsal is not a KernSheet-vs-PDMX trade-off here — it is a strict improvement over the
     KS-only fine-tune that <em>also</em> recovers most of the forgotten synthetic competence. The
     same <code>--kern-sheet</code> path now rolls out across the pipeline: the
-    <strong>noter</strong> mixed fine-tune is running, the <strong>scorer</strong> joint fine-tune
-    (third forgetting site, detector unfrozen) follows on the same flag. Caveat banked: KernSheet
-    is genuinely harder, so rehearsal narrows the gap rather than erasing it — the
-    forgetting/overfit component is what it removes.
+    <strong>noter</strong> mixed fine-tune (<code>debussy-mixed</code>, 67% KernSheet) reproduces the
+    result — PDMX free-running recovers <strong>93.4&nbsp;→&nbsp;96.8%</strong> while KernSheet holds
+    flat (90.7&nbsp;→&nbsp;90.9%), the same close-the-forgetting-at-no-target-cost shape the staffer
+    showed (see the <a href="noter-training.html#run-debussy-mixed">noter card</a>). The
+    <strong>scorer</strong> joint fine-tune (third forgetting site, detector unfrozen) follows on the
+    same flag. Caveat banked: KernSheet is genuinely harder, so rehearsal narrows the gap rather than
+    erasing it — the forgetting/overfit component is what it removes.
   </p>
 </article>
 

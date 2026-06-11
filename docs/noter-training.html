@@ -669,6 +669,25 @@
     <div class="result-box positive"><strong>Per-image norm wins on every KernSheet metric — the real-scan payoff the staffer also showed.</strong> The trade is in-domain: per-image <em>costs</em> 0.15% on the PDMX base (99.41% vs 99.56%), expected since PDMX is near-binary so per-image ≈ global there and PDMX was never the target. On KernSheet the sign flips and grows — the FT passed berlioz's converged val by epoch 7 and finished ahead on teacher-forced val (+0.17% acc, −0.0068 loss) <em>and</em> the honest free-running number (90.7% vs 89.4%, +1.3%). Unlike <span class="tag">berlioz</span> (a letterbox wash that was reverted), <span class="tag">debussy</span> is the keeper: it is the production KernSheet noter and the noter half of the per-image <span class="tag">scorer</span> re-merge.</div>
   </div>
 
+  <!-- ════════════════════════════════════════════ debussy-mixed -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-debussy-mixed"><span class="tag">debussy-mixed</span> — PDMX rehearsal mix, no catastrophic forgetting</h2>
+      <span class="session-meta">2026-06-11 · tag <code>train/debussy-mixed</code> · the noter site of the <a href="journal.html#rehearsal-mixing">rehearsal-mixing</a> rollout</span>
+      <span class="badge badge-green">both domains</span>
+    </div>
+    <p>The KS-only fine-tune <span class="tag">debussy-kernsheet</span> buys real-scan accuracy but <strong>catastrophically forgets PDMX</strong> — what 500k synthetic pages taught erodes because the fine-tune never sees it again. The fix is <strong>rehearsal</strong>: mix PDMX back into the fine-tune stream at the <code>Source</code> layer so the network keeps practising synthetic while it learns real. Same per-image-norm recipe as <span class="tag">debussy</span>, re-fine-tuned from the <span class="tag">debussy</span> PDMX base with <code>--kern-sheet&nbsp;&lt;ROOT&gt;&nbsp;0.67</code> — each epoch is 67% KernSheet + 33% PDMX, steps/epoch unchanged. The <a href="staffer-training.html#run-debussy-mixed">staffer</a> validated the same design first.</p>
+    <table class="summary-table">
+      <thead><tr><th>Free-running similarity, by domain</th><th><span class="tag">debussy-kernsheet</span> (KS-only)</th><th><span class="tag">debussy-mixed</span> (67% KS / 33% PDMX)</th></tr></thead>
+      <tbody>
+        <tr><td>PDMX</td><td>93.4%</td><td><strong>96.8%</strong></td></tr>
+        <tr><td>KernSheet</td><td>90.7%</td><td><strong>90.9%</strong></td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">Free-running = <code>noter [--kern-home … | --csv System2.csv] eval &lt;name&gt; --size 1024</code> (greedy edit-distance similarity). PDMX: mixed avg 96.8% (min 25.0%), KS-only avg 93.4% (min 15.8%). KernSheet: mixed avg 90.9%; KS-only 90.7% is the on-record <code>--size 500</code> figure (read as tied). Both eval'd 2026-06-11. The run's own teacher-forced val (blended 0.67/0.33 stream, not per-domain) converged to 97.81% acc / 0.0907 loss at epoch 11.</p>
+    <div class="result-box positive"><strong>Rehearsal closes the forgetting at zero KernSheet cost.</strong> PDMX recovers <strong>+3.4 pp</strong> (93.4 → 96.8), back within ~1 pp of the un-fine-tuned base, while KernSheet holds flat (90.7 → 90.9, within noise). So this is not a KernSheet-vs-PDMX trade — it is a strict improvement over the KS-only fine-tune that <em>also</em> restores most of the forgotten synthetic competence. <span class="tag">debussy-mixed</span> supersedes <span class="tag">debussy-kernsheet</span> as the production KernSheet noter, and is the noter half of the rehearsal-mixed <span class="tag">scorer</span> re-merge.</div>
+  </div>
+
 </main>
 
 <div id="chart-modal" class="chart-modal" role="dialog" aria-modal="true">
