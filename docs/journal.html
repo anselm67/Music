@@ -93,6 +93,79 @@
      following the format of the entries that follow. Keep newest-first order.
      ════════════════════════════════════════════════════════════════════════ -->
 
+<!-- ── GT precision: the stave-height invariant probe ── -->
+<article class="entry">
+  <h2>The stave-height invariant is exact in PDMX but loose in KernSheet — and the slack looks like GT noise</h2>
+  <div class="entry-meta">
+    <span>2026-06-11</span>
+    <span class="badge deferred">Finding</span>
+    <span class="ref">throwaway GT probe · cf. <a href="staffer-training.html#run-debussy-mixed">staffer-training</a></span>
+  </div>
+
+  <h3>Context</h3>
+  <p>
+    A standing idea for the staffer: every staff on a printed page is engraved at one rastral
+    size, so <strong>stave heights within a page should be constant</strong> — an unused structural
+    prior we could lean on (a soft height-consistency loss, or even
+    <code>bottom = top + shared_height</code>). Before building anything, the honest first move is
+    to check the premise <em>in the ground truth itself</em>. A throwaway script measured the
+    within-page coefficient of variation (CV = std/mean, scale-free) of stave heights
+    (<code>box.bottom − box.top</code>) on ~400 sampled scores from each of PDMX and KernSheet.
+  </p>
+
+  <div class="outcome">
+    <strong>PDMX: the invariant is exact.</strong> Stave-height CV is 0.00% from median through
+    p99; 99.2% of multi-staff pages sit under a 2% CV (4,869 staves, 646 pages). Verovio renders
+    every staff identically — within a page the heights are pixel-for-pixel equal.
+  </div>
+  <table>
+    <thead><tr><th>within-page stave height</th><th>PDMX (synthetic)</th><th>KernSheet (real scans)</th></tr></thead>
+    <tbody>
+      <tr><td>CV — median / p90 / p99</td><td>0.00 / 0.00 / 0.00 %</td><td><strong>2.89 / 6.33 / 10.60 %</strong></td></tr>
+      <tr><td>(max−min)/mean — median / p99</td><td>0.00 / 0.00 %</td><td><strong>7.8 / 29.6 %</strong></td></tr>
+      <tr><td>pages with CV &lt; 2%</td><td>99.2%</td><td>34.0%</td></tr>
+      <tr><td>median staff height</td><td>72 px</td><td>45 px</td></tr>
+    </tbody>
+  </table>
+
+  <h3>The uncomfortable reading</h3>
+  <p>
+    On KernSheet the invariant is only <em>approximately</em> true: the median within-page spread
+    is <strong>7.8% ≈ 3.5 px on a 45 px staff</strong>, with a real tail (p99 spread ~30%, ~13 px).
+    The discomfort is the magnitude — that ~3.5 px is <strong>the same order as the ~3.5 px stave
+    error the model posts on KernSheet</strong>. Two facts make the likely cause
+    <strong>GT imprecision, not the model</strong>: (1) the rastral size on a flatbed-scanned
+    printed score is <em>physically</em> constant, so genuine height variation should be ≈0; (2) the
+    KernSheet boxes are hand-placed/manually-validated, and the spread we see is exactly what
+    pixel-level annotation jitter produces. So part of what we've been charging to the detector on
+    KernSheet may in fact be noise baked into the labels — the GT is less precise than it was
+    assumed to be.
+  </p>
+  <p>
+    A secondary structural note fell out of the same probe: even in PDMX, <strong>system</strong>
+    heights vary among systems sharing a staff_count (p99 CV 10%) — the variation lives in the
+    inter-staff gaps, not the staves. So the invariant is a <em>stave</em> property only; any prior
+    must target stave heights, never system heights.
+  </p>
+
+  <h3>Consequences</h3>
+  <ul>
+    <li><strong>A KernSheet stave-error floor.</strong> If the labels carry ~3.5 px of height
+      jitter, sub-~3 px stave-error numbers on KernSheet should be read with suspicion — at that
+      scale we may be measuring annotation noise, not model error. The PDMX numbers stay trustworthy.</li>
+    <li><strong>Hard height-coupling is off the table</strong> — it would be perfect for PDMX but
+      would fight whatever real (or noisy) variation KernSheet carries. A <em>soft</em>
+      consistency regulariser remains viable and could double as a label denoiser (pulling outlier
+      box heights toward the page mean), <em>if</em> the spread is annotation noise rather than
+      true scan skew.</li>
+    <li><strong>Open question this probe can't settle:</strong> real scan geometry (skew,
+      perspective) vs. annotation jitter. On flat printed scans the balance tilts toward
+      annotation, but it's unconfirmed. A cheap follow-up: a height-consistency check in the
+      KernSheet editor that flags pages whose stave heights disperse beyond a few percent — both a
+      QA pass on the existing GT and the experiment that separates the two causes.</li>
+  </ul>
+</article>
+
 <!-- ── PDMX-rehearsal mixing to fight KernSheet catastrophic forgetting ── -->
 <article class="entry">
   <h2>Rehearsal mixing: PDMX as a secondary stream in every KernSheet fine-tune</h2>
