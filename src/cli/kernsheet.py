@@ -204,7 +204,7 @@ def detect(ctx: ClickContext, prefix: str, write: bool, width: int) -> None:
 def stats(ctx: ClickContext) -> None:
     """Layout statistics over the migrated KernSheet scores."""
     score_count = page_count = system_count = stave_count = bar_count = 0
-    score_failed = 0
+    score_failed = valid_page_count = 0
     systems_per_page: Counter = Counter()
     staves_per_system: Counter = Counter()
     bars_per_system: Counter = Counter()
@@ -218,6 +218,8 @@ def stats(ctx: ClickContext) -> None:
         score_count += 1
         for page in score.pages:
             page_count += 1
+            if page.validated:
+                valid_page_count += 1
             systems_per_page[len(page.systems)] += 1
             for system in page.systems:
                 system_count += 1
@@ -228,6 +230,7 @@ def stats(ctx: ClickContext) -> None:
 
     print(f"{score_count:,} scores - {score_failed} didn't load:")
     print(f"  Page count: {page_count:,}")
+    print(f" Valid pages: {valid_page_count:,} ({page_count - valid_page_count:,} not)")
     print(f"System count: {system_count:,}")
     print(f" Staff count: {stave_count:,}")
     print(f"   Bar count: {bar_count:,}")

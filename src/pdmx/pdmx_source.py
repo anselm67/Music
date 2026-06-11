@@ -14,7 +14,7 @@ from torch import Tensor
 from torchvision.io import decode_image
 
 from kern import KernReader
-from sheetmusic import Page, Score
+from sheetmusic import MixedSource, Page, Score, Source
 
 from .pdmx import PDMX
 
@@ -22,6 +22,14 @@ from .pdmx import PDMX
 class PdmxSource:
     def __init__(self, pdmx: PDMX) -> None:
         self.pdmx = pdmx
+
+    def mix(self, secondary: Source, fraction: float) -> MixedSource:
+        """Wrap this PDMX source as the primary of a rehearsal :class:`MixedSource`.
+
+        ``fraction`` is ``secondary``'s share of each epoch (0.5 -> half
+        ``secondary``, half PDMX); see :class:`MixedSource`.
+        """
+        return MixedSource(self, secondary, fraction)
 
     def scores(self) -> Iterator[Score]:
         for _, row in self.pdmx.df.iterrows():

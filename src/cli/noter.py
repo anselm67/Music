@@ -412,6 +412,17 @@ def grow_checkpoint(src_ckpt: Path, out_ckpt: Path, vocab_path: Path) -> None:
     "the larger KernSheet vocab to pre-train a PDMX base that fine-tunes on "
     "KernSheet without checkpoint surgery (the extra rows stay unlearned).",
 )
+@click.option(
+    "--kern-sheet",
+    "kern_sheet",
+    type=(click.Path(exists=True, file_okay=False, path_type=Path), float),
+    default=None,
+    help="Rehearsal fine-tune: mix a KernSheet corpus into the (PDMX) training "
+    "stream to fight catastrophic forgetting. Takes KERNSHEET_ROOT and a MIX "
+    "fraction in (0,1) = KernSheet's share of each epoch (0.5 -> half KS, half "
+    "PDMX). PDMX stays primary from the global options; pair with the combined "
+    "KernSheet --vocab.",
+)
 @click.pass_obj
 def train(
     ctx: ClickContext,
@@ -427,6 +438,7 @@ def train(
     warmup_steps: int,
     jitter: float | None,
     vocab_path: Path | None,
+    kern_sheet: tuple[Path, float] | None,
 ) -> None:
     """Trains and/or resumes training of a Noter model instance.
 
@@ -552,9 +564,24 @@ def train(
                 ) from e
             logging.info(f"Initialized weights from {init_from}")
 
+    source = ctx.source
+    if kern_sheet is not None:
+        if not isinstance(ctx.source, PdmxSource):
+            raise click.UsageError(
+                "--kern-sheet mixes KernSheet into a PDMX run; drop --kern-home "
+                "so PDMX is the primary source."
+            )
+        ks_root, mix = kern_sheet
+        if not 0.0 < mix < 1.0:
+            raise click.UsageError(f"--kern-sheet MIX must be in (0, 1), got {mix}")
+        source = ctx.source.mix(KernSheetSource(KernSheet(ks_root)), mix)
+        logging.info(
+            f"Rehearsal mix: {mix:.2f} KernSheet ({ks_root}) + {1 - mix:.2f} PDMX"
+        )
+
     trainer.fit(
         module,
-        NoterDataModule(config, ctx.source, vocab, num_workers=num_workers),
+        NoterDataModule(config, source, vocab, num_workers=num_workers),
         ckpt_path=ckpt_path,
     )
 
