@@ -24,10 +24,7 @@ class KernSheetSource:
 
     def scores(self) -> Iterator[Score]:
         for _, score in self.kern_sheet.items():
-            # is_file (not exists): an unmigrated score has an empty json_path,
-            # whose layout_path resolves to the layout/ directory — which exists.
-            if self.kern_sheet.layout_path(score).is_file():
-                yield self.kern_sheet.load_score(score.id)
+            yield self.kern_sheet.load_score(score.id)
 
     def score(self, id: str) -> Score:
         return self.kern_sheet.load_score(id)
