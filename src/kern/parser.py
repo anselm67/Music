@@ -133,10 +133,11 @@ class KernSpineHolder[T](SpineHolder):
             return Bar(
                 text,
                 barno=barno,
-                is_final=(is_final == "=" or additional == "||"),
+                is_final=(is_final == "="),
                 is_repeat_start=(additional.endswith(":")),
                 is_repeat_end=(additional.startswith(":")),
                 is_invisible=(additional == "-" and barno < 0),
+                is_double=("||" in additional),
             )
         elif text == ".":
             return Continue()

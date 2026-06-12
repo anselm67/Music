@@ -25,8 +25,8 @@ class Vocab:
     _i2tok: dict[int, str]
 
     # Bar tokens carry a bar number that we strip — the model only needs to know
-    # whether it's a single or double barline, not which bar number it is.
-    BAR_RE = re.compile(r"^(?P<base>==?)(?P<barno>\d+)$")
+    # whether it's a single, final, or double barline, not which bar number it is.
+    BAR_RE = re.compile(r"^(?P<base>==?)(?P<barno>\d+)?(?P<dbl>\|\|)?$")
 
     def __init__(self, tok2i: dict[str, int]):
         self._tok2i = tok2i
@@ -38,7 +38,7 @@ class Vocab:
     @staticmethod
     def _strip_bar_number(str_tok: str) -> str:
         if m := Vocab.BAR_RE.match(str_tok):
-            return m.group("base")
+            return m.group("base") + (m.group("dbl") or "")
         return str_tok
 
     def encode(self, str_tok: str) -> int:

@@ -90,6 +90,62 @@ def test_instrument_all_spines_skipped(tmp_path: Path) -> None:
     assert not any("Instr:" in line for line in reader.lines)
 
 
+def test_unnumbered_double_barline_is_a_glyph(tmp_path: Path) -> None:
+    """An un-numbered `=||` is a distinct double-bar glyph: it neither inherits a
+    bar number nor advances the count, so it must not collide with the next bar."""
+    kern = """
+**kern
+*clefG2
+*M4/4
+=1
+4r
+=||
+=2
+4r
+==
+""".strip()
+    reader = tokenize_input(tmp_path, kern)
+    assert reader.lines == [
+        "clef-GG",
+        "4/4",
+        "=1",
+        "rest/4",
+        "=||",
+        "=2",
+        "rest/4",
+        "==3",
+    ]
+
+
+def test_numbered_double_barline_keeps_its_number(tmp_path: Path) -> None:
+    """A numbered `=2||` is a real measure boundary: the number must survive (for
+    score alignment) while still rendering as a double bar, never as final `==`."""
+    kern = """
+**kern
+*clefG2
+*M4/4
+=1
+4r
+=2||
+4r
+=3
+4r
+==
+""".strip()
+    reader = tokenize_input(tmp_path, kern)
+    assert reader.lines == [
+        "clef-GG",
+        "4/4",
+        "=1",
+        "rest/4",
+        "=2||",
+        "rest/4",
+        "=3",
+        "rest/4",
+        "==4",
+    ]
+
+
 def test_instrument_mixed_with_spine_path_skipped(tmp_path: Path) -> None:
     """Rows mixing instrument and spine-path tokens must not appear in output."""
     kern = """

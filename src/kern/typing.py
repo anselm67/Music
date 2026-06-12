@@ -196,6 +196,7 @@ class Bar(Token):
     is_repeat_start: bool
     is_repeat_end: bool
     is_invisible: bool
+    is_double: bool = False
 
     def requires_valid_bar_number(self) -> bool:
         return not (
@@ -203,6 +204,7 @@ class Bar(Token):
             or self.is_repeat_start
             or self.is_repeat_end
             or self.is_invisible
+            or self.is_double
         )
 
 

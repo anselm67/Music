@@ -83,6 +83,8 @@ class TokenFormatter:
             barno_str = ""
         if bar.is_final:
             return f"=={barno_str}"
+        elif bar.is_double:
+            return f"={barno_str}||"
         else:
             return f"={barno_str}"
 
@@ -301,7 +303,7 @@ class NormHandler(BaseHandler):
             # TODO We're not supposed to see any more bars, so it's ok
             # not to incrememt self.bar_number
 
-            if any((bar.barno >= 0 for bar in bars)):
+            if any((bar.barno >= 0 or bar.is_double for bar in bars)):
                 return list(zip([spine for spine, _ in tokens], bars))
             else:
                 return None
