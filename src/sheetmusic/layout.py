@@ -9,21 +9,6 @@ from utils import from_json
 type CenteredBox = tuple[float, float, float, float]
 
 
-def _box_to_disk(box: dict[str, Any]) -> dict[str, Any]:
-    """Serialise a Box dict to the on-disk (top_left, bot_right) point format."""
-    return {
-        "top_left": [box["left"], box["top"]],
-        "bot_right": [box["right"], box["bottom"]],
-    }
-
-
-def _box_from_disk(box: dict[str, Any]) -> dict[str, Any]:
-    """Parse the on-disk (top_left, bot_right) point format into Box fields."""
-    left, top = box["top_left"]
-    right, bottom = box["bot_right"]
-    return {"left": left, "top": top, "right": right, "bottom": bottom}
-
-
 @dataclass(frozen=True)
 class Box:
     left: int
@@ -167,8 +152,6 @@ class System:
     def asdict(self) -> dict[str, object]:
         obj = asdict(self)
         obj.pop("box", None)
-        for staff in obj["staves"]:
-            staff["box"] = _box_to_disk(staff["box"])
         return obj
 
     def scale(self, w_scale: float, h_scale: float) -> "System":
@@ -252,13 +235,10 @@ class Score:
 
     def asdict(self) -> dict[str, object]:
         obj = asdict(self)
-        # Hack out the 'box' attribute from all systems; serialise staff boxes in
-        # the on-disk (top_left, bot_right) point format.
+        # Hack out the derived 'box' attribute from all systems.
         for page in obj["pages"]:
             for system in page["systems"]:
                 system.pop("box", None)
-                for staff in system["staves"]:
-                    staff["box"] = _box_to_disk(staff["box"])
         return obj
 
     def resize(self, width: int, height: int) -> "Score":
@@ -266,10 +246,4 @@ class Score:
 
     @staticmethod
     def from_json(obj: Any) -> "Score":
-        # On-disk staff boxes use the (top_left, bot_right) point format; rewrite
-        # them into Box fields before generic dataclass deserialisation.
-        for page in obj["pages"]:
-            for system in page["systems"]:
-                for staff in system["staves"]:
-                    staff["box"] = _box_from_disk(staff["box"])
         return cast(Score, from_json(Score, obj))

@@ -390,6 +390,30 @@ FORCE=1  scripts/train_scorer_pipeline.sh my-model     # retrain stages even if 
     items).</p>
   </div>
 
+  <div class="script">
+    <div class="script-header">
+      <span class="script-name">migrate_box_ltrb.py</span>
+      <span class="badge badge-rose">migration</span>
+      <span class="badge badge-amber">pdmx</span>
+      <span class="badge badge-amber">kernsheet</span>
+    </div>
+    <p class="script-desc">
+      One-shot on-disk migration rewriting every staff box in the layout JSON from
+      the old point format <code>{"top_left":[l,t],"bot_right":[r,b]}</code> to flat
+      <code>{"left":l,"top":t,"right":r,"bottom":b}</code>, matching the
+      <code>Box</code> ltrb refactor and letting the serialisation shim in
+      <code>sheetmusic.layout</code> be deleted. Operates directly on the JSON
+      (independent of that shim), is <strong>idempotent</strong> (already-flat boxes
+      are left untouched) and skips empty / unparseable files. Re-dumps with
+      <code>indent=2</code> so only the box keys change. Already run against both
+      corpora (PDMX ~253k, KernSheet 581).
+    </p>
+    <div class="label">Usage</div>
+<pre>uv run python scripts/migrate_box_ltrb.py --dry-run        # report counts, write nothing
+uv run python scripts/migrate_box_ltrb.py                  # migrate PDMX + KernSheet layout dirs
+uv run python scripts/migrate_box_ltrb.py --dry-run ROOT   # restrict to one or more roots</pre>
+  </div>
+
 </main>
 
 <script>
