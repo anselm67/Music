@@ -33,6 +33,10 @@ class Action:
 class StaffEditor:
     STAFFER_WINDOW = "StaffEditor"
 
+    # X11 keysym low-bytes for bare modifier presses (Shift/Ctrl/Caps/Alt/Super),
+    # which cv2.waitKey reports on their own — ignored rather than warned about.
+    MODIFIER_KEYS = frozenset(range(225, 237))
+
     kern_sheet: KernSheet
 
     # Data being edited.
@@ -315,16 +319,6 @@ class StaffEditor:
                 color,
                 thickness,
             )
-        for i, finding in enumerate(self.page_findings(page)):
-            cv2.putText(
-                rgb_image,
-                f"! {finding.review}: {finding.message}",
-                (10, 30 + 30 * i),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                fontScale=0.7,
-                color=RED,
-                thickness=2,
-            )
         return rgb_image
 
     def get_bar_offset(self, page_index: int = -1) -> int:
@@ -342,6 +336,18 @@ class StaffEditor:
 
     def get(self) -> Tuple[MatLike, Page]:
         return self.images[self.page_index], self.page
+
+    def print_page_status(self) -> None:
+        """One-liner shown on page entry: status, flagged reviews, acknowledged ones."""
+        parts = [
+            f"Page {self.page.page_number}/{self.score.page_count}: "
+            f"{self.page.status.value}"
+        ]
+        if firing := sorted(f.review for f in self.page_findings()):
+            parts.append(f"flagged: {', '.join(firing)}")
+        if self.page.reviewed:
+            parts.append(f"oked: {', '.join(self.page.reviewed)}")
+        print(" | ".join(parts))
 
     def next(self) -> None:
         if self.page_index + 1 >= self.score.page_count:
@@ -363,12 +369,14 @@ class StaffEditor:
             self.bar_index = -1
         else:
             self.bar_index = 0
+        self.print_page_status()
 
     def prev(self, select_last: bool = False) -> None:
         if self.page_index - 1 < 0:
             print("Beginning of score.")
             return
         self.page_index -= 1
+        self.print_page_status()
         system_count = self.page.system_count
         if system_count == 0:
             self.system_index = -1
@@ -621,6 +629,7 @@ class StaffEditor:
                 self._reset_selection()
             else:
                 print(f"Page {start_page_number} not found; starting at first page.")
+        self.print_page_status()
 
         while True:
             self.update_bar_offset()
@@ -646,6 +655,8 @@ class StaffEditor:
                 if self.confirm(f"Delete entry {self.key} and all its files?"):
                     self.delete_entry()
                     return True
+            elif key in self.MODIFIER_KEYS:
+                pass  # bare Shift/Ctrl/Alt press on its own; ignore silently
             else:
                 print(f"Unknown key: '{key}', press 'h' for help.")
 
@@ -718,6 +729,12 @@ class StaffEditor:
     def title(self) -> None:
         self.clear()
         print("Fast move on!" if self.fast_mode else "Fast mode off.")
+        print(f"Page {self.page.page_number} status: {self.page.status.value}")
+        findings = self.page_findings()
+        if findings:
+            print(f"{len(findings)} review finding(s) on this page:")
+            for finding in findings:
+                print(f"  ! {finding.review}: {finding.message}")
         print(f"Header for tokens - {self.kern.bar_count} bars")
         for line in self.kern.header():
             print(line)
