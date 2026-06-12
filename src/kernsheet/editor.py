@@ -97,18 +97,26 @@ class StaffEditor:
         self.page.systems[self.system_index] = replace(self.system, staves=new_staves)
 
     def resize_system(self, delta: int) -> None:
-        # Grows/shrinks the system downward, spreading the height change equally:
-        # every staff's height changes by delta px, and staff i is shifted down by
-        # i*delta so the staves stay stacked without overlap. The system top stays
-        # fixed; the bottom moves by staff_count * delta.
+        # Grows/shrinks the system from the bottom, keeping the top anchored and
+        # the internal proportions (staff heights and gaps) constant. The system
+        # top (staves[0].top) is fixed; the new height is the old height + delta;
+        # every staff edge's offset below the top is scaled by the same factor, so
+        # the bottom moves by delta and the staff/gap ratios are preserved.
         if self.system_index < 0 or self.system.staff_count == 0:
             return
+        top = self.system.staves[0].top
+        height = self.system.staves[-1].bottom - top
+        if height <= 0 or height + delta <= 0:
+            return
+        factor = (height + delta) / height
         staves = []
-        for i, staff in enumerate(self.system.staves):
+        for staff in self.system.staves:
             box = staff.box
-            top = box.top + i * delta
-            bottom = box.bottom + (i + 1) * delta
-            staves.append(replace(staff, box=Box(box.left, top, box.right, bottom)))
+            new_top = top + round((box.top - top) * factor)
+            new_bottom = top + round((box.bottom - top) * factor)
+            staves.append(
+                replace(staff, box=Box(box.left, new_top, box.right, new_bottom))
+            )
         self.replace_system(staves=staves)
 
     @property
@@ -379,16 +387,46 @@ class StaffEditor:
         else:
             return 128
 
+    def _system_sides(self) -> tuple[int, int]:
+        # Left/right barline x-positions for a new system: the average sides of
+        # the page's existing systems, or the page width minus a margin if none.
+        sides = [(s.bars[0], s.bars[-1]) for s in self.page.systems if len(s.bars) > 0]
+        if sides:
+            left = sum(left for left, _ in sides) // len(sides)
+            right = sum(right for _, right in sides) // len(sides)
+            return left, right
+        margin = 25
+        return margin, self.image.shape[1] - margin
+
+    def _staff_metrics(self) -> tuple[int, int] | None:
+        # Average staff height and inter-staff gap across the page's systems, or
+        # None if the page has no multi-staff system to derive a gap from.
+        heights = [
+            staff.bottom - staff.top for s in self.page.systems for staff in s.staves
+        ]
+        gaps = [
+            s.staves[i + 1].top - s.staves[i].bottom
+            for s in self.page.systems
+            for i in range(len(s.staves) - 1)
+        ]
+        if not heights or not gaps:
+            return None
+        return sum(heights) // len(heights), sum(gaps) // len(gaps)
+
     def _make_system(self, top: int, bottom: int) -> System:
-        # TODO Don't commit this!!!
-        height = self.system_height() // 3
-        left, right = 10, 500
+        left, right = self._system_sides()
+        metrics = self._staff_metrics()
+        if metrics is not None:
+            staff_height, gap = metrics
+            bottom = top + 2 * staff_height + gap
+        else:
+            staff_height = (bottom - top) // 3
         return System(
             bar_numbers=[],
-            bars=[],
+            bars=[left, right],
             staves=[
-                Staff(Box(left, top, right, top + height)),
-                Staff(Box(left, bottom - height, right, bottom)),
+                Staff(Box(left, top, right, top + staff_height)),
+                Staff(Box(left, bottom - staff_height, right, bottom)),
             ],
         )
 
@@ -404,6 +442,8 @@ class StaffEditor:
                 self.system_index + 1, self._make_system(ypos, ypos + height)
             )
             self.system_index += 1
+        # The new system starts with side bars, so select its first one.
+        self.bar_index = 0 if self.system.bar_count > 0 else -1
 
     def add_bar(self, offset: int = -1) -> None:
         bars = self.system.bars.copy()
@@ -439,11 +479,12 @@ class StaffEditor:
             self.system_index = -1
             self.staff_index = -1
             self.bar_index = -1
-        elif self.system.staff_count == 0:
+            return
+        self.system_index = min(self.system_index, self.page.system_count - 1)
+        if self.system.staff_count == 0:
             self.staff_index = -1
             self.bar_index = -1
         else:
-            self.system_index = max(0, self.system_index - 1)
             self.staff_index = 0
             self.bar_index = 0
 
@@ -679,12 +720,12 @@ class StaffEditor:
             Action("l", lambda: self.move_bar(2), "Moves the selected bar right."),
             Action(
                 "e",
-                lambda: self.resize_system(1),
+                lambda: self.resize_system(2),
                 "Extends the selected system down.",
             ),
             Action(
                 "r",
-                lambda: self.resize_system(-1),
+                lambda: self.resize_system(-2),
                 "Shrinks the selected system up.",
             ),
             Action(
