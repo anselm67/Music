@@ -742,6 +742,7 @@ class StaffEditor:
 
     def title(self) -> None:
         self.clear()
+        print(f"id : {self.id}")
         print("Fast move on!" if self.fast_mode else "Fast mode off.")
         print(f"Page {self.page.page_number} status: {self.page.status.value}")
         findings = self.page_findings()
