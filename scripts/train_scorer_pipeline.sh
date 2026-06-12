@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 #
-# Train a full scorer from scratch: PDMX base + KernSheet fine-tune for both the
-# staffer and the noter, then merge the two fine-tuned branches and fine-tune the
-# scorer on KernSheet. Given one base NAME the five sub-models are named:
+# Train a full scorer from scratch: PDMX base + rehearsal-mix fine-tune for both
+# the staffer and the noter, then merge the two fine-tuned branches and fine-tune
+# the scorer on the same mix. Given one base NAME the five sub-models are named:
 #
-#   staffer/<NAME>              noter/<NAME>              (PDMX bases, shared name)
-#   staffer/<NAME>-kernsheet    noter/<NAME>-kernsheet    (KernSheet fine-tunes)
-#   scorer/<SCORER_NAME>        (the merged end-to-end model; defaults to <NAME>)
+#   staffer/<NAME>           noter/<NAME>           (PDMX bases, shared name)
+#   staffer/<NAME>-mixed     noter/<NAME>-mixed     (rehearsal-mix fine-tunes)
+#   scorer/<SCORER_NAME>     (the merged end-to-end model; defaults to <NAME>)
+#
+# Fine-tuning is a PDMX-primary REHEARSAL MIX (`--kern-sheet <KS> $MIX`), not a
+# KernSheet-only pass: PDMX stays primary and KernSheet is mixed in at a $MIX
+# fraction. This fixes the catastrophic forgetting that KS-only FT caused (the
+# unfrozen detector/decoder drifting on PDMX) — a strict win at every site,
+# largest at the joint scorer. See memory `project-mixed-finetune`.
 #
 # Run BY THE USER from the repo root (this orchestrator launches training; Claude
 # does not). Each stage is fail-fast and skipped if its checkpoint already exists,
@@ -24,12 +30,15 @@ SCORER_NAME="${2:-$NAME}"
 
 # ---------------------------------------------------------------------------
 # Config — these are the documented best-run recipes; edit to taste. The
-# KernSheet fine-tune split sizes must sum to <= the dataset (staffer/scorer
-# 2321 pages, noter 26166 staff items) and give the noter/scorer >= 250 train
-# batches (their val_check_interval; the staffer clamps so any split works).
+# fine-tune split sizes are over the MIXED epoch (PDMX-primary + KernSheet at
+# $MIX); KernSheet contributes mix*train_len items so its share stays <= the KS
+# dataset (staffer/scorer 2321 pages, noter 26166 staff items), and the
+# noter/scorer need >= 250 train batches (their val_check_interval; the staffer
+# clamps so any split works).
 # ---------------------------------------------------------------------------
 KS=/home/anselm/datasets/KernSheet
 VOCAB="$KS/build/vocab.json"
+MIX=0.67                    # KernSheet share of each fine-tune epoch (rest is PDMX rehearsal)
 
 STAFFER_BASE_EPOCHS=7
 STAFFER_FT_EPOCHS=30
@@ -45,7 +54,7 @@ NOTER_JITTER=0.5             # PDMX base only; KernSheet boxes are a thirds appr
 STAFFER_FT_LR=1e-5; STAFFER_FT_WARMUP=200
 NOTER_FT_LR=1e-4;   NOTER_FT_WARMUP=200
 
-STAFFER_FT_TRAIN=2000; STAFFER_FT_VALID=300     # 2321 pages
+STAFFER_FT_TRAIN=3000; STAFFER_FT_VALID=450     # mixed epoch; KS share ~2010 < 2321 pages
 NOTER_FT_TRAIN=23400;  NOTER_FT_VALID=2600      # 26166 staff items
 SCORER_FT_TRAIN=2000;  SCORER_FT_VALID=300      # 2321 pages (>= 250 batches at bs 8)
 # ---------------------------------------------------------------------------
@@ -92,18 +101,19 @@ else
     train -e "$STAFFER_BASE_EPOCHS" --use-sampler "$NAME"
 fi
 
-# --- Stage 2: staffer KernSheet fine-tune ---
-stage "2/5  staffer KernSheet fine-tune -> checkpoints/staffer/$NAME-kernsheet"
-if done_ckpt staffer "$NAME-kernsheet"; then
+# --- Stage 2: staffer rehearsal-mix fine-tune ---
+stage "2/5  staffer rehearsal-mix fine-tune -> checkpoints/staffer/$NAME-mixed"
+if done_ckpt staffer "$NAME-mixed"; then
   echo "  exists — skipping (FORCE=1 to retrain)"
 else
-  tag "train/$NAME-kernsheet"
-  run staffer --kern-home "$KS" --log-file "logs/staffer/$NAME-kernsheet.log" \
+  tag "train/$NAME-mixed"
+  run staffer --log-file "logs/staffer/$NAME-mixed.log" \
     train --init-from "checkpoints/staffer/$NAME/last.ckpt" \
+    --kern-sheet "$KS" "$MIX" \
     --train-len "$STAFFER_FT_TRAIN" --valid-len "$STAFFER_FT_VALID" \
     --lr "$STAFFER_FT_LR" --warmup-steps "$STAFFER_FT_WARMUP" \
     -e "$STAFFER_FT_EPOCHS" --use-sampler \
-    "$NAME-kernsheet"
+    "$NAME-mixed"
 fi
 
 # --- Stage 3: noter PDMX base (trains directly on the KernSheet vocab) ---
@@ -117,31 +127,34 @@ else
     "$NAME"
 fi
 
-# --- Stage 4: noter KernSheet fine-tune (no jitter) ---
-stage "4/5  noter KernSheet fine-tune -> checkpoints/noter/$NAME-kernsheet"
-if done_ckpt noter "$NAME-kernsheet"; then
+# --- Stage 4: noter rehearsal-mix fine-tune (no jitter; mix carries KS exposure) ---
+stage "4/5  noter rehearsal-mix fine-tune -> checkpoints/noter/$NAME-mixed"
+if done_ckpt noter "$NAME-mixed"; then
   echo "  exists — skipping (FORCE=1 to retrain)"
 else
-  tag "train/$NAME-kernsheet"
-  run noter --kern-home "$KS" --log-file "logs/noter/$NAME-kernsheet.log" \
+  tag "train/$NAME-mixed"
+  run noter --log-file "logs/noter/$NAME-mixed.log" \
     train --init-from "checkpoints/noter/$NAME/last.ckpt" \
+    --kern-sheet "$KS" "$MIX" --vocab "$VOCAB" \
     --train-len "$NOTER_FT_TRAIN" --valid-len "$NOTER_FT_VALID" \
     --lr "$NOTER_FT_LR" --warmup-steps "$NOTER_FT_WARMUP" \
     -e "$NOTER_FT_EPOCHS" -s 2.0 \
-    "$NAME-kernsheet"
+    "$NAME-mixed"
 fi
 
-# --- Stage 5: scorer merge + KernSheet fine-tune ---
-stage "5/5  scorer KernSheet fine-tune -> checkpoints/scorer/$SCORER_NAME"
+# --- Stage 5: scorer merge + rehearsal-mix fine-tune ---
+stage "5/5  scorer rehearsal-mix fine-tune -> checkpoints/scorer/$SCORER_NAME"
 if done_ckpt scorer "$SCORER_NAME"; then
   echo "  exists — skipping (FORCE=1 to retrain)"
 else
   tag "train/$SCORER_NAME"
-  # No --vocab/--lr/--warmup-steps/--freeze-staffer-steps: ride the ScorerConfig
-  # defaults (the default vocab path under --kern-home is the KernSheet vocab), as
-  # the ravel run did.
-  run scorer --kern-home "$KS" --log-file "logs/scorer/$SCORER_NAME.log" \
-    train --staffer "$NAME-kernsheet" --noter "$NAME-kernsheet" \
+  # --vocab is REQUIRED here: the mix is PDMX-primary so the scorer would default
+  # to the PDMX vocab (4784), but the mixed branches carry the extended KernSheet
+  # vocab (5543) — without it the noter state_dict mismatches and load crashes.
+  # LR/warmup/freeze ride the ScorerConfig defaults, as the ravel run did.
+  run scorer --log-file "logs/scorer/$SCORER_NAME.log" \
+    train --staffer "$NAME-mixed" --noter "$NAME-mixed" \
+    --kern-sheet "$KS" "$MIX" --vocab "$VOCAB" \
     --train-len "$SCORER_FT_TRAIN" --valid-len "$SCORER_FT_VALID" \
     -e "$SCORER_EPOCHS" \
     "$SCORER_NAME"
