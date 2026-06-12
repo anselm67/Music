@@ -1,4 +1,4 @@
-from sheetmusic import Box, Page, Score, Staff, System
+from sheetmusic import Box, Page, Score, Staff, Status, System
 
 
 class TestScore:
@@ -15,7 +15,7 @@ class TestScore:
             image_height=20,
             systems=[system],
             image_rotation=0.0,
-            validated=True,
+            status=Status.VALIDATED,
         )
         score = Score(id="id", pages=[page])
         text = score.asdict()
@@ -39,7 +39,7 @@ class TestScore:
             image_height=20,
             systems=[system],
             image_rotation=0.0,
-            validated=True,
+            status=Status.VALIDATED,
         )
         assert page.bar_count == sum([x.bar_count for x in page.systems])
 
@@ -58,7 +58,7 @@ class TestScale:
             image_height=20,
             systems=[system],
             image_rotation=0.0,
-            validated=True,
+            status=Status.VALIDATED,
         )
         score = Score(id="id", pages=[page])
         scaled = score.resize(20, 40)

@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 from kernsheet.editor import StaffEditor
-from sheetmusic import Box, Page, Score, Staff, System
+from sheetmusic import Box, Page, Score, Staff, Status, System
 
 
 def _sys(top: int, bottom: int, bars: list[int]) -> System:
@@ -43,7 +43,7 @@ def _page(
         image_width=width,
         image_height=height,
         systems=list(systems),
-        validated=validated,
+        status=Status.VALIDATED if validated else Status.PENDING,
     )
 
 
@@ -350,13 +350,16 @@ class TestNavigation:
 
 
 class TestPageCommands:
-    def test_toggle_validation(self) -> None:
+    def test_cycle_status(self) -> None:
         editor = _editor([_page([_sys(100, 250, [10, 200, 400])], validated=False)])
 
+        assert editor.page.status is Status.PENDING
         editor.run_command(ord("v"))
-        assert editor.page.validated is True
+        assert editor.page.status is Status.VALIDATED
         editor.run_command(ord("v"))
-        assert editor.page.validated is False
+        assert editor.page.status is Status.REJECTED
+        editor.run_command(ord("v"))
+        assert editor.page.status is Status.PENDING
 
     def test_blank_pages_clears_and_validates_range(self) -> None:
         editor = _editor(
@@ -372,6 +375,24 @@ class TestPageCommands:
         assert editor.score.pages[0].systems == [] and editor.score.pages[0].validated
         assert editor.score.pages[1].systems == [] and editor.score.pages[1].validated
         assert editor.score.pages[2].systems != []  # untouched
+
+    def test_acknowledge_reviews_records_firing_reviews(self) -> None:
+        # A system with mismatched staff heights fires the staff_height review.
+        bad = System(
+            bar_numbers=[1],
+            bars=[10, 400],
+            staves=[
+                Staff(box=Box(10, 0, 400, 40)),
+                Staff(box=Box(10, 60, 400, 200)),
+            ],
+        )
+        editor = _editor([_page([bad])])
+        assert {f.review for f in editor.page_findings()} == {"staff_height"}
+
+        editor.run_command(ord("o"))
+
+        assert editor.page.reviewed == ["staff_height"]
+        assert editor.page_findings() == []  # acknowledged -> no longer flagged
 
     def test_toggle_fast_mode(self) -> None:
         editor = _editor([_page([_sys(100, 250, [10, 200, 400])])], fast_mode=False)

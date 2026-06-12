@@ -14,8 +14,9 @@ from pathlib import Path
 
 import click
 
-from kernsheet import KernSheet
+from kernsheet import KernSheet, review_names, score_findings
 from kernsheet import migrate as run_migrate
+from kernsheet.reviews import Finding
 from utils import log_uncaught_exceptions, print_histogram
 
 HOME = Path("/home/anselm/datasets/KernSheet")
@@ -75,6 +76,45 @@ def cli(
     ctx.obj = ClickContext(home=home, kern_sheet=kern_sheet)
 
 
+def _resolve_reviews(review: str | None) -> list[str] | None:
+    """Validate a ``--review`` name (None = all registered reviews)."""
+    if review is None:
+        return None
+    if review not in review_names():
+        raise click.BadParameter(
+            f"unknown review {review!r}; known: {', '.join(review_names())}"
+        )
+    return [review]
+
+
+def _scan(
+    ks: KernSheet, prefix: str, names: list[str] | None
+) -> "list[tuple[str, Finding]]":
+    """All (catalog key, Finding) pairs across the corpus for the given reviews."""
+    out: list[tuple[str, Finding]] = []
+    for key, kern_score in ks.items(prefix, valid=True):
+        try:
+            score = ks.load_score(kern_score.id)
+        except Exception as e:
+            logging.error(f"review load {kern_score.id}: {e}")
+            continue
+        for finding in score_findings(score, names):
+            out.append((key, finding))
+    return out
+
+
+def _review_worklist(
+    ks: KernSheet, prefix: str, names: list[str] | None
+) -> list[tuple[str, str, int | None]]:
+    """One (key, score_id, first-flagged-page) entry per flagged score."""
+    seen: dict[str, tuple[str, str, int | None]] = {}
+    for key, finding in _scan(ks, prefix, names):
+        prev = seen.get(finding.score_id)
+        if prev is None or (prev[2] is not None and finding.page_number < prev[2]):
+            seen[finding.score_id] = (key, finding.score_id, finding.page_number)
+    return list(seen.values())
+
+
 @click.command()
 @click.option(
     "--write",
@@ -120,22 +160,42 @@ def make(ctx: ClickContext) -> None:
     default=False,
     help="Fast mode: auto-save and validate pages on jumps.",
 )
+@click.option(
+    "--review",
+    "review",
+    type=str,
+    default=None,
+    help="Only open scores that a review flags, landing on the flagged page. "
+    f"One of: {', '.join(review_names())}.",
+)
 @click.pass_obj
-def edit(ctx: ClickContext, prefix: str, edit_all: bool, fast: bool) -> None:
+def edit(
+    ctx: ClickContext, prefix: str, edit_all: bool, fast: bool, review: str | None
+) -> None:
     """Open the layout editor on every score whose catalog key starts with PREFIX
     (all scores when PREFIX is omitted). Validated scores are skipped unless --all
-    is given. Press 'h' in the editor for help."""
+    is given. With --review, only scores a review flags are opened, on the flagged
+    page. Press 'h' in the editor for help."""
     from kernsheet.editor import StaffEditor
 
     ks = ctx.kern_sheet
+    names = _resolve_reviews(review)
     # Materialise the worklist up front: editing a score can delete it (or its
     # whole entry) from the catalog, which would otherwise mutate the dict the
     # items() generator is walking. Re-check existence before opening each one.
-    worklist = [(key, score.id) for key, score in ks.items(prefix, valid=edit_all)]
-    for key, score_id in worklist:
+    if review:
+        worklist = _review_worklist(ks, prefix, names)
+        print(f"{len(worklist)} score(s) flagged by {review}.")
+    else:
+        worklist = [
+            (key, score.id, None) for key, score in ks.items(prefix, valid=edit_all)
+        ]
+    for key, score_id, start_page in worklist:
         if not ks.has_score(score_id):
             continue  # deleted earlier this session (the score or its whole entry)
-        if not StaffEditor(ks, key, score_id).edit(fast_mode=fast):
+        if not StaffEditor(ks, key, score_id).edit(
+            fast_mode=fast, start_page_number=start_page
+        ):
             return
 
 
@@ -254,12 +314,43 @@ def check(ctx: ClickContext, verbose: bool) -> None:
     ctx.kern_sheet.check(verbose=verbose)
 
 
+@click.command()
+@click.argument("prefix", type=str, required=False, default="")
+@click.option(
+    "--review",
+    "review",
+    type=str,
+    default=None,
+    help=f"Run one review; default all. One of: {', '.join(review_names())}.",
+)
+@click.pass_obj
+def review(ctx: ClickContext, prefix: str, review: str | None) -> None:
+    """Report layout-review findings across the corpus (read-only).
+
+    Recomputes every registered review (or just --review NAME) over each score's
+    layout and lists the pages needing attention. Use `edit --review NAME` to walk
+    and fix them."""
+    names = _resolve_reviews(review)
+    findings = _scan(ctx.kern_sheet, prefix, names)
+    by_review: dict[str, list[Finding]] = {}
+    for _, finding in findings:
+        by_review.setdefault(finding.review, []).append(finding)
+    for name in sorted(by_review):
+        items = by_review[name]
+        print(f"\n{name}: {len(items)} page(s)")
+        for f in items:
+            print(f"  {f.score_id}  page {f.page_number}  {f.message}")
+    flagged = len({f.score_id for _, f in findings})
+    print(f"\n{len(findings)} finding(s) across {flagged} score(s).")
+
+
 cli.add_command(migrate)
 cli.add_command(make)
 cli.add_command(edit)
 cli.add_command(detect)
 cli.add_command(stats)
 cli.add_command(check)
+cli.add_command(review)
 
 
 def main() -> None:

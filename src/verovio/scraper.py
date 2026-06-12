@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from xml.etree.ElementTree import Element, ElementTree, parse
 
-from sheetmusic import Box, Page, Staff, System
+from sheetmusic import Box, Page, Staff, Status, System
 
 
 class LayoutExtractor:
@@ -165,7 +165,7 @@ class LayoutExtractor:
             image_width=image_width,
             image_height=image_height,
             systems=systems,
-            validated=True,
+            status=Status.VALIDATED,
         )
 
 

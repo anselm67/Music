@@ -93,6 +93,75 @@
      following the format of the entries that follow. Keep newest-first order.
      ════════════════════════════════════════════════════════════════════════ -->
 
+<!-- ── Page review state + the reviews framework ── -->
+<article class="entry">
+  <h2>Page state grows from a <code>validated</code> bool to a <code>status</code> enum, and gets a reviews framework</h2>
+  <div class="entry-meta">
+    <span>2026-06-12</span>
+    <span class="badge accepted">Accepted</span>
+    <span class="ref"><code>src/kernsheet/reviews.py</code> · <code>scripts/migrate_status.py</code> · cf. the stave-height probe below</span>
+  </div>
+
+  <h3>Context</h3>
+  <p>
+    A KernSheet page carried a single <code>validated: bool</code> — in the training feed when
+    <code>True</code>, excluded when <code>False</code>. That one bit conflated two different
+    things: <em>"not yet reviewed"</em> (fresh <code>kernsheet detect</code> output) and
+    <em>"reviewed and deliberately excluded"</em> (an unfixable scan). And it offered nowhere to
+    record the outcome of an <em>automated</em> check. The stave-height probe (entry below) had
+    closed by proposing exactly such a check: a height-consistency QA pass in the editor that flags
+    pages whose stave heights disperse beyond the annotation-noise floor. To host that, the page
+    state had to get richer first.
+  </p>
+
+  <h3>Decision</h3>
+  <p>
+    Two coupled changes.
+  </p>
+  <ul>
+    <li><strong>State.</strong> <code>Page.validated: bool</code> → <code>Page.status: Status</code>
+      (<code>PENDING</code> / <code>VALIDATED</code> / <code>REJECTED</code>), plus
+      <code>Page.reviewed: list[str]</code> — the names of automated reviews a human has
+      acknowledged ("ok") on that page. Training/eval still feed on <code>status == VALIDATED</code>
+      (a read-only <code>validated</code> property preserves every filter call site). Both corpora
+      were migrated on disk in lock-step with the code — PDMX ~253k layouts (all
+      <code>validated</code>) and KernSheet 627 (true→validated, false→pending) — via
+      <code>scripts/migrate_status.py</code>, so there is <strong>no read-compat shim</strong>; the
+      code speaks only the new schema.</li>
+    <li><strong>Reviews.</strong> A registry of cheap geometry checks over a <code>Score</code>
+      (<code>kernsheet/reviews.py</code>), each yielding page-level <code>Finding</code>s. The first
+      is <code>staff_height</code>: it flags a page whose within-page stave-height spread exceeds
+      <code>STAFF_HEIGHT_TOLERANCE_PX = 8&nbsp;px</code> — set just above the ~3.5&nbsp;px KernSheet
+      annotation-jitter floor the probe measured. Surfaced by <code>kernsheet review</code>
+      (read-only report) and <code>kernsheet edit --review staff_height</code> (a worklist that opens
+      the editor on each flagged page). In the editor: <code>v</code> cycles the status,
+      <code>o</code> acknowledges the page's firing reviews into <code>reviewed</code>, and "fix" is
+      just normal editing — the finding clears on the next recompute.</li>
+  </ul>
+
+  <h3>Rationale — recompute, don't persist</h3>
+  <p>
+    Findings are <strong>recomputed on demand, never stored</strong>. Each check reads only
+    <code>Score</code> geometry already in the layout JSON — no images, no model — so scanning the
+    whole corpus is a sub-second pass, and a finding can never go stale against a layout that was
+    edited underneath it. The only thing persisted is the human's verdict: the <code>status</code>
+    and the small <code>reviewed</code> acknowledgement set. A genuine fix needs no marker at all —
+    once the geometry is corrected the check simply stops firing. This keeps the on-disk schema
+    minimal and the framework trivially extensible: bar-count mismatch, bar-number continuity and
+    staff-count consistency are all one-line <code>@register</code> additions over the same
+    <code>Score</code>.
+  </p>
+
+  <div class="outcome">
+    <strong>Outcome.</strong> At 8&nbsp;px, <code>staff_height</code> flags <strong>287 pages across
+    161 scores (11% of 2,625 KernSheet pages)</strong> — median within-page spread is 3&nbsp;px
+    (p90/p95/p99 = 9/11/17&nbsp;px), so the threshold sits cleanly above the label-noise floor and
+    surfaces the real tail. The check is both a QA pass over existing GT and the instrument that
+    separates the probe's open question — annotation jitter vs. real scan skew — page by page, as a
+    human walks the worklist and chooses <em>ok</em> / <em>fix</em> / <em>reject</em>.
+  </div>
+</article>
+
 <!-- ── GT precision: the stave-height invariant probe ── -->
 <article class="entry">
   <h2>The stave-height invariant is exact in PDMX but loose in KernSheet — and the slack looks like GT noise</h2>

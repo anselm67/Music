@@ -27,10 +27,10 @@ class KernSheetSource:
             yield self.kern_sheet.load_score(score.id)
 
     def pages(self, id: str) -> list[Page]:
-        # Training/eval feed: drop the un-validated pages (the layouts `kernsheet
-        # detect` generates start validated=False) so they don't leak in until a
-        # human has reviewed them in the editor. Valid pages of a partly-reviewed
-        # score are still kept.
+        # Training/eval feed: keep only VALIDATED pages (the layouts `kernsheet
+        # detect` generates start status=PENDING) so un-reviewed or REJECTED pages
+        # don't leak in until a human has approved them in the editor. Validated
+        # pages of a partly-reviewed score are still kept.
         return [page for page in self.score(id).pages if page.validated]
 
     def score(self, id: str) -> Score:

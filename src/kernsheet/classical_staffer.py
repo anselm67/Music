@@ -20,7 +20,7 @@ from numpy.typing import NDArray
 from pdf2image import convert_from_path
 from scipy.signal import find_peaks
 
-from sheetmusic import Box, Page, Score, Staff, System
+from sheetmusic import Box, Page, Score, Staff, Status, System
 
 # Render/processing width; the peak-height thresholds in _decode_page are tuned to it.
 WIDTH = 1200
@@ -224,7 +224,7 @@ class ClassicalStaffer:
             image_width=image_width,
             image_height=image_height,
             systems=systems,
-            validated=False,
+            status=Status.PENDING,
             image_rotation=image_rotation,
         )
         return page, next_bar

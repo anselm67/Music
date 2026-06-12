@@ -15,8 +15,8 @@ import cv2
 from cv2.typing import MatLike
 
 from kern import KernReader
-from kernsheet import ClassicalStaffer, KernSheet
-from sheetmusic import Box, Page, Score, Staff, System
+from kernsheet import ClassicalStaffer, Finding, KernSheet, score_findings
+from sheetmusic import Box, Page, Score, Staff, Status, System
 
 
 class Action:
@@ -67,6 +67,30 @@ class StaffEditor:
 
     def replace_page(self, **kwargs: Any) -> None:
         self.score.pages[self.page_index] = replace(self.page, **kwargs)
+
+    def page_findings(self, page: Page | None = None) -> list[Finding]:
+        """Un-suppressed review findings for ``page`` (the current page by default)."""
+        page = page if page is not None else self.page
+        return [
+            f for f in score_findings(self.score) if f.page_number == page.page_number
+        ]
+
+    def cycle_status(self) -> None:
+        """Advance the page through PENDING -> VALIDATED -> REJECTED -> PENDING."""
+        order = [Status.PENDING, Status.VALIDATED, Status.REJECTED]
+        nxt = order[(order.index(self.page.status) + 1) % len(order)]
+        self.replace_page(status=nxt)
+        print(f"Page {self.page.page_number} status: {nxt.value}")
+
+    def acknowledge_reviews(self) -> None:
+        """Mark every review currently firing on this page as "ok" — recording each
+        in Page.reviewed so it stops being flagged (the layout itself is unchanged)."""
+        firing = {f.review for f in self.page_findings()}
+        if not firing:
+            print("No outstanding reviews on this page.")
+            return
+        self.replace_page(reviewed=sorted(set(self.page.reviewed) | firing))
+        print(f"Acknowledged: {', '.join(sorted(firing))}")
 
     @property
     def system(self) -> System:
@@ -145,6 +169,17 @@ class StaffEditor:
         self.bar_index = 0
         self.bar_offset = 0
         self.fast_mode = False
+        self._reset_selection()
+        self.update_bar_offset()
+        cv2.namedWindow(self.STAFFER_WINDOW)
+        self.init_commands()
+
+    def _reset_selection(self) -> None:
+        """Point system/staff/bar selection at the first selectable item on the
+        current page (or -1 where the page/system has nothing to select)."""
+        self.system_index = 0
+        self.staff_index = 0
+        self.bar_index = 0
         if self.page.system_count <= 0:
             self.system_index = -1
             self.staff_index = -1
@@ -154,9 +189,6 @@ class StaffEditor:
             self.bar_index = -1
         elif len(self.system.bars) <= 0:
             self.bar_index = -1
-        self.update_bar_offset()
-        cv2.namedWindow(self.STAFFER_WINDOW)
-        self.init_commands()
 
     def _load_score(self, id: str) -> None:
         self.score = self.kern_sheet.load_score(id)
@@ -183,15 +215,19 @@ class StaffEditor:
         BLUE = (255, 0, 0)
         RED = (0, 0, 255)
         GREEN = (2, 7 * 16 + 1, 4 * 16 + 8)
-        style, selected_style = (BLUE, 2), (RED, 4)
-        if page.validated:
-            style = (GREEN, 2)
+        PURPLE = (160, 32, 160)
+        STATUS_COLOR = {
+            Status.PENDING: BLUE,
+            Status.VALIDATED: GREEN,
+            Status.REJECTED: PURPLE,
+        }
+        style, selected_style = (STATUS_COLOR[page.status], 2), (RED, 4)
         rgb_image = image.copy()
         if page.system_count == 0:
             # That's fine let the user know.
             cv2.putText(
                 rgb_image,
-                "Page Validated" if page.validated else "Validate that page.",
+                page.status.value.capitalize(),
                 (400, 100),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 fontScale=1,
@@ -279,6 +315,16 @@ class StaffEditor:
                 color,
                 thickness,
             )
+        for i, finding in enumerate(self.page_findings(page)):
+            cv2.putText(
+                rgb_image,
+                f"! {finding.review}: {finding.message}",
+                (10, 30 + 30 * i),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                fontScale=0.7,
+                color=RED,
+                thickness=2,
+            )
         return rgb_image
 
     def get_bar_offset(self, page_index: int = -1) -> int:
@@ -302,7 +348,7 @@ class StaffEditor:
             print("End of score.")
             return
         if self.fast_mode:
-            self.replace_page(validated=True)
+            self.replace_page(status=Status.VALIDATED)
             self.save()
         self.page_index += 1
         self.system_index = 0
@@ -547,8 +593,13 @@ class StaffEditor:
             image = cv2.resize(image, new_size)
         cv2.imshow(self.STAFFER_WINDOW, image)
 
-    def edit(self, fast_mode: bool = False) -> bool:
+    def edit(
+        self, fast_mode: bool = False, start_page_number: int | None = None
+    ) -> bool:
         """Edits the staff.
+
+        start_page_number: open on this 1-based page instead of the first (used by
+            ``edit --review`` to land on the flagged page).
 
         Returns:
             bool: True if the user wishes to continue editing further documents,
@@ -559,6 +610,17 @@ class StaffEditor:
         print(f"id : {self.id}")
         print(f"{self.kern.bar_count} bars in kern file.")
         self.fast_mode = fast_mode
+        if start_page_number is not None:
+            indices = [
+                i
+                for i, page in enumerate(self.score.pages)
+                if page.page_number == start_page_number
+            ]
+            if indices:
+                self.page_index = indices[0]
+                self._reset_selection()
+            else:
+                print(f"Page {start_page_number} not found; starting at first page.")
 
         while True:
             self.update_bar_offset()
@@ -573,7 +635,7 @@ class StaffEditor:
                 return False
             elif key == ord("n"):  # Moves onto the next document if any.
                 if self.fast_mode:
-                    self.replace_page(validated=True)
+                    self.replace_page(status=Status.VALIDATED)
                     self.save()
                 return True
             elif key == ord("1"):
@@ -684,7 +746,7 @@ class StaffEditor:
     def blank_pages(self, page_range: range) -> None:
         for i in page_range:
             self.score.pages[i] = replace(
-                self.score.pages[i], systems=[], validated=True
+                self.score.pages[i], systems=[], status=Status.VALIDATED
             )
         print(f"Blanked pages {page_range.start} to {page_range.stop}.")
 
@@ -746,8 +808,13 @@ class StaffEditor:
             ),
             Action(
                 "v",
-                lambda: self.replace_page(validated=not self.page.validated),
-                "Toggles the current page validation flag on or off.",
+                self.cycle_status,
+                "Cycles page status: pending -> validated -> rejected.",
+            ),
+            Action(
+                "o",
+                self.acknowledge_reviews,
+                "Marks this page's review findings as ok (acknowledged).",
             ),
             Action(81, self.select_prev_bar, "Moves to and selects previous bar."),
             Action(83, self.select_next_bar, "Moves to and selects next bar."),

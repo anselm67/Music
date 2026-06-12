@@ -328,7 +328,7 @@ class TestLayoutId:
     async def test_make_layout_writes_home_relative_id(self, tmp_path: Path) -> None:
         import json
 
-        from sheetmusic import Box, Page, Staff, System
+        from sheetmusic import Box, Page, Staff, Status, System
 
         p = make_maker(tmp_path, force=True)
         svg = tmp_path / "svg/1/aa/score.svg"
@@ -347,7 +347,7 @@ class TestLayoutId:
                     staves=[Staff(box=Box(0, 0, 10, 10))],
                 )
             ],
-            validated=True,
+            status=Status.VALIDATED,
         )
         with patch("pdmx.pdmx_maker.LayoutExtractor") as mock_le:
             mock_le.return_value.parse.return_value = page

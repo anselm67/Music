@@ -414,6 +414,30 @@ uv run python scripts/migrate_box_ltrb.py                  # migrate PDMX + Kern
 uv run python scripts/migrate_box_ltrb.py --dry-run ROOT   # restrict to one or more roots</pre>
   </div>
 
+  <div class="script">
+    <div class="script-header">
+      <span class="script-name">migrate_status.py</span>
+      <span class="badge badge-rose">migration</span>
+      <span class="badge badge-amber">pdmx</span>
+      <span class="badge badge-amber">kernsheet</span>
+    </div>
+    <p class="script-desc">
+      One-shot on-disk migration rewriting each page in the layout JSON from the old
+      boolean <code>"validated": true|false</code> to the richer
+      <code>"status": "validated"|"pending"</code> enum (see
+      <code>sheetmusic.Status</code>) plus an empty <code>"reviewed": []</code>
+      acknowledgement list (see <code>kernsheet.reviews</code>). PDMX is all
+      <code>validated</code>; KernSheet maps true&rarr;validated, false&rarr;pending.
+      <strong>Idempotent</strong> (pages already carrying <code>status</code> are left
+      untouched) and skips empty / unparseable files. Re-dumps with
+      <code>indent=2</code>. Already run against both corpora (PDMX ~253k, KernSheet
+      627).
+    </p>
+    <div class="label">Usage</div>
+<pre>uv run python scripts/migrate_status.py --dry-run         # report counts, write nothing
+uv run python scripts/migrate_status.py                   # migrate PDMX + KernSheet layout dirs</pre>
+  </div>
+
 </main>
 
 <script>

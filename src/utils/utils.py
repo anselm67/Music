@@ -6,6 +6,7 @@ import subprocess
 import sys
 from collections import Counter
 from dataclasses import fields, is_dataclass
+from enum import Enum
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Iterable, Union, cast, get_args, get_origin
@@ -87,6 +88,9 @@ def from_json(cls: type, data: Any) -> Any:
     Returns:
         _type_: An instance of the target class.
     """
+    if isinstance(cls, type) and issubclass(cls, Enum):
+        return cls(data)
+
     if is_dataclass(cls):
         field_types = {f.name: f.type for f in fields(cls)}
         return cls(

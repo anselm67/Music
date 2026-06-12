@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from kern import KernReader, tokenize
-from sheetmusic import Box, Page, Score, Staff, System
+from sheetmusic import Box, Page, Score, Staff, Status, System
 
 
 @dataclass
@@ -79,7 +79,7 @@ def build_score(score_id: str, legacy: dict, kr: KernReader) -> Score:
                 image_width=p["image_width"],
                 image_height=p["image_height"],
                 systems=systems,
-                validated=p["validated"],
+                status=Status.VALIDATED if p["validated"] else Status.PENDING,
                 image_rotation=p.get("image_rotation", 0.0),
             )
         )

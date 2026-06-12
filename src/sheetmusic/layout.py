@@ -1,12 +1,23 @@
 """Defines the dataclass hierarchy for encoding score layout information."""
 
 from dataclasses import asdict, dataclass, field
+from enum import Enum
 from typing import Any, cast
 
 from utils import from_json
 
 # center-{x, y}, width, height
 type CenteredBox = tuple[float, float, float, float]
+
+
+class Status(str, Enum):
+    """A page's review lifecycle. Only ``VALIDATED`` pages feed training/eval;
+    ``PENDING`` is the un-reviewed output of ``kernsheet detect``, ``REJECTED`` is
+    a page a human judged unusable (e.g. an unfixable scan)."""
+
+    PENDING = "pending"
+    VALIDATED = "validated"
+    REJECTED = "rejected"
 
 
 @dataclass(frozen=True)
@@ -172,11 +183,19 @@ class Page:
     image_width: int
     image_height: int
 
-    # Staves and validation.
+    # Staves and review state.
     systems: list[System]
-    validated: bool
+    status: Status
+
+    # Names of the automated reviews a human has acknowledged ("ok") on this page,
+    # suppressing their findings. See sheetmusic.reviews / kernsheet.reviews.
+    reviewed: list[str] = field(default_factory=list)
 
     image_rotation: float = 0.0
+
+    @property
+    def validated(self) -> bool:
+        return self.status == Status.VALIDATED
 
     @property
     def system_count(self) -> int:
@@ -207,7 +226,8 @@ class Page:
             image_width=width,
             image_height=height,
             systems=[s.scale(w_scale, h_scale) for s in self.systems],
-            validated=self.validated,
+            status=self.status,
+            reviewed=self.reviewed,
             image_rotation=self.image_rotation,
         )
 

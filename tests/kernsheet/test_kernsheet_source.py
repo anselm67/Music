@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image
 
 from kernsheet import KernSheet, KernSheetSource
-from sheetmusic import Box, Page, Score, Source, Staff, System
+from sheetmusic import Box, Page, Score, Source, Staff, Status, System
 
 
 def _score(json_path: str, pdf_path: str, id: str | None = None) -> dict[str, str]:
@@ -38,7 +38,7 @@ def _page(page_number: int, width: int = 40, validated: bool = True) -> Page:
                 staves=[Staff(box=Box(0, 0, 10, 10))],
             )
         ],
-        validated=validated,
+        status=Status.VALIDATED if validated else Status.PENDING,
     )
 
 
@@ -97,7 +97,7 @@ def test_scores_skips_unmigrated_empty_json_path(tmp_path: Path) -> None:
 
 def test_pages_filters_unvalidated(tmp_path: Path) -> None:
     # scores() yields every migrated score; pages() is the training/eval feed and
-    # drops un-validated pages (kernsheet detect writes them validated=False) while
+    # drops non-validated pages (kernsheet detect writes them status=PENDING) while
     # keeping the valid pages of a partly-reviewed score.
     _catalog(
         tmp_path,
