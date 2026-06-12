@@ -17,6 +17,7 @@ from cv2.typing import MatLike
 from kern import KernReader
 from kernsheet import ClassicalStaffer, Finding, KernSheet, score_findings
 from sheetmusic import Box, Page, Score, Staff, Status, System
+from utils import format_sequence_columns
 
 
 class Action:
@@ -719,10 +720,23 @@ class StaffEditor:
         records = self.kern.get_text(bar_number)
         if records is None:
             print(f"No records found for bar {bar_number}")
-        else:
+            return
+        print(f"Bar {bar_number} / {self.kern.bar_count + self.kern.first_bar - 1}:")
+        cells = [record.split("\t") for record in records]
+        if cells and max(len(c) for c in cells) == 2:
+            # Grand staff: align the two spines into labelled columns.
+            left = [c[0] for c in cells]
+            right = [c[1] if len(c) > 1 else "" for c in cells]
             print(
-                f"Bar {bar_number} / {self.kern.bar_count + self.kern.first_bar - 1}:"
+                format_sequence_columns(
+                    left,
+                    right,
+                    left_header="spine 0",
+                    right_header="spine 1",
+                    highlight_mismatches=False,
+                )
             )
+        else:
             for record in records:
                 print(record)
 
