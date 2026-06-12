@@ -334,7 +334,7 @@ class Parser(Generic[T]):
         self.close_spine(source_holder)
 
     INSTRUMENT_RE = re.compile(r'^\*I(["\'])?(.*)$')
-    INDICATOR_RE = re.compile(r'^\*([#:/\w"\'\.+-]*)$')
+    INDICATOR_RE = re.compile(r'^\*([-#:/\w"\'\.+\[\]]*)$')
     SECTION_LABEL_RE = re.compile(r"^\*>.*$")
 
     def parse_spine_indicator(

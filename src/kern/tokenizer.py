@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+import os
+import tempfile
+from contextlib import suppress
 from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Iterable, TextIO, Type, cast
@@ -194,6 +197,8 @@ class BaseHandler(Handler[Spine]):
 class NormHandler(BaseHandler):
     formatter: TokenFormatter
     output: TextIO | None
+    output_path: Path | None
+    output_tmp: Path | None
 
     # The current bar number, when none provided.
     bar_numbering: bool
@@ -203,7 +208,18 @@ class NormHandler(BaseHandler):
 
     def __init__(self, output_path: Path | None):
         super(NormHandler, self).__init__()
-        self.output = open(output_path, "w+") if output_path else None
+        # Write to a temp sibling and only os.replace it onto the destination on a
+        # clean done(), so a mid-parse failure can't truncate an existing file.
+        self.output_path = output_path
+        self.output_tmp = None
+        self.output = None
+        if output_path:
+            fd, tmp = tempfile.mkstemp(
+                dir=output_path.parent, prefix=output_path.name + ".", suffix=".tmp"
+            )
+            os.close(fd)
+            self.output_tmp = Path(tmp)
+            self.output = open(tmp, "w+")
         self.formatter = TokenFormatter()
         self.bar_numbering = False
         self.bar_number = 1
@@ -245,15 +261,15 @@ class NormHandler(BaseHandler):
                 return True
             return False
 
-        # If we see a note or chord before any bar, emit a fake bar 0.
+        # If we see a note or chord before any bar, emit a fake bar 0. Route it
+        # through merge_tokens so branch/merge spines fold into base columns,
+        # keeping the bar-zero line's column count identical to every other row.
         if not self.bar_zero:
             if any(requires_bar(t) for _, t in tokens):
                 bar = Bar("*fake*", 0, False, False, False, False)
                 if self.output:
-                    self.output.write(
-                        "\t".join([self.formatter.format(bar) for _, _ in tokens])
-                        + "\n"
-                    )
+                    zero = self.merge_tokens([(spine, bar) for spine, _ in tokens])
+                    self.output.write("\t".join(tok for tok in zero if tok) + "\n")
                 self.bar_zero = True
 
         # Adjusts the bar number when none provided.
@@ -346,8 +362,16 @@ class NormHandler(BaseHandler):
             self.output.write("\t".join(tok for tok in output if tok) + "\n")
 
     def done(self) -> None:
-        if self.output:
+        if self.output and self.output_tmp and self.output_path:
             self.output.close()
+            os.replace(self.output_tmp, self.output_path)
+
+    def abort(self) -> None:
+        # Drop the temp file on failure, leaving any existing destination intact.
+        if self.output and self.output_tmp:
+            self.output.close()
+            with suppress(FileNotFoundError):
+                os.unlink(self.output_tmp)
 
 
 def tokenize(
@@ -357,7 +381,11 @@ def tokenize(
 ) -> bool:
     """Tokenizes a krn file into a normalized form."""
     handler = NormHandler(dst_file)
-    parser = Parser.from_file(src_file, handler)
-    parser.enable_warnings = enable_warnings
-    parser.parse()
+    try:
+        parser = Parser.from_file(src_file, handler)
+        parser.enable_warnings = enable_warnings
+        parser.parse()
+    except BaseException:
+        handler.abort()
+        raise
     return True
