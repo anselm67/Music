@@ -149,8 +149,8 @@ if done_ckpt scorer "$SCORER_NAME"; then
 else
   tag "train/$SCORER_NAME"
   # --vocab is REQUIRED here: the mix is PDMX-primary so the scorer would default
-  # to the PDMX vocab (4784), but the mixed branches carry the extended KernSheet
-  # vocab (5543) — without it the noter state_dict mismatches and load crashes.
+  # to the PDMX vocab (4785), but the mixed branches carry the extended KernSheet
+  # vocab (5492) — without it the noter state_dict mismatches and load crashes.
   # LR/warmup/freeze ride the ScorerConfig defaults, as the ravel run did.
   run scorer --log-file "logs/scorer/$SCORER_NAME.log" \
     train --staffer "$NAME-mixed" --noter "$NAME-mixed" \
