@@ -241,9 +241,9 @@
             "console": "integratedTerminal",
             "python": "${workspaceFolder}/.venv/bin/python",
             "args": [
-                "edit",
-                "--all",
-                "bach/inventions/inven"
+                "-h",
+                "/home/anselm/datasets/kern-sheet-edit",
+                "edit"
             ]
         },
     ]
