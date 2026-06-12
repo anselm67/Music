@@ -192,6 +192,12 @@
         <td>Per-image KernSheet fine-tune; <strong>beats berlioz on every metric</strong> — val acc, loss, and free-running similarity (90.7% vs 89.4%)</td>
         <td><span class="badge badge-green">KernSheet best</span></td>
       </tr>
+      <tr>
+        <td><a class="run-link" href="#run-debussy-mixed"><span class="tag">debussy-mixed</span></a></td><td>2026-06-11</td><td>12</td>
+        <td>97.81%*</td><td>0.0907*</td>
+        <td><strong>PDMX rehearsal mix</strong> (0.67 KS / 0.33 PDMX) on the <span class="tag">debussy</span> base — undoes catastrophic forgetting: PDMX free-running 93.4&nbsp;→&nbsp;96.8% while KernSheet holds (90.7&nbsp;→&nbsp;90.9%). *val is the blended stream, not per-domain</td>
+        <td><span class="badge badge-green">both domains</span></td>
+      </tr>
     </tbody>
   </table>
 

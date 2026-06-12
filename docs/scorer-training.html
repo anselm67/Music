@@ -166,9 +166,16 @@
         <td><strong>Per-image</strong> normalization (vs <span class="tag">berlioz</span> letterbox+global); whole pipeline rebuilt per-image</td>
         <td><span class="badge badge-green">per-image · keeper</span></td>
       </tr>
+      <tr>
+        <td><a class="run-link" href="#run-debussy-mixed"><span class="tag">debussy-mixed</span></a></td><td>KS + PDMX</td><td>2026-06-12</td><td>20</td>
+        <td>97.70%*</td><td>0.936*</td><td>4.11 px*</td>
+        <td>91.6% KS · <strong>96.3% PDMX</strong><sup>★</sup></td>
+        <td><strong>PDMX rehearsal mix</strong> (0.67) — fixes joint-FT forgetting: PDMX 91.8→96.3%, miscount 36→6/500, for −0.4 pp KS</td>
+        <td><span class="badge badge-green">both domains · keeper</span></td>
+      </tr>
     </tbody>
   </table>
-  <p class="subtitle" style="margin-top:-1rem"><sup>†</sup> on an unseeded validation split; see note above. <sup>‡</sup> from <code>scorer eval</code> on a random (unseeded) 300 pages under the <strong>center-y Hungarian</strong> matcher — <em>not</em> the legacy top-to-bottom page-matched eval the <span class="tag">boulez</span>/<span class="tag">walton</span>/<span class="tag">ravel</span> rows share (those over-penalize miscounts). Under the same center-y matcher the three later runs rank <span class="tag">debussy</span> 91.1% ≥ <span class="tag">berlioz</span> 90.8% ≥ <span class="tag">ravel</span> 89.6% (each its own unseeded draw, so ~1% gaps are soft); <span class="tag">ravel</span>'s 90.7%/3-miscount row above is the legacy-matcher figure, not comparable to these. See the <a href="#run-debussy"><span class="tag">debussy</span></a> card.</p>
+  <p class="subtitle" style="margin-top:-1rem"><sup>†</sup> on an unseeded validation split; see note above. <sup>‡</sup> from <code>scorer eval</code> on a random (unseeded) 300 pages under the <strong>center-y Hungarian</strong> matcher — <em>not</em> the legacy top-to-bottom page-matched eval the <span class="tag">boulez</span>/<span class="tag">walton</span>/<span class="tag">ravel</span> rows share (those over-penalize miscounts). Under the same center-y matcher the three later runs rank <span class="tag">debussy</span> 91.1% ≥ <span class="tag">berlioz</span> 90.8% ≥ <span class="tag">ravel</span> 89.6% (each its own unseeded draw, so ~1% gaps are soft); <span class="tag">ravel</span>'s 90.7%/3-miscount row above is the legacy-matcher figure, not comparable to these. See the <a href="#run-debussy"><span class="tag">debussy</span></a> card. <sup>*</sup> <span class="tag">debussy-mixed</span>'s val columns are on its <strong>blended</strong> 0.67-KS/0.33-PDMX validation stream (not a single per-domain split), so they aren't directly comparable to the per-domain val rows above; the honest per-domain figures are the <code>scorer eval</code> numbers (<sup>★</sup>). <sup>★</sup> from <code>scorer eval --size 500 --seed 0</code> under the center-y matcher — KS at beam 8 + rerank, PDMX greedy; see the <a href="#run-debussy-mixed"><span class="tag">debussy-mixed</span></a> card.</p>
 
   <!-- ════════════════════════ merge1 ════════════════════════ -->
   <div class="session">
@@ -363,6 +370,28 @@
       </tbody>
     </table>
     <div class="result-box positive"><strong>The rerank is a small, free, real win — +0.3 pp at beam 4, +0.4 pp at beam 8 — and the two levers are independent.</strong> These are the first <em>paired</em> scorer A/Bs (seed 0 fixes the page draw, so deltas aren't draw noise — the earlier unseeded 91.4 vs 91.8 on different 1000-page samples was not comparable). Reading the table by column: <em>reranking</em> adds ≈0.3–0.4 pp at either width; <em>beam width</em> 4 → 8 adds only +0.1 pp on the baseline but is responsible for the <em>entire</em> min-similarity lift (12.5 → 17.1, present in the beam-8 baseline too — nothing to do with reranking). Best config is <strong>beam 8 + rerank = 92.0 %</strong>. The diagnostic ceiling was larger (exact joint-correct 17.9 % → 33.8 % on a stricter all-staves-agree metric), but on the softer matched-similarity eval the gain is modest because most systems already agree and the reranker only helps when a shared signature exists. It costs nothing at inference, so it stays on.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ debussy-mixed -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-debussy-mixed"><span class="tag">debussy-mixed</span> — PDMX rehearsal mix, the joint forgetting site</h2>
+      <span class="session-meta">2026-06-12 · tag <code>train/debussy-mixed</code> · 20 ep · <span class="tag">debussy</span> recipe + <code>--kern-sheet … 0.67</code> on the <span class="tag">debussy-mixed</span> <span class="tag">staffer</span>+<span class="tag">noter</span></span>
+      <span class="badge badge-green">both domains · keeper</span>
+    </div>
+    <p>The scorer joint fine-tune is the <strong>third catastrophic-forgetting site</strong> (after the standalone <a href="staffer-training.html#run-debussy-mixed">staffer</a> and <a href="noter-training.html#run-debussy-mixed">noter</a>): fine-tuning the merged model on KernSheet erodes PDMX, and here the detector is <em>unfrozen</em>, so the damage hits counting as well as transcription. The fix is the same <strong>rehearsal mix</strong> rolled out across the pipeline — one flag, <code>--kern-sheet&nbsp;/…/KernSheet&nbsp;0.67</code>, makes each epoch 67% KernSheet + 33% PDMX (PDMX primary, steps/epoch unchanged). Built from the <span class="tag">debussy-mixed</span> branch checkpoints under the <span class="tag">debussy</span> per-image recipe; needs <code>--vocab&nbsp;…/KernSheet/build/vocab.json</code> since the mixed branches carry the 5543 extended vocab while the PDMX-primary default would load 4784.</p>
+    <table class="summary-table">
+      <thead><tr><th>End-to-end, by domain (<code>scorer eval --size 500 --seed 0</code>)</th><th><span class="tag">debussy</span> (KS-only FT)</th><th><span class="tag">debussy-mixed</span> (0.67 rehearsal)</th></tr></thead>
+      <tbody>
+        <tr><td>KernSheet · matched-stave sim (beam 8 + rerank)</td><td><strong>92.0%</strong></td><td>91.6%</td></tr>
+        <tr><td>KernSheet · miscount pages</td><td><strong>5 / 500</strong></td><td>7 / 500</td></tr>
+        <tr><td><strong>PDMX</strong> · matched-stave sim</td><td>91.8%</td><td><strong>96.3%</strong></td></tr>
+        <tr><td><strong>PDMX</strong> · miscount pages</td><td>36 / 500</td><td><strong>6 / 500</strong></td></tr>
+        <tr><td><strong>PDMX</strong> · staves predicted / GT</td><td>2252 / 2274</td><td><strong>2271 / 2274</strong></td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">All cells are <code>scorer eval --size 500 --seed 0</code> under the center-y Hungarian matcher. KernSheet rows are the beam-8 + <code>--rerank</code> config (the same seeded 500-page draw the <span class="tag">debussy</span> rerank table above uses, so the KS column is directly comparable: 92.0% is <span class="tag">debussy</span>'s beam-8-rerank cell); PDMX rows are greedy on a seeded 500-page PDMX draw. The blended-stream val converged to 97.70% acc / 0.387 loss (epoch 19).</p>
+    <div class="result-box positive"><strong>Rehearsal fixes the joint forgetting site decisively — and it was the worst of the three.</strong> The KS-only <span class="tag">debussy</span> scorer doesn't merely soften PDMX transcription (91.8%); with the detector unfrozen its counting <em>drifts</em>, miscounting <strong>36 / 500</strong> PDMX pages. The mix recovers PDMX similarity <strong>+4.5 pp</strong> (91.8 → 96.3) <em>and</em> cuts PDMX miscount <strong>6×</strong> (36 → 6, with stave recall 2252 → 2271 / 2274) — the detector stops forgetting where to put boxes. The cost on the target domain is small and bounded: <strong>−0.4 pp</strong> KernSheet similarity (92.0 → 91.6, consistent with the −0.4 pp seen rerank-off, 91.6 → 91.2) and +2 miscount pages. So this is the same strict-improvement-over-KS-only-FT shape the <a href="staffer-training.html#run-debussy-mixed">staffer</a> and <a href="noter-training.html#run-debussy-mixed">noter</a> showed, only larger here because the joint site forgets more. The barline-agreement rerank still pays its usual +0.4 pp on KernSheet (91.2 → 91.6 at beam 8), so it stays on. <span class="tag">debussy-mixed</span> supersedes <span class="tag">debussy</span> as the production end-to-end model: one scorer that holds both domains with no catastrophic forgetting.</div>
   </div>
 
 </main>
