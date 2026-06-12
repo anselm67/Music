@@ -183,17 +183,18 @@ def detect(ctx: ClickContext, prefix: str, write: bool, width: int) -> None:
     for _, score in todo:
         try:
             result = staffer.detect(ks.pdf_path(score), score.id)
+            print(
+                f"  {score.id}: {result.page_count}p "
+                f"{result.system_count}sys {result.staff_count}staves"
+                + ("" if write else " (dry-run)")
+            )
+            if write:
+                ks.save_score(score.id, result)
+                ks.rebuild_images(score, result)
         except Exception as e:
             failed += 1
             logging.error(f"detect {score.id}: {e}")
             continue
-        print(
-            f"  {score.id}: {result.page_count}p "
-            f"{result.system_count}sys {result.staff_count}staves"
-            + ("" if write else " (dry-run)")
-        )
-        if write:
-            ks.save_score(score.id, result)
         ok += 1
     verb = "written" if write else "detected (dry-run; pass -w to write)"
     print(f"\n{ok} score(s) {verb}, {failed} failed, of {len(todo)} candidate(s).")

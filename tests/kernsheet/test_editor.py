@@ -111,23 +111,23 @@ def _two_systems() -> list[System]:
 
 
 class TestResizeSystem:
-    def test_extend_down_spreads_height_equally(self) -> None:
+    def test_extend_down_scales_proportionally(self) -> None:
         editor = _editor([_page([_sys(100, 250, [10, 500])])])
 
         editor.resize_system(1)  # the 'e' command
 
         rh, lh = editor.system.staves
-        # Every staff grows by delta, not just the last one.
-        assert rh.box.height == 51
-        assert lh.box.height == 51
-        # The system top is fixed; the bottom moves by staff_count * delta.
+        # The system top is anchored; the bottom moves by delta.
         assert editor.system.top == 100
-        assert editor.system.bottom == 252
-        # The inter-staff gap is preserved (staves shift, they don't stretch).
-        assert lh.box.top - rh.box.bottom == 50
+        assert editor.system.bottom == 251
+        # Every offset below the top scales by (height+delta)/height, so the top
+        # staff stays put and the gap below it widens proportionally.
+        assert rh.box.top == 100
+        assert lh.box.top - rh.box.bottom == 51
 
     def test_spreads_across_all_staves(self) -> None:
-        # A three-staff system shows the change is shared by *every* staff.
+        # A three-staff system: staff heights are preserved and the added height
+        # is shared across the inter-staff gaps.
         editor = _editor(
             [
                 _page(
@@ -148,9 +148,14 @@ class TestResizeSystem:
 
         editor.resize_system(2)
 
-        assert [s.box.height for s in editor.system.staves] == [42, 42, 42]
+        assert [s.box.height for s in editor.system.staves] == [40, 40, 40]
+        gaps = [
+            editor.system.staves[i + 1].top - editor.system.staves[i].bottom
+            for i in range(2)
+        ]
+        assert gaps == [61, 61]  # both gaps absorb the added height
         assert editor.system.top == 100
-        assert editor.system.bottom == 346  # 340 + 3 * 2
+        assert editor.system.bottom == 342  # 340 + delta, top anchored
 
     def test_shrink_up_is_inverse_of_extend(self) -> None:
         editor = _editor([_page([_sys(100, 250, [10, 500])])])
@@ -234,7 +239,8 @@ class TestSystemEditing:
         assert editor.system_index == 1  # selection follows the new system
         new = editor.page.systems[1]
         assert new.staff_count == 2
-        assert new.bars == []
+        # The new system inherits the page's side bars (left/right margins).
+        assert new.bars == [10, 400]
 
     def test_delete_selected_system(self) -> None:
         editor = _editor([_page(_two_systems())], system_index=0)

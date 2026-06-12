@@ -253,7 +253,9 @@ class KernSheet:
             image = cv2.warpAffine(image, matrix, (width, height))
         return cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
-    def _rebuild_images(self, kern_score: KernScore, score: Score) -> None:
+    def rebuild_images(self, kern_score: KernScore, score: Score) -> None:
+        """Render ``build/png`` for every page of ``score``. ``kern_score`` resolves
+        the source pdf; ``score`` supplies the per-page width/rotation to apply."""
         pdf_path = self.pdf_path(kern_score)
         images = convert_from_path(pdf_path)
         for page in score.pages:
@@ -295,7 +297,7 @@ class KernSheet:
                             rebuild_images = True
                             break
                     if rebuild_images:
-                        self._rebuild_images(kern_score, score)
+                        self.rebuild_images(kern_score, score)
                 except Exception as e:
                     failed += 1
                     logging.error(f"make {kern_score.id}: {e}")

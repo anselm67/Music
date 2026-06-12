@@ -165,9 +165,10 @@ class StaffEditor:
             png_path = self.kern_sheet.png_path(id, page.page_number)
             image = cv2.imread(png_path.as_posix())  # already BGR, ready for imshow
             if image is None:
-                logging.warning(f"failed to load {png_path}")
-            else:
-                self.images.append(image)
+                raise FileNotFoundError(
+                    f"{id}: missing page image {png_path}; run `kernsheet make`"
+                )
+            self.images.append(image)
         self.id = id
 
     def draw_page(
