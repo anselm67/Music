@@ -108,7 +108,11 @@ class ScorerDataset(Dataset[Sample]):
             is_ok = True
             staff_idx = 0
             for sys_idx, system in enumerate(page.systems):
-                if sys_idx >= c.num_system_queries or system.staff_count not in (1, 2):
+                if (
+                    sys_idx >= c.num_system_queries
+                    or system.staff_count not in (1, 2)
+                    or not system.bar_numbers
+                ):
                     is_ok = False
                     break
                 spine_numbers = [0] if system.staff_count == 1 else [1, 0]
