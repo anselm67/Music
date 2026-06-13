@@ -70,6 +70,23 @@ def _staff_height(score: Score) -> Iterator[Finding]:
             )
 
 
+@register("bar_numbers")
+def _bar_numbers(score: Score) -> Iterator[Finding]:
+    """Every system needs bar numbers — they pin its transcription target. A system
+    with none was added in the editor (``_make_system`` seeds ``bar_numbers=[]``) and
+    validated before its bars were ever assigned; it cannot be transcribed and crashes
+    the noter dataset build, so it should never have been validated as-is."""
+    for page in score.pages:
+        barless = sum(1 for sys in page.systems if not sys.bar_numbers)
+        if barless:
+            yield Finding(
+                "bar_numbers",
+                score.id,
+                page.page_number,
+                f"{barless} system(s) with no bar numbers",
+            )
+
+
 def _needs_attention(page: Page, review: str) -> bool:
     """A finding needs human attention unless the page is already rejected
     (excluded anyway) or a human has acknowledged this review on it."""

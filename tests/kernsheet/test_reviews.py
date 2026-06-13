@@ -45,6 +45,31 @@ class TestStaffHeight:
         assert score_findings(_score(_page([50]))) == []
 
 
+class TestBarNumbers:
+    def _page(self, bar_numbers: list[int]) -> Page:
+        # VALIDATED on purpose: the point of this review is to flag barless systems
+        # that slipped through validation (VALIDATED does not suppress findings).
+        staves = [Staff(box=Box(0, 0, 100, 50)), Staff(box=Box(0, 60, 100, 110))]
+        system = System(bar_numbers=bar_numbers, bars=[0, 100], staves=staves)
+        return Page(
+            page_number=1,
+            image_width=200,
+            image_height=300,
+            systems=[system],
+            status=Status.VALIDATED,
+            reviewed=[],
+        )
+
+    def test_system_with_bar_numbers_no_finding(self) -> None:
+        assert score_findings(_score(self._page([1])), names=["bar_numbers"]) == []
+
+    def test_barless_system_flags(self) -> None:
+        findings = score_findings(_score(self._page([])), names=["bar_numbers"])
+        assert [f.review for f in findings] == ["bar_numbers"]
+        assert findings[0].page_number == 1
+        assert findings[0].score_id == "x"
+
+
 class TestSuppression:
     def _bad(
         self, *, status: Status = Status.PENDING, reviewed: list[str] | None = None
