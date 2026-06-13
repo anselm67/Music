@@ -404,6 +404,14 @@ def grow_checkpoint(src_ckpt: Path, out_ckpt: Path, vocab_path: Path) -> None:
     "Omit to leave disabled.",
 )
 @click.option(
+    "--augment",
+    type=float,
+    default=None,
+    help="Train-only scan-augmentation probability (0-1; fraction of train "
+    "pages passed through ScanAugment to mimic real-scan ink spread / paper "
+    "tone / noise). Omit to leave disabled.",
+)
+@click.option(
     "--vocab",
     "vocab_path",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
@@ -437,6 +445,7 @@ def train(
     lr: float | None,
     warmup_steps: int,
     jitter: float | None,
+    augment: float | None,
     vocab_path: Path | None,
     kern_sheet: tuple[Path, float] | None,
 ) -> None:
@@ -458,10 +467,11 @@ def train(
             or lr is not None
             or warmup_steps >= 0
             or jitter is not None
+            or augment is not None
         ):
             logging.warning(
-                "Resuming from checkpoint; "
-                "--train-len/--valid-len/--lr/--warmup-steps/--jitter ignored."
+                "Resuming from checkpoint; --train-len/--valid-len/--lr/"
+                "--warmup-steps/--jitter/--augment ignored."
             )
     else:
         ckpt_path = None
@@ -477,6 +487,8 @@ def train(
             config.warmup_steps = warmup_steps
         if jitter is not None:
             config.jitter = jitter
+        if augment is not None:
+            config.augment = augment
 
     config.max_steps = epochs * (config.train_len // config.batch_size)
     logging.info(

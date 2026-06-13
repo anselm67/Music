@@ -299,6 +299,14 @@ def stats(ctx: ClickContext, num_workers: int) -> None:
     help="Override the number of warmup steps.",
 )
 @click.option(
+    "--augment",
+    type=float,
+    default=None,
+    help="Train-only scan-augmentation probability (0-1; fraction of train "
+    "pages passed through ScanAugment to mimic real-scan ink spread / paper "
+    "tone / noise). Omit to leave disabled.",
+)
+@click.option(
     "--kern-sheet",
     "kern_sheet",
     type=(click.Path(exists=True, file_okay=False, path_type=Path), float),
@@ -322,6 +330,7 @@ def train(
     valid_len: int,
     lr: float | None,
     warmup_steps: int,
+    augment: float | None,
     kern_sheet: tuple[Path, float] | None,
 ) -> None:
     """Trains and/or resume training of a Staffer model instance.
@@ -334,10 +343,16 @@ def train(
     if ckpt_path.exists():
         logging.info(f"Resuming training from {ckpt_path}")
         config = config_from_checkpoint(ckpt_path)
-        if train_len > 0 or valid_len > 0 or lr is not None or warmup_steps >= 0:
+        if (
+            train_len > 0
+            or valid_len > 0
+            or lr is not None
+            or warmup_steps >= 0
+            or augment is not None
+        ):
             logging.warning(
                 "Resuming from checkpoint; "
-                "--train-len/--valid-len/--lr/--warmup-steps ignored."
+                "--train-len/--valid-len/--lr/--warmup-steps/--augment ignored."
             )
     else:
         ckpt_path = None
@@ -353,6 +368,8 @@ def train(
             config.lr = lr
         if warmup_steps >= 0:
             config.warmup_steps = warmup_steps
+        if augment is not None:
+            config.augment = augment
     config.max_steps = epochs * (config.train_len // config.batch_size)
     # Cap at one epoch's batches: small datasets (e.g. KernSheet) have fewer
     # than the default 250 training batches per epoch, which Lightning rejects.

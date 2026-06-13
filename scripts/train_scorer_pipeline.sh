@@ -48,6 +48,13 @@ SCORER_EPOCHS=20
 
 NOTER_JITTER=0.5             # PDMX base only; KernSheet boxes are a thirds approx (no jitter)
 
+# Scan-augmentation probability (ScanAugment: ink spread / paper tone / blur / JPEG)
+# on the PDMX bases ONLY — same rationale as the jitter above: it teaches real-scan
+# appearance on the crisp synthetic source, and the KernSheet fine-tunes already see
+# real scans. Set to 0 to disable.
+STAFFER_AUGMENT=0.5
+NOTER_AUGMENT=0.5
+
 # Per-stage fine-tune LR / warmup. The staffer FT ran 10x lower than the noter FT;
 # the scorer rides the ScorerConfig defaults (lr 1e-4, warmup 500, freeze 500) — it
 # passes no --lr/--warmup-steps/--freeze-staffer-steps, matching the ravel run.
@@ -98,7 +105,7 @@ if done_ckpt staffer "$NAME"; then
 else
   tag "train/$NAME"
   run staffer --log-file "logs/staffer/$NAME.log" \
-    train -e "$STAFFER_BASE_EPOCHS" --use-sampler "$NAME"
+    train -e "$STAFFER_BASE_EPOCHS" --use-sampler --augment "$STAFFER_AUGMENT" "$NAME"
 fi
 
 # --- Stage 2: staffer rehearsal-mix fine-tune ---
@@ -123,7 +130,8 @@ if done_ckpt noter "$NAME"; then
 else
   tag "train/$NAME"
   run noter --log-file "logs/noter/$NAME.log" \
-    train --vocab "$VOCAB" --jitter "$NOTER_JITTER" -e "$NOTER_BASE_EPOCHS" \
+    train --vocab "$VOCAB" --jitter "$NOTER_JITTER" --augment "$NOTER_AUGMENT" \
+    -e "$NOTER_BASE_EPOCHS" \
     "$NAME"
 fi
 

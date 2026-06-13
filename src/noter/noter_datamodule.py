@@ -40,12 +40,15 @@ class NoterDataModule(L.LightningDataModule):
             [self.config.train_len, self.config.valid_len],
             generator=torch.Generator().manual_seed(42),
         )
-        if self.config.jitter > 0:
-            # Shallow copy shares the (read-only) items/transform but lets the
-            # train view jitter boxes while validation (self.val_ds, on `full`)
-            # stays on clean centered crops. Re-point train at the jittering view.
+        if self.config.jitter > 0 or self.config.augment > 0:
+            # Shallow copy shares the (read-only) items but lets the train view
+            # jitter boxes / scan-augment pages while validation (self.val_ds, on
+            # `full`) stays clean. enable_augment rebuilds the train view's own
+            # transform, so the shared clean transform on `full` is untouched.
             train_full = copy.copy(full)
             train_full.jitter = self.config.jitter
+            if self.config.augment > 0:
+                train_full.enable_augment(self.config.augment)
             self.train_ds = Subset(train_full, self.train_ds.indices)
 
     def train_dataloader(self) -> DataLoader:

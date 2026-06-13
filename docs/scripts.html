@@ -191,15 +191,18 @@ uv run python scripts/eval_predicted_boxes.py \
       <span class="badge badge-amber">kernsheet</span>
     </div>
     <p class="script-desc">
-      Compares grayscale pixel-value distributions of PDMX vs KernSheet. Samples
-      <code>N</code> random PNGs from each dataset, accumulates a 256-bin histogram,
-      normalises to a density, and overlays both on one figure (linear + log-y).
-      Surfaces the photometric domain gap: PDMX is near-binary white/black, real
-      KernSheet scans carry a gray pedestal a global <code>Normalize</code> can't
-      remove. Prints per-dataset mean, black-fraction, and white-fraction.
+      Compares PDMX vs KernSheet appearance and calibrates <code>ScanAugment</code>
+      against it. Samples <code>N</code> random PNGs per source and overlays two
+      distributions: the 256-bin grayscale histogram (linear + log-y) — the
+      photometric gap (PDMX near-binary white/black, KernSheet a gray pedestal) — and
+      the stroke-width distribution (2&times; the ink distance-transform) — the
+      "fatter" gap. With <code>--augment P</code> a third <code>PDMX+aug</code> source
+      is added by passing each PDMX page through <code>ScanAugment(P)</code>, so its
+      augmented curves can be tuned to land on KernSheet. Prints per-source mean,
+      black/white fraction, and stroke-width mean/median.
     </p>
     <div class="label">Usage</div>
-<pre>uv run python scripts/pixel_hist.py [-n 400] [-o build/pixel_hist.png] [--seed 0]</pre>
+<pre>uv run python scripts/pixel_hist.py [-n 400] [--augment 1.0] [-o build/pixel_hist.png] [--seed 0]</pre>
   </div>
 
   <!-- ──────────────────────────────────────────── scorer_error_mix -->

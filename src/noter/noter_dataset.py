@@ -8,7 +8,14 @@ from torchvision.transforms import v2
 from torchvision.transforms.functional import crop
 from tqdm import tqdm
 
-from sheetmusic import Box, LetterboxResize, PerImageNormalize, Source, letterbox_scale
+from sheetmusic import (
+    Box,
+    LetterboxResize,
+    PerImageNormalize,
+    ScanAugment,
+    Source,
+    letterbox_scale,
+)
 
 from .noter_model import NoterConfig
 from .noter_vocab import Vocab
@@ -89,20 +96,9 @@ class NoterDataset(Dataset):
         # Train-only box jitter probability (0 = off); the datamodule enables it
         # on the train view only, leaving validation on clean (centered) crops.
         self.jitter = 0.0
-        # Sets up image transforms.
-        self.transform = v2.Compose(
-            [
-                v2.Grayscale(),
-                v2.ToDtype(torch.float, scale=True),
-                LetterboxResize(
-                    config.page_shape,
-                    interpolation=config.interpolation,
-                    antialias=config.antialias,
-                    fill=1.0,
-                ),
-                PerImageNormalize(),
-            ]
-        )
+        # Clean transform (no scan augment); the datamodule calls enable_augment
+        # on the train view only, leaving validation on un-augmented pages.
+        self.transform = self._build_transform(0.0)
         self.load_sequence = SequenceLoader(
             source, vocab, config.max_seqlen, config.max_chords
         )
@@ -153,6 +149,32 @@ class NoterDataset(Dataset):
                 self.items = self.items[:count]
                 break
         logging.info(f"\tNoterDataset: {len(self.items):,} samples.")
+
+    def _build_transform(self, augment: float) -> v2.Transform:
+        """Image transform; ScanAugment (prob ``augment``, 0 = off) runs on the
+        float [0,1] page before per-image normalisation."""
+        return v2.Compose(
+            [
+                v2.Grayscale(),
+                v2.ToDtype(torch.float, scale=True),
+                LetterboxResize(
+                    self.config.page_shape,
+                    interpolation=self.config.interpolation,
+                    antialias=self.config.antialias,
+                    fill=1.0,
+                ),
+                ScanAugment(augment),
+                PerImageNormalize(),
+            ]
+        )
+
+    def enable_augment(self, prob: float) -> None:
+        """Rebuild the transform with scan augmentation at probability ``prob``.
+
+        Called by the datamodule on the (shallow-copied) train view only, so
+        validation keeps the clean transform built in ``__init__``.
+        """
+        self.transform = self._build_transform(prob)
 
     def __len__(self) -> int:
         return len(self.items)

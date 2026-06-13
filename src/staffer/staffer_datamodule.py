@@ -1,10 +1,11 @@
 """Lightning dataset module wrapping StafferDataset over a Source."""
 
+import copy
 import logging
 
 import torch
 import lightning as L
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, Subset, random_split
 
 from sheetmusic import Source
 
@@ -42,6 +43,14 @@ class StafferDataModule(L.LightningDataModule):
             [self.config.train_len, self.config.valid_len],
             generator=torch.Generator().manual_seed(42),
         )
+        if self.config.augment > 0:
+            # Shallow copy shares the (read-only) items but rebuilds the train
+            # view's own transform with scan augmentation; validation (self.val_ds,
+            # on `full`) keeps the clean transform. Re-point train at the augmenting
+            # view, preserving the seeded split indices.
+            train_full = copy.copy(full)
+            train_full.enable_augment(self.config.augment)
+            self.train_ds = Subset(train_full, self.train_ds.indices)
 
     def train_dataloader(self) -> DataLoader:
         if self.use_sampler:

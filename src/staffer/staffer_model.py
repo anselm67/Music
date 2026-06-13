@@ -52,6 +52,9 @@ class StafferConfig:
     warmup_steps: int = 4000
     box_loss_multiplier: int = 2
     bottom_bias: float = 3.0  # sampler weight multiplier for bottom-of-page systems
+    # Train-only scan-augmentation probability (0 = off): fraction of train pages
+    # passed through ScanAugment. Applied to the train split only.
+    augment: float = 0.0
 
     def scale_to_patch(self, value: int) -> int:
         ret = value // self.divider
