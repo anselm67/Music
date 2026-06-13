@@ -150,78 +150,6 @@ uv run python scripts/eval_predicted_boxes.py \
     to the first N pages. The default model is <code>ravel</code>.</p>
   </div>
 
-  <!-- ────────────────────────────────────── kernsheet_pages_to_1based -->
-  <div class="script">
-    <div class="script-header">
-      <span class="script-name">kernsheet_pages_to_1based.py</span>
-      <span class="badge badge-amber">migration</span>
-      <span class="badge badge-amber">kernsheet</span>
-    </div>
-    <p class="script-desc">
-      One-time migration: bumps every <code>page_number</code> in KernSheet
-      <code>layout/*.json</code> files from 0-based to 1-based (matching the
-      PDMX/staffer convention of <code>pages[page_number - 1]</code>). Also drops
-      the stale 0-based PNG cache so images re-render under the new naming.
-      Idempotent — scores already at 1-based are skipped.
-    </p>
-    <div class="label">Usage</div>
-<pre>uv run python scripts/kernsheet_pages_to_1based.py</pre>
-  </div>
-
-  <!-- ─────────────────────────────────────── migrate_bars_to_system -->
-  <div class="script">
-    <div class="script-header">
-      <span class="script-name">migrate_bars_to_system.py</span>
-      <span class="badge badge-amber">migration</span>
-      <span class="badge badge-amber">pdmx</span>
-      <span class="badge badge-amber">kernsheet</span>
-    </div>
-    <p class="script-desc">
-      Moves <code>bars[]</code> (barline x-coordinates) from each <code>Staff</code>
-      up to the parent <code>System</code> in layout JSON files. Since all staves in
-      a system share the same bars, storing it once on the system avoids redundancy.
-      Default is a dry-run; pass <code>--write</code> to modify files in place.
-      Migrates both PDMX (~253k files) and KernSheet (~581 files) in parallel.
-    </p>
-    <div class="label">Usage</div>
-<pre>uv run python scripts/migrate_bars_to_system.py           # dry-run
-uv run python scripts/migrate_bars_to_system.py --write   # write in-place</pre>
-  </div>
-
-  <!-- ─────────────────────────────────────── migrate_kernsheet_layout -->
-  <div class="script">
-    <div class="script-header">
-      <span class="script-name">migrate_kernsheet_layout.py</span>
-      <span class="badge badge-amber">migration</span>
-      <span class="badge badge-amber">kernsheet</span>
-    </div>
-    <p class="script-desc">
-      Thin shim around <code>kernsheet.migrate.migrate</code> (also exposed as
-      <code>kernsheet migrate</code> CLI). Migrates KernSheet layout files to the
-      current schema. Default is a dry-run.
-    </p>
-    <div class="label">Usage</div>
-<pre>uv run python scripts/migrate_kernsheet_layout.py [--home DIR] [--limit N] [--write]</pre>
-  </div>
-
-  <!-- ──────────────────────────────────────────── migrate_layout_id -->
-  <div class="script">
-    <div class="script-header">
-      <span class="script-name">migrate_layout_id.py</span>
-      <span class="badge badge-amber">migration</span>
-      <span class="badge badge-amber">pdmx</span>
-    </div>
-    <p class="script-desc">
-      Rewrites the <code>id</code> field in every PDMX <code>build/layout/*.json</code>
-      from the old absolute MXL path to the home-relative key
-      (<code>mxl/&lt;...&gt;.mxl</code>). Safe to run during a live training — only
-      the unused <code>id</code> field changes, and writes are atomic
-      (<code>os.replace</code>). Dry-run by default.
-    </p>
-    <div class="label">Usage</div>
-<pre>uv run python scripts/migrate_layout_id.py [--home DIR] [--dry-run] [--limit N]</pre>
-  </div>
-
   <!-- ─────────────────────────────────────────────── scorer_system_agreement -->
   <div class="script">
     <div class="script-header">
@@ -388,54 +316,6 @@ FORCE=1  scripts/train_scorer_pipeline.sh my-model     # retrain stages even if 
     trains directly on that vocab (no grow-checkpoint). KernSheet fine-tune split
     sizes are pinned to the dataset (staffer/scorer 2321 pages, noter 26166 staff
     items).</p>
-  </div>
-
-  <div class="script">
-    <div class="script-header">
-      <span class="script-name">migrate_box_ltrb.py</span>
-      <span class="badge badge-rose">migration</span>
-      <span class="badge badge-amber">pdmx</span>
-      <span class="badge badge-amber">kernsheet</span>
-    </div>
-    <p class="script-desc">
-      One-shot on-disk migration rewriting every staff box in the layout JSON from
-      the old point format <code>{"top_left":[l,t],"bot_right":[r,b]}</code> to flat
-      <code>{"left":l,"top":t,"right":r,"bottom":b}</code>, matching the
-      <code>Box</code> ltrb refactor and letting the serialisation shim in
-      <code>sheetmusic.layout</code> be deleted. Operates directly on the JSON
-      (independent of that shim), is <strong>idempotent</strong> (already-flat boxes
-      are left untouched) and skips empty / unparseable files. Re-dumps with
-      <code>indent=2</code> so only the box keys change. Already run against both
-      corpora (PDMX ~253k, KernSheet 581).
-    </p>
-    <div class="label">Usage</div>
-<pre>uv run python scripts/migrate_box_ltrb.py --dry-run        # report counts, write nothing
-uv run python scripts/migrate_box_ltrb.py                  # migrate PDMX + KernSheet layout dirs
-uv run python scripts/migrate_box_ltrb.py --dry-run ROOT   # restrict to one or more roots</pre>
-  </div>
-
-  <div class="script">
-    <div class="script-header">
-      <span class="script-name">migrate_status.py</span>
-      <span class="badge badge-rose">migration</span>
-      <span class="badge badge-amber">pdmx</span>
-      <span class="badge badge-amber">kernsheet</span>
-    </div>
-    <p class="script-desc">
-      One-shot on-disk migration rewriting each page in the layout JSON from the old
-      boolean <code>"validated": true|false</code> to the richer
-      <code>"status": "validated"|"pending"</code> enum (see
-      <code>sheetmusic.Status</code>) plus an empty <code>"reviewed": []</code>
-      acknowledgement list (see <code>kernsheet.reviews</code>). PDMX is all
-      <code>validated</code>; KernSheet maps true&rarr;validated, false&rarr;pending.
-      <strong>Idempotent</strong> (pages already carrying <code>status</code> are left
-      untouched) and skips empty / unparseable files. Re-dumps with
-      <code>indent=2</code>. Already run against both corpora (PDMX ~253k, KernSheet
-      627).
-    </p>
-    <div class="label">Usage</div>
-<pre>uv run python scripts/migrate_status.py --dry-run         # report counts, write nothing
-uv run python scripts/migrate_status.py                   # migrate PDMX + KernSheet layout dirs</pre>
   </div>
 
 </main>
