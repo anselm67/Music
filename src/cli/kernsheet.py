@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tool to migrate and manage the KernSheet dataset.
+"""Tool to manage the KernSheet dataset.
 
 KernSheet holds real scanned/published piano scores with manually-reviewed layout.
 Mirrors the ``pdmx`` CLI but acts on ``~/datasets/KernSheet`` (native ``Score`` layout
@@ -15,7 +15,6 @@ from pathlib import Path
 import click
 
 from kernsheet import KernSheet, review_names, score_findings
-from kernsheet import migrate as run_migrate
 from kernsheet.reviews import Finding
 from utils import log_uncaught_exceptions, print_histogram
 
@@ -113,28 +112,6 @@ def _review_worklist(
         if prev is None or (prev[2] is not None and finding.page_number < prev[2]):
             seen[finding.score_id] = (key, finding.score_id, finding.page_number)
     return list(seen.values())
-
-
-@click.command()
-@click.option(
-    "--write",
-    "-w",
-    is_flag=True,
-    default=False,
-    show_default=True,
-    help="Write layout/ files (otherwise a dry-run report only).",
-)
-@click.option("--limit", "-l", type=int, default=0, help="Process at most N scores.")
-@click.pass_obj
-def migrate(ctx: ClickContext, write: bool, limit: int) -> None:
-    """Rewrite legacy envelope layouts into native Score JSON under layout/."""
-    ok, skips = run_migrate(ctx.home, write=write, limit=limit)
-    print(f"\nmigrated OK: {ok}   skipped: {len(skips)}")
-    by_reason: Counter = Counter()
-    for s in skips:
-        by_reason[s.reason.split("(")[0].split("bar ")[0].strip()] += 1
-    for reason, count in by_reason.most_common():
-        print(f"  {count:4d}  {reason}")
 
 
 @click.command()
@@ -344,7 +321,6 @@ def review(ctx: ClickContext, prefix: str, review: str | None) -> None:
     print(f"\n{len(findings)} finding(s) across {flagged} score(s).")
 
 
-cli.add_command(migrate)
 cli.add_command(make)
 cli.add_command(edit)
 cli.add_command(detect)

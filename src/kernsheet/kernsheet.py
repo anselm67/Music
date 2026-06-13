@@ -56,8 +56,8 @@ class KernSheet:
         self.catalog = cast(Catalog, from_json(Catalog, json.loads(text)))
         for key, entry in self.catalog.entries.items():
             for score in entry.scores:
-                # Canonical id = the layout-json stem, matching migrate.build_score
-                # and Score.id. (The catalog's own `id` field is a stale `#N` encoding
+                # Canonical id = the layout-json stem, matching Score.id.
+                # (The catalog's own `id` field is a stale `#N` encoding
                 # nothing else speaks; derive here so every consumer keys the same way.)
                 score.id = (
                     str(Path(score.json_path).with_suffix(""))
