@@ -47,7 +47,7 @@ def render_subset(ks: KernSheet, src: KernSheetSource) -> int:
     rendered = 0
     for score in src.scores():
         try:
-            ks._rebuild_images(ks.id2score[score.id], score)
+            ks.rebuild_images(ks.id2score[score.id], score)
             rendered += 1
         except Exception as e:
             logging.warning(f"render skip {score.id}: {e}")

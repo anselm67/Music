@@ -265,8 +265,10 @@ def main() -> None:
                 continue
             pl, pt, pr, pb = pred_boxes[match[gpos]]
             pbox = Box(
-                (int(pl * convx), int(pt * convy)),
-                (int(pr * convx), int(pb * convy)),
+                int(pl * convx),
+                int(pt * convy),
+                int(pr * convx),
+                int(pb * convy),
             )
             dtop.append(abs(pt * convy - gt_box.top))
             dbot.append(abs(pb * convy - gt_box.bottom))
