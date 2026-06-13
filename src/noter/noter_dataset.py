@@ -133,6 +133,11 @@ class NoterDataset(Dataset):
                                 f"({system.staff_count} vs 2)"
                             )
                             continue
+                    if not system.bar_numbers:
+                        logging.error(
+                            f"{score.id}: system with no bar numbers, skipping"
+                        )
+                        continue
                     for idx, staff in enumerate(system.staves):
                         self.items.append(
                             (
