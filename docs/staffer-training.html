@@ -278,9 +278,21 @@
         <td><strong>Rehearsal fine-tune</strong>: KernSheet + PDMX mixed at the source layer (67% KS) to undo catastrophic forgetting</td>
         <td><span class="badge badge-green">forgetting ↓</span></td>
       </tr>
+      <tr>
+        <td><a class="run-link" href="#run-mahler"><span class="tag">mahler</span></a></td><td>2026-06-13</td><td>256</td><td>16</td>
+        <td>0.053</td><td>0.965</td><td>eval mean 0.58 px · val/stave_err_px 0.48</td>
+        <td>New full-pipeline base off the <code>=||</code> double-barline fix — PDMX, current code</td>
+        <td><span class="badge badge-slate">PDMX base</span></td>
+      </tr>
+      <tr>
+        <td><a class="run-link" href="#run-mahler-mixed"><span class="tag">mahler-mixed</span></a></td><td>2026-06-13</td><td>256</td><td>16</td>
+        <td>0.283∥</td><td>0.873∥</td><td>KS 3.91 px · PDMX 0.99 px (bounded)</td>
+        <td><strong>Rehearsal fine-tune</strong> of <span class="tag">mahler</span>: KernSheet + PDMX mixed (67% KS) — real-scan stage of the new pipeline</td>
+        <td><span class="badge badge-green">domain gap ↓</span></td>
+      </tr>
     </tbody>
   </table>
-  <p style="font-size:0.82rem;color:var(--muted)">∥ <span class="tag">debussy-mixed</span> validates on the <em>mixed</em> stream (~67% KernSheet + 33% PDMX), so its <code>val/loss</code> 0.293 and <code>sys IoU</code> 0.934 sit between pure-PDMX (<span class="tag">debussy</span> 0.982) and pure-KernSheet (<span class="tag">debussy-kernsheet</span> 0.918) and are not comparable to either single-domain row — the per-domain eval table in its card is the meaningful read.</p>
+  <p style="font-size:0.82rem;color:var(--muted)">∥ <span class="tag">debussy-mixed</span> validates on the <em>mixed</em> stream (~67% KernSheet + 33% PDMX), so its <code>val/loss</code> 0.293 and <code>sys IoU</code> 0.934 sit between pure-PDMX (<span class="tag">debussy</span> 0.982) and pure-KernSheet (<span class="tag">debussy-kernsheet</span> 0.918) and are not comparable to either single-domain row — the per-domain eval table in its card is the meaningful read. The same caveat applies to <span class="tag">mahler-mixed</span> (mixed-stream <code>val/loss</code> 0.283, <code>sys IoU</code> 0.873).</p>
   <p style="font-size:0.82rem;color:var(--muted)"><span class="tag">stave-primary-grid-full-kernsheet</span> is evaluated on KernSheet (real scans), not PDMX — its <code>sys IoU</code> 0.930 / stave error are <em>not</em> comparable to the synthetic-domain rows above; the meaningful comparison is its own before/after on KernSheet (see card). <code>sys IoU</code> shown as actual (1 − stored).</p>
   <p style="font-size:0.82rem;color:var(--muted)">† stave L1 not comparable to prior runs: enhanced2-ltrb stave head outputs (top, bottom) directly; prior runs output (cy, h). ‡ <span class="tag">stave-primary</span>'s <code>val/stave_l1</code> is not a clean metric (logging-key collision, see its card), so its stave column reports the eval table's bottom-of-page error instead — directly comparable to the anchor's bins 12–14 (~12–13 px). § <span class="tag">berlioz</span>'s PDMX <code>val/stave_err_px</code> 0.52 vs <span class="tag">stave-primary-grid-full</span>'s 0.41 is <em>not</em> a clean comparison — the <code>random_split</code> was reseeded between the two runs, so they validate on different PDMX pages, and the metric is heavy-tailed; on PDMX the letterbox is vertically identical to stretch (see <span class="tag">berlioz</span> card), so the base is effectively unchanged.</p>
   <p style="font-size:0.82rem;color:var(--muted)">¶ <span class="tag">debussy</span> vs <span class="tag">berlioz</span> <em>is</em> a clean A/B: both post-date the <code>random_split</code> reseed (commit <code>c271450</code>, 2026-06-05) and share the same letterbox + config, so they validate on the <em>identical</em> PDMX split — the only deliberate difference is per-image vs global normalization. The <code>val/stave_err_px</code> gap 0.69 vs 0.52 (+0.17&nbsp;px) is therefore the real cost of per-image norm on the synthetic domain; <code>sys IoU</code> is a tie (0.982 vs 0.981). Per-image norm was never expected to help PDMX (synthetic pages are near-binary white, where per-image ≈ global) — its target is the KernSheet photometric gap, so the verdict is the upcoming <span class="tag">debussy-kernsheet</span> fine-tune, not this row.</p>
@@ -1316,6 +1328,75 @@
     <div class="result-box positive"><strong>One model now does both domains — no catastrophic forgetting.</strong> PDMX competence is largely restored (1.73&nbsp;→&nbsp;1.22&nbsp;px, ~61% of the loss recovered) at a small bounded tax over the base (+0.32&nbsp;px), while KernSheet is unharmed and marginally better (3.83&nbsp;→&nbsp;3.55&nbsp;px). <span class="tag">debussy-mixed</span> is the staffer to carry into the scorer joint fine-tune; the same <code>--kern-sheet</code> rehearsal path applies to the noter and scorer runs next.</div>
   </div>
 
+  <!-- ════════════════════════════════════════════ mahler -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-mahler"><span class="tag">mahler</span> — new full-pipeline base</h2>
+      <span class="session-meta">2026-06-13 · tag <code>train/mahler</code> · 7 epochs · D=256 H=8 · current code (letterbox + per-image)</span>
+      <span class="badge badge-slate">PDMX base</span>
+    </div>
+    <p><strong>The staffer stage of the rebuilt end-to-end pipeline.</strong> <span class="tag">mahler</span> opens a fresh full pipeline (staffer → noter → scorer) retrained off the <code>=||</code> double-barline tokenizer fix, driven by <code>scripts/train_scorer_pipeline.sh mahler</code>. The detector is <em>vocab-independent</em> (it predicts boxes, not tokens), so architecturally this is the same D=256 stave-primary-grid model as <span class="tag">stave-primary-grid-full</span> / <span class="tag">debussy</span> on the current code (letterbox resize + per-image normalization); the rebuild simply gives every stage a consistent lineage on the new token vocab. Standard PDMX recipe: <code>train -e 7 --use-sampler</code>, <code>train_len 350000 / valid_len 1600</code>, <code>lr 1e-4</code>.</p>
+    <h3>Training curves — vs stave-primary-grid-full</h3>
+    <div class="charts">
+      <div class="chart-card"><h4>Val loss — vs spgf</h4><canvas id="c-mahler-loss"></canvas></div>
+      <div class="chart-card"><h4>Val sys IoU (actual = 1 − stored) — vs spgf</h4><canvas id="c-mahler-iou"></canvas></div>
+      <div class="chart-card"><h4>Val stave_err_px (clean, px) — vs spgf</h4><canvas id="c-mahler-l1"></canvas></div>
+    </div>
+    <p style="font-size:0.82rem;color:var(--muted)">In-training validation: <code>val/loss</code> 0.219 → <strong>0.053</strong>, <code>sys IoU</code> 0.862 → <strong>0.965</strong>, <code>val/stave_err_px</code> 2.11 → <strong>0.48&nbsp;px</strong> over 7 epochs (still descending at the final epoch). The standing champion <span class="tag">stave-primary-grid-full</span> (<span class="tag">spgf</span>) is dashed for reference — it validates on a different (pre-vocab-rebuild) PDMX split, so the gap is indicative, not a clean A/B.</p>
+    <h3>Stave coordinate error by vertical position</h3>
+    <p style="font-size:0.82rem;color:var(--muted)"><code>staffer --pdmx-home … -n 2000 eval mahler --size 500</code> on PDMX (H=960&nbsp;px). Stave top/bottom-edge error bucketed by vertical position.</p>
+    <table class="eval-table">
+      <thead><tr><th>Bin</th><th>Y range</th><th>n</th><th>top_err</th><th>bot_err</th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td>0–60</td><td>355</td><td>0.1 px</td><td>0.1 px</td></tr>
+        <tr><td>1</td><td>60–120</td><td>334</td><td>0.4 px</td><td>0.5 px</td></tr>
+        <tr><td>2</td><td>120–180</td><td>473</td><td>0.4 px</td><td>0.4 px</td></tr>
+        <tr><td>3</td><td>180–240</td><td>441</td><td>0.6 px</td><td>0.6 px</td></tr>
+        <tr><td>4</td><td>240–300</td><td>342</td><td>0.9 px</td><td>0.7 px</td></tr>
+        <tr><td>5</td><td>300–360</td><td>285</td><td>0.4 px</td><td>0.4 px</td></tr>
+        <tr><td>6</td><td>360–420</td><td>258</td><td>0.5 px</td><td>0.5 px</td></tr>
+        <tr><td>7</td><td>420–480</td><td>238</td><td>0.5 px</td><td>0.6 px</td></tr>
+        <tr><td>8</td><td>480–540</td><td>225</td><td>0.6 px</td><td>1.2 px</td></tr>
+        <tr><td>9</td><td>540–600</td><td>197</td><td>0.7 px</td><td>0.9 px</td></tr>
+        <tr><td>10</td><td>600–660</td><td>158</td><td>1.4 px</td><td>1.6 px</td></tr>
+        <tr><td>11</td><td>660–720</td><td>140</td><td>0.6 px</td><td>0.5 px</td></tr>
+        <tr><td>12</td><td>720–780</td><td>93</td><td>0.7 px</td><td>0.7 px</td></tr>
+        <tr><td>13</td><td>780–840</td><td>52</td><td>1.1 px</td><td>0.7 px</td></tr>
+        <tr><td>14</td><td>840–900</td><td>10</td><td>0.6 px</td><td>0.7 px</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">n-weighted mean (bins 0–14) top_err ≈ <strong>0.56&nbsp;px</strong> / bot_err ≈ <strong>0.60&nbsp;px</strong> (mean <strong>0.58&nbsp;px</strong>); clean <code>val/stave_err_px</code> at the final epoch <strong>0.48&nbsp;px</strong>. Profile is sub-px through bin 9 with a single soft spot at bin 10 (1.4/1.6&nbsp;px); bin 15 (900–960) had n=0 and is omitted.</p>
+    <div class="result-box neutral"><strong>On par with <span class="tag">debussy</span> — the pipeline rebuild changed nothing for the PDMX base.</strong> Re-evaluating the prior <span class="tag">debussy</span> checkpoint through the <em>same</em> eval binary gives <strong>0.54&nbsp;px</strong> mean stave error (top 0.57 / bot 0.51) vs <span class="tag">mahler</span>'s 0.58&nbsp;px — a 0.04&nbsp;px, noise-level gap (each eval draws its own random 500 pages), with near-identical per-bin profiles. Expected: the two share identical hparams and command (<code>-e 7 --use-sampler</code>), and the 12 files that changed in the staffer/data path between their commits (rehearsal-mix plumbing, the ltrb box migration, perf/metrics-logging) don't touch PDMX-base accuracy. <em>Caveat:</em> the in-training <code>sys IoU</code> 0.965 vs <span class="tag">debussy</span>'s 0.982 is <strong>not</strong> a clean comparison — different val split and a metrics-logging change between the eras — so the identical-binary eval above (a tie) is the trustworthy read. Carries forward into the <span class="tag">mahler-mixed</span> KernSheet rehearsal fine-tune and then the noter/scorer stages.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ mahler-mixed -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-mahler-mixed"><span class="tag">mahler-mixed</span> — KernSheet rehearsal fine-tune</h2>
+      <span class="session-meta">2026-06-13 · tag <code>train/mahler-mixed</code> · 30 epochs · D=256 H=8 · init from <span class="tag">mahler</span></span>
+      <span class="badge badge-green">domain gap ↓ · PDMX bounded</span>
+    </div>
+    <p><strong>The real-scan staffer of the new pipeline.</strong> Same rehearsal recipe proven on <span class="tag">debussy-mixed</span>: fine-tune the PDMX base (<span class="tag">mahler</span>) on a stream that mixes KernSheet back with PDMX at the source layer (<code>--kern-sheet /home/anselm/datasets/KernSheet 0.67</code>, 67% KS = 2:1 KS:PDMX) so real-scan accuracy is learned without catastrophically forgetting the synthetic domain. Recipe: <code>--init-from checkpoints/staffer/mahler/last.ckpt --lr 1e-5 --warmup-steps 200 --train-len 3000 --valid-len 450 -e 30 --use-sampler</code>.</p>
+    <h3>Domain-gap closure — stave y-error (n-weighted over bins, 500 samples)</h3>
+    <p style="font-size:0.82rem;color:var(--muted)">Base <span class="tag">mahler</span> run zero-shot vs the rehearsal fine-tune, on each domain. The KernSheet rows are the gap-closure test (does the FT learn real scans?); the PDMX rows are the forgetting test (does rehearsal keep synthetic competence?).</p>
+    <table class="summary-table">
+      <thead><tr><th>eval domain · model</th><th>top_err</th><th>bot_err</th><th>mean</th></tr></thead>
+      <tbody>
+        <tr><td><strong>KernSheet</strong> · <span class="tag">mahler</span> (base, zero-shot)</td><td>8.33</td><td>7.60</td><td><strong>7.96&nbsp;px</strong> ← domain gap</td></tr>
+        <tr><td><strong>KernSheet</strong> · <span class="tag">mahler-mixed</span> (rehearsal)</td><td>3.93</td><td>3.89</td><td><strong>3.91&nbsp;px</strong> ← halved</td></tr>
+        <tr><td colspan="4" style="height:0.4rem;border:0"></td></tr>
+        <tr><td><strong>PDMX</strong> · <span class="tag">mahler</span> (base, never FT'd)</td><td>0.56</td><td>0.60</td><td><strong>0.58&nbsp;px</strong></td></tr>
+        <tr><td><strong>PDMX</strong> · <span class="tag">mahler-mixed</span> (rehearsal)</td><td>1.03</td><td>0.94</td><td><strong>0.99&nbsp;px</strong> ← +0.41 tax</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">In-training validation runs on the mixed (~67% KS) stream: <code>val/loss</code> 0.283, <code>val/stave_err_px</code> 3.31, <code>sys IoU</code> 0.873 (flat from ~epoch 26). Evals: KernSheet via <code>staffer --kern-home ~/datasets/KernSheet eval &lt;name&gt; --size 500</code>; PDMX via <code>staffer --pdmx-home … -n 2000 eval &lt;name&gt; --size 500</code>.</p>
+    <h3>What the numbers say</h3>
+    <p><strong>The fine-tune halves the real-scan error.</strong> KernSheet stave error drops 7.96&nbsp;→&nbsp;3.91&nbsp;px (−4.05, ~51%): the base detector's worst per-bin errors (8–12&nbsp;px through the page middle) collapse to 3–6&nbsp;px.</p>
+    <p><strong>And it keeps PDMX largely intact.</strong> Rehearsal holds synthetic stave error to 0.99&nbsp;px — a bounded +0.41&nbsp;px over the pristine 0.58&nbsp;px base, concentrated in the deep bins (13–14, 3–5&nbsp;px) where PDMX no longer gets the network's full attention. That is the expected, cheap price of sharing one detector across both domains.</p>
+    <p><strong>Head-to-head with <span class="tag">debussy-mixed</span> — a tie.</strong> Re-evaluating the prior <span class="tag">debussy-mixed</span> checkpoint through the <em>same</em> eval binary this session gives PDMX <strong>0.90&nbsp;px</strong> / KernSheet <strong>3.75&nbsp;px</strong>, vs <span class="tag">mahler-mixed</span>'s 0.99 / 3.91 — a +0.09 / +0.16&nbsp;px edge to <span class="tag">debussy-mixed</span> that is within the unseeded eval's run-to-run wobble (~0.3&nbsp;px). (These supersede the older <span class="tag">debussy-mixed</span> card's 1.22 / 3.55&nbsp;px, which were high-variance unseeded draws on the debussy-era eval.) The rehearsal recipe reproduces cleanly across the rebuild.</p>
+    <div class="result-box positive"><strong>One detector, both domains — domain gap halved at a bounded PDMX cost.</strong> KernSheet 7.96&nbsp;→&nbsp;3.91&nbsp;px (~51%) while PDMX holds at 0.99&nbsp;px (+0.41 over base). <span class="tag">mahler-mixed</span> is the staffer that carries into the scorer joint fine-tune of the new pipeline; noter <span class="tag">mahler</span> is training now, scorer next.</div>
+  </div>
+
 </main>
 
 <div id="chart-modal" class="chart-modal" role="dialog" aria-modal="true">
@@ -1348,6 +1429,7 @@ const C = {
   spg:     '#65a30d',
   spgf:    '#15803d',
   spgfk:   '#b45309',
+  mahler:  '#be123c',
 };
 
 const basic = {
@@ -1439,6 +1521,15 @@ const spgfk = {
   loss: [1.0228,0.7025,0.5740,0.5115,0.4776,0.4527,0.4289,0.4105,0.4021,0.3877,0.3815,0.3743,0.3684,0.3659,0.3676,0.3612,0.3558,0.3543,0.3536,0.3552,0.3526,0.3486,0.3475,0.3473,0.3470,0.3466,0.3460,0.3464,0.3463,0.3462],
   iou:  [0.8666,0.8870,0.8998,0.9068,0.9115,0.9145,0.9171,0.9190,0.9210,0.9231,0.9238,0.9250,0.9257,0.9265,0.9268,0.9276,0.9283,0.9284,0.9288,0.9290,0.9296,0.9298,0.9300,0.9301,0.9303,0.9304,0.9305,0.9306,0.9305,0.9305],
   l1:   [6.0414,5.4659,5.2225,5.0674,4.9325,4.8020,4.6718,4.5308,4.4685,4.3638,4.3150,4.2589,4.2333,4.1901,4.1612,4.1370,4.0820,4.0837,4.0608,4.0238,4.0047,3.9846,3.9704,3.9694,3.9658,3.9565,3.9524,3.9547,3.9534,3.9581],
+};
+// mahler — new full-pipeline base off the =|| double-barline fix (2026-06-13). Same
+// D=256 stave-primary-grid model on current code (letterbox + per-image); the detector
+// is vocab-independent. iou is ACTUAL (1 − stored val/sys_iou); l1 is the clean
+// val/stave_err_px (px), same quantity as spgf.l1.
+const mahler = {
+  loss: [0.2188,0.1574,0.1192,0.0856,0.0680,0.0560,0.0530],
+  iou:  [0.8623,0.8922,0.9221,0.9400,0.9545,0.9636,0.9651],
+  l1:   [2.1066,1.4630,1.0444,0.7802,0.5948,0.5024,0.4802],
 };
 const epK = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29];
 
@@ -1615,6 +1706,12 @@ makeChart('c-spgf-l1',   ep7, [line('stave-primary-grid',spg.l1,  C.spg,{dashed:
 makeChart('c-spgfk-loss', epK, [line('stave-primary-grid-full-kernsheet',spgfk.loss,C.spgfk,{fill:true})]);
 makeChart('c-spgfk-iou',  epK, [line('stave-primary-grid-full-kernsheet',spgfk.iou, C.spgfk,{fill:true})], {min:0,max:1});
 makeChart('c-spgfk-l1',   epK, [line('stave-primary-grid-full-kernsheet',spgfk.l1,  C.spgfk,{fill:true})]);
+
+// mahler vs stave-primary-grid-full (spgf) — both D=256 PDMX bases; spgf dashed as the
+// standing champion (different pre-rebuild split, so indicative not a clean A/B).
+makeChart('c-mahler-loss', ep7, [line('stave-primary-grid-full',spgf.loss,C.spgf,{dashed:true}), line('mahler',mahler.loss,C.mahler,{fill:true})]);
+makeChart('c-mahler-iou',  ep7, [line('stave-primary-grid-full',spgf.iou, C.spgf,{dashed:true}), line('mahler',mahler.iou, C.mahler,{fill:true})], {min:0,max:1});
+makeChart('c-mahler-l1',   ep7, [line('stave-primary-grid-full',spgf.l1,  C.spgf,{dashed:true}), line('mahler',mahler.l1,  C.mahler,{fill:true})]);
 
 // ── Modal close wiring: backdrop click, close button, Esc.
 document.querySelector('.chart-modal-close').addEventListener('click', closeChartModal);
