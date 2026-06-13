@@ -29,13 +29,3 @@ For the noter model, the same process applies:
 # Select all scores that have systems of only one staff:
 pdmx query -o System2.csv 'index==index' --score 'pages.0.systems.0.staff_count <= 2' --valid --bar-match
 ```
-
-TODO List:
-- Simplify the network output so staff becomes two coordinates only (top, bottom) derive other coordinates from the system
-- import editor from projects/Staffer or projects/OMR
-Pending fixes:
-- The tokenizer should check the length of the first bars against the metric and decide based on that where the number 1 falls.
-- In mxl/14/10/QmWAGXyEP8SJRRRPSy5jpFvX9MRGPqPUuHkUay19hAy8wM.mxl the rendering is missing the first few bars and is therefore out of sync.
-- In /mxl/3/6/Qmd7UQFcdQg8fjqqCkJPHkc2N4PqQEkx6vh5sxqchozJu8.mxl the bar count mismatches likely because they are some invisible bars at the beginning of the svg file that the LayoutExtractor counts (it shouldn't).
-- `StafferDataset`: ~93 samples have `box.bottom > page.image_height` (corrupted layout). Currently `max_sys_bottom` is clamped to 1.0, but corrupted box coords still flow into training ground truth via `__getitem__` (producing normalised coords > 1.0). These samples should be dropped entirely, not clamped.
-
