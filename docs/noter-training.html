@@ -196,6 +196,18 @@
         <td><a class="run-link" href="#run-debussy-mixed"><span class="tag">debussy-mixed</span></a></td><td>2026-06-11</td><td>12</td>
         <td>97.81%*</td><td>0.0907*</td>
         <td><strong>PDMX rehearsal mix</strong> (0.67 KS / 0.33 PDMX) on the <span class="tag">debussy</span> base — undoes catastrophic forgetting: PDMX free-running 93.4&nbsp;→&nbsp;96.8% while KernSheet holds (90.7&nbsp;→&nbsp;90.9%). *val is the blended stream, not per-domain</td>
+        <td><span class="badge badge-slate">superseded by mahler</span></td>
+      </tr>
+      <tr>
+        <td><a class="run-link" href="#run-mahler"><span class="tag">mahler</span></a></td><td>2026-06-14</td><td>12</td>
+        <td>99.54%</td><td>0.0175</td>
+        <td>Faithful <span class="tag">debussy</span>-recipe PDMX base rebuilt on the corrected <code>=||</code> double-barline tokenizer; <strong>new vocab</strong> (4,785 / KS-combined 5,492) so token metrics are a fresh baseline, not apples-to-apples with rows above</td>
+        <td><span class="badge badge-slate">base · ≈ debussy</span></td>
+      </tr>
+      <tr>
+        <td><a class="run-link" href="#run-mahler"><span class="tag">mahler-mixed</span></a></td><td>2026-06-14</td><td>12</td>
+        <td>97.50%*</td><td>0.1064*</td>
+        <td>Rehearsal mix (0.67 KS / 0.33 PDMX) on the <span class="tag">mahler</span> base — the <code>=||</code> rebuild of <span class="tag">debussy-mixed</span>; reproduces it (PDMX 95.7% / KS 89.4% free-running on the new vocab). *val is the blended stream</td>
         <td><span class="badge badge-green">both domains</span></td>
       </tr>
     </tbody>
@@ -692,6 +704,25 @@
     </table>
     <p style="font-size:0.78rem;color:var(--muted)">Free-running = <code>noter [--kern-home … | --csv System2.csv] eval &lt;name&gt; --size 1024</code> (greedy edit-distance similarity). PDMX: mixed avg 96.8% (min 25.0%), KS-only avg 93.4% (min 15.8%). KernSheet: mixed avg 90.9%; KS-only 90.7% is the on-record <code>--size 500</code> figure (read as tied). Both eval'd 2026-06-11. The run's own teacher-forced val (blended 0.67/0.33 stream, not per-domain) converged to 97.81% acc / 0.0907 loss at epoch 11.</p>
     <div class="result-box positive"><strong>Rehearsal closes the forgetting at zero KernSheet cost.</strong> PDMX recovers <strong>+3.4 pp</strong> (93.4 → 96.8), back within ~1 pp of the un-fine-tuned base, while KernSheet holds flat (90.7 → 90.9, within noise). So this is not a KernSheet-vs-PDMX trade — it is a strict improvement over the KS-only fine-tune that <em>also</em> restores most of the forgotten synthetic competence. <span class="tag">debussy-mixed</span> supersedes <span class="tag">debussy-kernsheet</span> as the production KernSheet noter, and is the noter half of the rehearsal-mixed <span class="tag">scorer</span> re-merge.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ mahler -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-mahler"><span class="tag">mahler</span> / <span id="run-mahler-mixed" class="tag">mahler-mixed</span> — the <code>=||</code> tokenizer rebuild</h2>
+      <span class="session-meta">2026-06-14 · tags <code>train/mahler</code> · <code>train/mahler-mixed</code> · 12 ep each · the <span class="tag">debussy</span> / <span class="tag">debussy-mixed</span> recipe, re-run on the corrected tokenizer</span>
+      <span class="badge badge-green">both domains</span>
+    </div>
+    <p><span class="tag">mahler</span> is a faithful re-run of the <span class="tag">debussy</span> noter pipeline (per-image norm, letterbox, then the 0.67 rehearsal mix) triggered by the <strong><code>=||</code> double-barline tokenizer fix</strong> (commit <code>3802989</code>): a double barline is now its own <code>=||</code> glyph instead of being conflated with the final <code>==</code>. Both corpora were fully retokenized and <strong>both vocabs rebuilt</strong> (PDMX 4,784 → 4,785, KS-combined 5,543 → 5,492, both now carrying <code>=||</code>). Because the target token <em>alphabet changed</em>, every token-accuracy / edit-similarity number here is on a <strong>different vocab</strong> than the rows above — a fresh baseline, <em>not</em> a head-to-head with <span class="tag">debussy-mixed</span>. The point of the run is reproduction on the corrected GT, not a metric win.</p>
+    <table class="summary-table">
+      <thead><tr><th>Free-running similarity, by domain</th><th><span class="tag">mahler</span> (PDMX base)</th><th><span class="tag">mahler-mixed</span> (0.67 rehearsal)</th></tr></thead>
+      <tbody>
+        <tr><td>PDMX</td><td><strong>97.3%</strong></td><td>95.7%</td></tr>
+        <tr><td>KernSheet</td><td>71.3% <span style="color:var(--muted)">(zero-shot)</span></td><td><strong>89.4%</strong></td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">Free-running = <code>noter [--kern-home … | --pdmx-home …] eval &lt;name&gt; --size 1024</code> (greedy edit-distance similarity), eval'd 2026-06-14. PDMX: <span class="tag">mahler</span> avg 97.3% (min 7.0%), <span class="tag">mahler-mixed</span> avg 95.7% (min 16.0%). KernSheet: <span class="tag">mahler-mixed</span> avg 89.4% (min 4.5%), <span class="tag">mahler</span> zero-shot 71.3% (min 16.6%). Teacher-forced val: <span class="tag">mahler</span> 99.54% acc / 0.0175 loss (epoch 11, PDMX split); <span class="tag">mahler-mixed</span> 97.50% / 0.1064 on the blended 0.67/0.33 stream.</p>
+    <div class="result-box positive"><strong>The rebuild reproduces the production noter — same forgetting-then-rehearsal shape, on the corrected GT.</strong> The mixed fine-tune lifts KernSheet from <strong>71.3% zero-shot → 89.4%</strong> (+18.1 pp) while keeping PDMX at <strong>95.7%</strong> (a −1.6 pp rehearsal tax off the 97.3% base — the same bounded cost <span class="tag">debussy-mixed</span> paid). The absolute numbers sit ≈1–1.5 pp under the corresponding <span class="tag">debussy-mixed</span> cells (96.8% / 90.9%), but that gap rides the <strong>new <code>=||</code> vocab</strong> (different token alphabet, different edit-distance denominator), not a regression — the box-level <a href="staffer-training.html#run-mahler">staffer</a> halves, which the vocab can't touch, came out dead-even with <span class="tag">debussy</span>. <span class="tag">mahler-mixed</span> is the noter half of the corrected-tokenizer <span class="tag">scorer</span>/<a href="scorer-training.html#run-mahler">mahler</a> merge and supersedes <span class="tag">debussy-mixed</span> as the production noter, at metric parity.</div>
   </div>
 
 </main>
