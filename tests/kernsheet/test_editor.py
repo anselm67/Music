@@ -492,6 +492,19 @@ class TestBarCounting:
 
         assert [s.bar_numbers for s in editor.page.systems] == [[2, 3], [4, 5]]
 
+    def test_renumber_bars_clears_barless_systems(self) -> None:
+        # A system with staves but no barlines (count 0) carrying a stale [1] must
+        # be cleared so it doesn't linger inconsistent and the bar_numbers review
+        # can flag it; it also must not consume a bar number from the chain.
+        editor = _editor(
+            [_page([_sys(100, 250, [10, 200, 400]), _sys(300, 450, [])])],
+            kern=_FakeKern(first_bar=1),
+        )
+
+        editor.renumber_bars()
+
+        assert [s.bar_numbers for s in editor.page.systems] == [[1, 2], []]
+
 
 class TestIoCommands:
     def test_save_writes_score(self) -> None:

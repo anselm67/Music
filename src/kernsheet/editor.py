@@ -674,7 +674,11 @@ class StaffEditor:
             systems = []
             for system in page.systems:
                 count = system.bar_count
-                if system.staff_count > 0 and count > 0:
+                if system.staff_count > 0:
+                    # A system with bars gets its sequential run; one with none
+                    # (count == 0) is cleared so a stale number can't linger and the
+                    # barless `bar_numbers` review flags it (consistent with the
+                    # `bar_drift` review, which skips empty bar_numbers).
                     system = replace(
                         system,
                         bar_numbers=list(range(bar_number, bar_number + count)),
