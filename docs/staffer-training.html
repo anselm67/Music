@@ -290,6 +290,18 @@
         <td><strong>Rehearsal fine-tune</strong> of <span class="tag">mahler</span>: KernSheet + PDMX mixed (67% KS) — real-scan stage of the new pipeline</td>
         <td><span class="badge badge-green">domain gap ↓</span></td>
       </tr>
+      <tr>
+        <td><a class="run-link" href="#run-mahler-augment"><span class="tag">mahler-augment</span></a></td><td>2026-06-15</td><td>256</td><td>16</td>
+        <td>0.053</td><td>0.981</td><td>eval mean 0.60 px · val/stave_err_px 0.58</td>
+        <td><strong>ScanAugment</strong> (<code>--augment 0.5</code>) on the <span class="tag">mahler</span> PDMX base — scan-look synthetic</td>
+        <td><span class="badge badge-green">KS box ↓</span></td>
+      </tr>
+      <tr>
+        <td><a class="run-link" href="#run-mahler-augment-mixed"><span class="tag">mahler-augment-mixed</span></a></td><td>2026-06-15</td><td>256</td><td>16</td>
+        <td>0.254∥</td><td>0.940∥</td><td>KS <strong>3.49 px</strong> · PDMX 0.98 px</td>
+        <td>Rehearsal fine-tune of <span class="tag">mahler-augment</span> — augment cuts real-scan box error (3.91→3.49 px) but doesn't <a href="scorer-training.html#run-mahler-augment">propagate end-to-end</a></td>
+        <td><span class="badge badge-amber">win didn't carry</span></td>
+      </tr>
     </tbody>
   </table>
   <p style="font-size:0.82rem;color:var(--muted)">∥ <span class="tag">debussy-mixed</span> validates on the <em>mixed</em> stream (~67% KernSheet + 33% PDMX), so its <code>val/loss</code> 0.293 and <code>sys IoU</code> 0.934 sit between pure-PDMX (<span class="tag">debussy</span> 0.982) and pure-KernSheet (<span class="tag">debussy-kernsheet</span> 0.918) and are not comparable to either single-domain row — the per-domain eval table in its card is the meaningful read. The same caveat applies to <span class="tag">mahler-mixed</span> (mixed-stream <code>val/loss</code> 0.283, <code>sys IoU</code> 0.873).</p>
@@ -1395,6 +1407,34 @@
     <p><strong>And it keeps PDMX largely intact.</strong> Rehearsal holds synthetic stave error to 0.99&nbsp;px — a bounded +0.41&nbsp;px over the pristine 0.58&nbsp;px base, concentrated in the deep bins (13–14, 3–5&nbsp;px) where PDMX no longer gets the network's full attention. That is the expected, cheap price of sharing one detector across both domains.</p>
     <p><strong>Head-to-head with <span class="tag">debussy-mixed</span> — a tie.</strong> Re-evaluating the prior <span class="tag">debussy-mixed</span> checkpoint through the <em>same</em> eval binary this session gives PDMX <strong>0.90&nbsp;px</strong> / KernSheet <strong>3.75&nbsp;px</strong>, vs <span class="tag">mahler-mixed</span>'s 0.99 / 3.91 — a +0.09 / +0.16&nbsp;px edge to <span class="tag">debussy-mixed</span> that is within the unseeded eval's run-to-run wobble (~0.3&nbsp;px). (These supersede the older <span class="tag">debussy-mixed</span> card's 1.22 / 3.55&nbsp;px, which were high-variance unseeded draws on the debussy-era eval.) The rehearsal recipe reproduces cleanly across the rebuild.</p>
     <div class="result-box positive"><strong>One detector, both domains — domain gap halved at a bounded PDMX cost.</strong> KernSheet 7.96&nbsp;→&nbsp;3.91&nbsp;px (~51%) while PDMX holds at 0.99&nbsp;px (+0.41 over base). <span class="tag">mahler-mixed</span> is the staffer that carries into the scorer joint fine-tune of the new pipeline; noter <span class="tag">mahler</span> is training now, scorer next.</div>
+  </div>
+
+  <!-- ════════════════════════════════════ mahler-augment -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-mahler-augment"><span class="tag">mahler-augment</span> / <span id="run-mahler-augment-mixed" class="tag">mahler-augment-mixed</span> — scan-look augmentation</h2>
+      <span class="session-meta">2026-06-15 · tag <code>train/mahler-augment</code> · base 7 ep + mixed 30 ep · D=256 H=8 · the <span class="tag">mahler</span> recipe + <code>--augment 0.5</code></span>
+      <span class="badge badge-green">KS box ↓</span>
+    </div>
+    <p><strong>The detector half of the ScanAugment experiment.</strong> Identical to the <span class="tag">mahler</span> staffer recipe, with <strong>ScanAugment</strong> (<code>src/sheetmusic/transform.py</code>, commit <code>97849e1</code>) enabled at <code>--augment 0.5</code> on the PDMX <em>base</em> only — a geometry-preserving print→scan chain (ink spread, blur, paper tone + uneven illumination, sensor noise, JPEG) applied to the crisp Verovio renders so the detector sees scan-like degradation before it ever meets KernSheet. The fine-tune (<span class="tag">mahler-augment-mixed</span>) is the same 0.67-KS rehearsal as <span class="tag">mahler-mixed</span>, augment off (the mix already carries real scans).</p>
+    <table class="summary-table">
+      <thead><tr><th>eval domain · model (mean stave err, <code>--size 500</code>, this session)</th><th>top</th><th>bot</th><th>mean</th></tr></thead>
+      <tbody>
+        <tr><td><strong>KernSheet</strong> · <span class="tag">mahler</span> base (zero-shot)</td><td>8.33</td><td>7.60</td><td>7.96&nbsp;px</td></tr>
+        <tr><td><strong>KernSheet</strong> · <span class="tag">mahler-augment</span> base (zero-shot)</td><td>6.83</td><td>6.34</td><td><strong>6.58&nbsp;px</strong> ← −1.38</td></tr>
+        <tr><td colspan="4" style="height:0.3rem;border:0"></td></tr>
+        <tr><td><strong>KernSheet</strong> · <span class="tag">mahler-mixed</span> (rehearsal)</td><td>3.93</td><td>3.89</td><td>3.91&nbsp;px</td></tr>
+        <tr><td><strong>KernSheet</strong> · <span class="tag">mahler-augment-mixed</span> (rehearsal)</td><td>3.48</td><td>3.50</td><td><strong>3.49&nbsp;px</strong> ← −0.42</td></tr>
+        <tr><td colspan="4" style="height:0.4rem;border:0"></td></tr>
+        <tr><td><strong>PDMX</strong> · <span class="tag">mahler</span> base</td><td>0.56</td><td>0.60</td><td>0.58&nbsp;px</td></tr>
+        <tr><td><strong>PDMX</strong> · <span class="tag">mahler-augment</span> base</td><td>0.59</td><td>0.61</td><td>0.60&nbsp;px ← +0.02</td></tr>
+        <tr><td><strong>PDMX</strong> · <span class="tag">mahler-augment-mixed</span> (forget test)</td><td>1.01</td><td>0.95</td><td>0.98&nbsp;px</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">Same eval binaries as the <span class="tag">mahler-mixed</span> card. The augment-mixed in-training mixed-stream val converged to <code>val/loss</code> 0.254, <code>val/stave_err_px</code> 3.11, <code>sys IoU</code> 0.940 (vs <span class="tag">mahler-mixed</span> 0.283 / 3.31 / 0.873) — augment is ahead on the mixed val too.</p>
+    <h3>What the numbers say</h3>
+    <p><strong>Augmentation does what it was built to do — at the detector.</strong> It cuts real-scan box error at <em>both</em> stages: the PDMX base now generalises to KernSheet zero-shot at <strong>6.58&nbsp;px vs 7.96</strong> (−1.38, before it has seen a single real scan), and after the rehearsal fine-tune the gap-closure lands <strong>3.49&nbsp;px vs 3.91</strong> (−0.42, ~11% tighter). The clean-PDMX cost is negligible — base 0.60 vs 0.58&nbsp;px, mixed 0.98 vs 0.99&nbsp;px. So as a <em>detector</em> intervention this is a genuine, consistent win.</p>
+    <div class="result-box neutral"><strong>A real detector win that doesn't pay off downstream.</strong> The box-error improvements here are clean and reproducible (KS zero-shot −1.38&nbsp;px, KS after-FT −0.42&nbsp;px, PDMX flat). But the <a href="scorer-training.html#run-mahler-augment">end-to-end scorer</a> shows the gain <strong>does not propagate</strong>: KernSheet transcription is flat-to-slightly-worse (90.7 vs 91.0%) because detection geometry was never the real-scan bottleneck, and the augmented base's softer PDMX objectness doubles end-to-end PDMX miscounts (5&nbsp;→&nbsp;12&nbsp;/&nbsp;500). So <span class="tag">mahler-augment</span> is <strong>not promoted</strong> — see the scorer card for the full verdict. The standalone detector result is logged here because it's real and informative: the lever works, it just pushes on the wrong bottleneck.</div>
   </div>
 
 </main>

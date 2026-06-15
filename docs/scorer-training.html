@@ -180,6 +180,13 @@
         <td><strong><code>=||</code> tokenizer rebuild</strong> of <span class="tag">debussy-mixed</span> — corrected double-barline GT, new vocab; reproduces it (PDMX 96.3→96.1, KS 91.6→91.0, within wobble)</td>
         <td><span class="badge badge-green">both domains · keeper</span></td>
       </tr>
+      <tr>
+        <td><a class="run-link" href="#run-mahler-augment"><span class="tag">mahler-augment</span></a></td><td>KS + PDMX</td><td>2026-06-15</td><td>20</td>
+        <td>97.32%*</td><td>0.939*</td><td>3.98 px*</td>
+        <td>90.7% KS · <strong>96.7% PDMX</strong><sup>★</sup></td>
+        <td><strong>ScanAugment</strong> on the <span class="tag">mahler</span> PDMX bases (scan-look synthetic) — clean <a href="staffer-training.html#run-mahler-augment">staffer</a> geometry win, but <strong>end-to-end wash/negative</strong>: KS −0.3 pp, PDMX miscount 5→12</td>
+        <td><span class="badge badge-amber">negative · not promoted</span></td>
+      </tr>
     </tbody>
   </table>
   <p class="subtitle" style="margin-top:-1rem"><sup>†</sup> on an unseeded validation split; see note above. <sup>‡</sup> from <code>scorer eval</code> on a random (unseeded) 300 pages under the <strong>center-y Hungarian</strong> matcher — <em>not</em> the legacy top-to-bottom page-matched eval the <span class="tag">boulez</span>/<span class="tag">walton</span>/<span class="tag">ravel</span> rows share (those over-penalize miscounts). Under the same center-y matcher the three later runs rank <span class="tag">debussy</span> 91.1% ≥ <span class="tag">berlioz</span> 90.8% ≥ <span class="tag">ravel</span> 89.6% (each its own unseeded draw, so ~1% gaps are soft); <span class="tag">ravel</span>'s 90.7%/3-miscount row above is the legacy-matcher figure, not comparable to these. See the <a href="#run-debussy"><span class="tag">debussy</span></a> card. <sup>*</sup> <span class="tag">debussy-mixed</span>'s val columns are on its <strong>blended</strong> 0.67-KS/0.33-PDMX validation stream (not a single per-domain split), so they aren't directly comparable to the per-domain val rows above; the honest per-domain figures are the <code>scorer eval</code> numbers (<sup>★</sup>). <sup>★</sup> from <code>scorer eval --size 500 --seed 0</code> under the center-y matcher — KS at beam 8 + rerank, PDMX greedy; see the <a href="#run-debussy-mixed"><span class="tag">debussy-mixed</span></a> card.</p>
@@ -422,6 +429,30 @@
     </table>
     <p style="font-size:0.78rem;color:var(--muted)">All cells <code>scorer eval --size 500 --seed 0</code> under the center-y Hungarian matcher; KernSheet beam 8, PDMX greedy. The two columns are on <strong>different token vocabs</strong> (the <code>=||</code> split), so the ~0.5 pp gaps are a vocab/measurement difference, not a quality delta — read them as parity. The PDMX stave counts differ because the seeded 500-page draw differs slightly between the corpora's retokenized indices. <span class="tag">mahler</span>'s own blended val converged to 97.32% acc / sys IoU 0.939 / stave-err 3.98 px / 0.371 loss (epoch 18).</p>
     <div class="result-box positive"><strong>The corrected-tokenizer rebuild reproduces the production scorer — parity on both domains.</strong> End-to-end <span class="tag">mahler</span> lands PDMX <strong>96.1%</strong> (vs <span class="tag">debussy-mixed</span> 96.3) and KernSheet <strong>91.0%</strong> (vs 91.6), each within the unseeded eval wobble and across a changed token alphabet — so the <code>=||</code> fix cost nothing while making double barlines a first-class glyph. The pattern from the standalone stages holds end-to-end: the <a href="staffer-training.html#run-mahler">staffer</a> halves (which the vocab can't touch) came out dead-even with <span class="tag">debussy</span>, and the small transcription deltas ride the new vocab, not a regression. The barline-agreement rerank still pays its usual ≈+0.4 pp on KernSheet (90.6 → 91.0) and a touch on PDMX (95.9 → 96.1), so it stays on. <span class="tag">mahler</span> supersedes <span class="tag">debussy-mixed</span> as the production end-to-end model: same both-domain robustness, now on the corrected double-barline tokenizer.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ mahler-augment -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-mahler-augment"><span class="tag">mahler-augment</span> — scan-look augmentation, end-to-end</h2>
+      <span class="session-meta">2026-06-15 · tag <code>train/mahler-augment</code> · 20 ep · the <span class="tag">mahler</span> pipeline + <strong>ScanAugment</strong> on the PDMX bases</span>
+      <span class="badge badge-amber">negative · not promoted</span>
+    </div>
+    <p><span class="tag">mahler-augment</span> is the <span class="tag">mahler</span> five-stage pipeline rerun with one change: <strong>ScanAugment</strong> (<code>src/sheetmusic/transform.py</code>, commit <code>97849e1</code>) turned on at <code>prob=0.5</code> for the two <strong>PDMX bases only</strong> (<code>--augment 0.5</code> on the staffer base and the noter base; the KernSheet rehearsal fine-tunes already see real scans). It applies a geometry-preserving print→scan chain — ink spread, optical blur, paper tone + uneven illumination, sensor noise, JPEG recompression — to make crisp Verovio renders look scanned, the goal being to close the photometric/morphological gap that per-image normalisation (an affine) can't synthesise. Same <code>=||</code> vocab as <span class="tag">mahler</span>, so this is a <strong>clean head-to-head</strong>.</p>
+    <table class="summary-table">
+      <thead><tr><th>End-to-end, by domain (<code>scorer eval --size 500 --seed 0</code>)</th><th><span class="tag">mahler</span> (no augment)</th><th><span class="tag">mahler-augment</span></th></tr></thead>
+      <tbody>
+        <tr><td>KernSheet · matched-stave sim (beam 8 + rerank)</td><td><strong>91.0%</strong></td><td>90.7%</td></tr>
+        <tr><td>KernSheet · matched-stave sim (no rerank)</td><td><strong>90.6%</strong></td><td>90.4%</td></tr>
+        <tr><td>KernSheet · miscount pages</td><td>9 / 500</td><td>9 / 500</td></tr>
+        <tr><td><strong>PDMX</strong> · matched-stave sim (rerank)</td><td>96.1%</td><td><strong>96.7%</strong></td></tr>
+        <tr><td><strong>PDMX</strong> · matched-stave sim (no rerank)</td><td>95.9%</td><td><strong>96.6%</strong></td></tr>
+        <tr><td><strong>PDMX</strong> · miscount pages</td><td><strong>5 / 500</strong></td><td>12 / 500</td></tr>
+        <tr><td><strong>PDMX</strong> · staves predicted / GT</td><td><strong>2371 / 2372</strong></td><td>2267 / 2274</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">All cells <code>scorer eval --size 500 --seed 0</code> under the center-y Hungarian matcher; KernSheet beam 8, PDMX greedy. Same <code>=||</code> vocab in both columns, so the deltas are real (not a vocab artefact). The PDMX GT-stave totals differ slightly because the seeded 500-page draw lands on slightly different retokenized indices.</p>
+    <div class="result-box negative"><strong>ScanAugment is a clean upstream win that does not propagate — net wash-to-negative end-to-end, so it is not promoted.</strong> Where augmentation is measured directly it clearly helps: the standalone <a href="staffer-training.html#run-mahler-augment">staffer</a> real-scan boxes tighten 3.31&nbsp;→&nbsp;3.11&nbsp;px (sys IoU 0.936&nbsp;→&nbsp;0.940 on the mixed val) and the standalone <a href="noter-training.html#run-mahler-augment">noter</a> KernSheet similarity ticks up. But that geometry gain <strong>does not carry into end-to-end transcription</strong>: on KernSheet — the whole point — <span class="tag">mahler-augment</span> is <strong>−0.3&nbsp;pp</strong> (90.7 vs 91.0 rerank; 90.4 vs 90.6 off), inside the eval wobble, i.e. flat-to-slightly-worse. Detection geometry simply wasn't the real-scan bottleneck; transcription is, and the boxes were already good enough that tightening them buys nothing downstream. Meanwhile augment carries a <strong>PDMX cost</strong>: it concedes clean-PDMX base accuracy (staffer base 0.48&nbsp;→&nbsp;0.58&nbsp;px) and the weaker objectness/count shows up as <strong>miscount 5&nbsp;→&nbsp;12&nbsp;/&nbsp;500</strong> (7 missed PDMX staves vs 1). PDMX matched-stave similarity is up +0.6&nbsp;pp, but that is only over staves it <em>did</em> find, so it doesn't offset the extra misses. Net: a real detector-level result with no end-to-end payoff and a small PDMX-counting tax — <span class="tag">mahler</span> stays as production. If augment is pursued again, the gap is in <em>transcription, not detection</em>, so the lever belongs on the noter path; and <code>prob=0.5</code> on the staffer base was too strong for PDMX counting.</div>
   </div>
 
 </main>

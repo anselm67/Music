@@ -210,6 +210,18 @@
         <td>Rehearsal mix (0.67 KS / 0.33 PDMX) on the <span class="tag">mahler</span> base — the <code>=||</code> rebuild of <span class="tag">debussy-mixed</span>; reproduces it (PDMX 95.7% / KS 89.4% free-running on the new vocab). *val is the blended stream</td>
         <td><span class="badge badge-green">both domains</span></td>
       </tr>
+      <tr>
+        <td><a class="run-link" href="#run-mahler-augment"><span class="tag">mahler-augment</span></a></td><td>2026-06-15</td><td>12</td>
+        <td>99.53%</td><td>0.0184</td>
+        <td><strong>ScanAugment</strong> (<code>--augment 0.5</code>) on the <span class="tag">mahler</span> PDMX base — scan-look synthetic; teacher-forced val dead-even with <span class="tag">mahler</span></td>
+        <td><span class="badge badge-slate">base</span></td>
+      </tr>
+      <tr>
+        <td><a class="run-link" href="#run-mahler-augment"><span class="tag">mahler-augment-mixed</span></a></td><td>2026-06-15</td><td>12</td>
+        <td>97.53%*</td><td>0.1048*</td>
+        <td>Rehearsal mix on the <span class="tag">mahler-augment</span> base — free-running PDMX 95.8% / KS 90.2% (vs <span class="tag">mahler-mixed</span> 95.8% / 89.8% same-session), but no <a href="scorer-training.html#run-mahler-augment">end-to-end</a> gain. *val is the blended stream</td>
+        <td><span class="badge badge-amber">marginal · not promoted</span></td>
+      </tr>
     </tbody>
   </table>
 
@@ -723,6 +735,25 @@
     </table>
     <p style="font-size:0.78rem;color:var(--muted)">Free-running = <code>noter [--kern-home … | --pdmx-home …] eval &lt;name&gt; --size 1024</code> (greedy edit-distance similarity), eval'd 2026-06-14. PDMX: <span class="tag">mahler</span> avg 97.3% (min 7.0%), <span class="tag">mahler-mixed</span> avg 95.7% (min 16.0%). KernSheet: <span class="tag">mahler-mixed</span> avg 89.4% (min 4.5%), <span class="tag">mahler</span> zero-shot 71.3% (min 16.6%). Teacher-forced val: <span class="tag">mahler</span> 99.54% acc / 0.0175 loss (epoch 11, PDMX split); <span class="tag">mahler-mixed</span> 97.50% / 0.1064 on the blended 0.67/0.33 stream.</p>
     <div class="result-box positive"><strong>The rebuild reproduces the production noter — same forgetting-then-rehearsal shape, on the corrected GT.</strong> The mixed fine-tune lifts KernSheet from <strong>71.3% zero-shot → 89.4%</strong> (+18.1 pp) while keeping PDMX at <strong>95.7%</strong> (a −1.6 pp rehearsal tax off the 97.3% base — the same bounded cost <span class="tag">debussy-mixed</span> paid). The absolute numbers sit ≈1–1.5 pp under the corresponding <span class="tag">debussy-mixed</span> cells (96.8% / 90.9%), but that gap rides the <strong>new <code>=||</code> vocab</strong> (different token alphabet, different edit-distance denominator), not a regression — the box-level <a href="staffer-training.html#run-mahler">staffer</a> halves, which the vocab can't touch, came out dead-even with <span class="tag">debussy</span>. <span class="tag">mahler-mixed</span> is the noter half of the corrected-tokenizer <span class="tag">scorer</span>/<a href="scorer-training.html#run-mahler">mahler</a> merge and supersedes <span class="tag">debussy-mixed</span> as the production noter, at metric parity.</div>
+  </div>
+
+  <!-- ════════════════════════════════════ mahler-augment -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-mahler-augment"><span class="tag">mahler-augment</span> / <span id="run-mahler-augment-mixed" class="tag">mahler-augment-mixed</span> — scan-look augmentation</h2>
+      <span class="session-meta">2026-06-15 · tag <code>train/mahler-augment</code> · 12 ep each · the <span class="tag">mahler</span> noter recipe + <code>--augment 0.5</code></span>
+      <span class="badge badge-amber">marginal · not promoted</span>
+    </div>
+    <p><strong>The transcriber half of the ScanAugment experiment.</strong> The <span class="tag">mahler</span> noter recipe with <strong>ScanAugment</strong> (<code>src/sheetmusic/transform.py</code>, commit <code>97849e1</code>) at <code>--augment 0.5</code> on the PDMX <em>base</em> only — the same print→scan degradation chain the staffer base got, here teaching the transcriber scan-like input before the KernSheet rehearsal. Same <code>=||</code> vocab as <span class="tag">mahler</span>, and both columns below were re-evaluated <strong>this session</strong> (the free-running eval is unseeded, so a same-session re-run of <span class="tag">mahler-mixed</span> is the fair baseline, not the older card figures).</p>
+    <table class="summary-table">
+      <thead><tr><th>Free-running similarity, by domain (<code>eval --size 1024</code>, same session)</th><th><span class="tag">mahler-mixed</span> (no augment)</th><th><span class="tag">mahler-augment-mixed</span></th></tr></thead>
+      <tbody>
+        <tr><td>PDMX</td><td>95.8%</td><td>95.8%</td></tr>
+        <tr><td>KernSheet</td><td>89.8%</td><td><strong>90.2%</strong> <span style="color:var(--muted)">(+0.4)</span></td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">Free-running = <code>noter [--kern-home … | --pdmx-home …] eval &lt;name&gt; --size 1024</code> (greedy edit-distance similarity), both re-eval'd 2026-06-15. The eval is unseeded, so run-to-run wobble is ≈±0.3–0.5 pp — the +0.4 pp KernSheet gain is inside that band. Teacher-forced val is dead-even: <span class="tag">mahler-augment</span> base 99.53% / 0.0184 (vs <span class="tag">mahler</span> 99.54% / 0.0175), <span class="tag">mahler-augment-mixed</span> 97.53% / 0.1048 on the blended stream (vs <span class="tag">mahler-mixed</span> 97.50% / 0.1064).</p>
+    <div class="result-box neutral"><strong>Augment is harmless-to-marginally-positive for the noter in isolation — and still doesn't move the end-to-end needle.</strong> Standalone the augmented noter is a clean tie on PDMX (95.8%) and a <strong>+0.4 pp</strong> KernSheet tick (89.8 → 90.2%), inside the unseeded wobble — so at worst it costs nothing, at best a marginal real-scan gain. But the gain does not survive the merge: the <a href="scorer-training.html#run-mahler-augment">end-to-end scorer</a> KernSheet similarity is flat-to-slightly-worse (90.7 vs 91.0%), and on the detector side augment's softer PDMX objectness costs miscounts. The standalone halves both look fine; the lever simply doesn't pay where it ships. <span class="tag">mahler-mixed</span> stays as the production noter — see the <a href="scorer-training.html#run-mahler-augment">scorer card</a> for the full <code>augment no good</code> verdict.</div>
   </div>
 
 </main>

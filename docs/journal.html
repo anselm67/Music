@@ -93,6 +93,58 @@
      following the format of the entries that follow. Keep newest-first order.
      ════════════════════════════════════════════════════════════════════════ -->
 
+<!-- ── ScanAugment: clean detector win, no end-to-end payoff ── -->
+<article class="entry">
+  <h2>Scan-look augmentation helps the detector and nothing downstream — <code>augment no good</code></h2>
+  <div class="entry-meta">
+    <span>2026-06-15</span>
+    <span class="badge rejected">Rejected</span>
+    <span class="ref"><code>src/sheetmusic/transform.py</code> (<code>ScanAugment</code>, commit <code>97849e1</code>) · run <span class="tag">mahler-augment</span> · cf. rehearsal mixing &amp; the photometric-gap entry</span>
+  </div>
+
+  <h3>Context</h3>
+  <p>
+    The standing real-scan strategy is per-image normalisation plus a KernSheet rehearsal mix.
+    Per-image norm is only an <em>affine</em>, though — it can rescale tone but can't synthesise the
+    <em>morphology</em> of a scan (fattened ink, optical blur, paper texture, JPEG ringing). The
+    hypothesis: a geometry-preserving print→scan augmentation on the crisp Verovio renders would
+    teach real-scan appearance the affine can't, narrowing the PDMX↔KernSheet gap that the pixel
+    histograms make visible. <code>ScanAugment</code> implements exactly that chain (ink spread,
+    blur, paper tone + uneven illumination, sensor noise, JPEG), calibrated so augmented-PDMX
+    stroke-width mean matches KernSheet (223 vs 221). It was wired behind a <code>--augment</code>
+    flag and turned on at <code>prob=0.5</code> for the PDMX bases only (the KernSheet fine-tunes
+    already see real scans), and the whole <span class="tag">mahler</span> pipeline was rerun as
+    <span class="tag">mahler-augment</span> on the same <code>=||</code> vocab — a clean A/B.
+  </p>
+
+  <h3>What we found</h3>
+  <p>
+    Where augmentation is <em>measured directly</em>, it works: the standalone
+    <a href="staffer-training.html#run-mahler-augment">staffer</a> real-scan boxes tighten
+    3.31&nbsp;→&nbsp;3.11&nbsp;px (sys IoU 0.936&nbsp;→&nbsp;0.940) and the standalone
+    <a href="noter-training.html#run-mahler-augment">noter</a> KernSheet similarity ticks up. But the
+    end-to-end <a href="scorer-training.html#run-mahler-augment">scorer</a> — the metric that ships —
+    does not move: KernSheet similarity is <strong>90.7% vs <span class="tag">mahler</span>'s
+    91.0%</strong> (and 90.4 vs 90.6 without rerank), i.e. flat-to-slightly-worse inside the eval
+    wobble. And it brings a PDMX tax: conceding clean-PDMX base accuracy
+    (0.48&nbsp;→&nbsp;0.58&nbsp;px) weakens objectness/count enough to roughly double PDMX
+    miscounts (<strong>5&nbsp;→&nbsp;12&nbsp;/&nbsp;500</strong>).
+  </p>
+
+  <h3>The reading</h3>
+  <p>
+    Detection geometry was <em>not</em> the real-scan bottleneck. The boxes were already good enough
+    that tightening them buys nothing for the transcriber sitting downstream; the limiter on real
+    scans is the noter's reading, which crisper crops don't fix. So a genuine detector-level
+    improvement produces a net <strong>wash-to-negative end-to-end</strong>, plus a counting
+    regression on the synthetic domain. <strong>Decision: not promoted</strong> —
+    <span class="tag">mahler</span> stays as production. Two lessons carry forward: the real-scan gap
+    lives in <em>transcription, not detection</em>, so future augmentation energy belongs on the
+    noter path rather than the staffer; and <code>prob=0.5</code> on the staffer base was too strong
+    for PDMX counting. The code stays behind its default-off flag for that future noter-side trial.
+  </p>
+</article>
+
 <!-- ── Page review state + the reviews framework ── -->
 <article class="entry">
   <h2>Page state grows from a <code>validated</code> bool to a <code>status</code> enum, and gets a reviews framework</h2>
