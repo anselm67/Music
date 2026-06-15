@@ -194,21 +194,38 @@ class TestResizeStaves:
             ],
         )
 
-    def test_equalises_to_common_height_keeping_tops(self) -> None:
+    def test_equalises_within_fixed_outer_box(self) -> None:
+        # _uneven: outer box [100, 260], staves 40 & 60 (avg 50). 'g' (+2) -> height
+        # 52 each; top staff anchored at 100, bottom staff anchored at 260.
         editor = _editor([_page([self._uneven()])])
 
-        editor.resize_staves(2)  # 'g' — target max(40, 60) + 2 = 62
+        editor.resize_staves(2)  # 'g'
 
         s0, s1 = editor.system.staves
-        assert (s0.box.top, s0.box.height) == (100, 62)
-        assert (s1.box.top, s1.box.height) == (200, 62)
+        assert (s0.box.top, s0.box.bottom) == (100, 152)
+        assert (s1.box.top, s1.box.bottom) == (208, 260)
+        # the outer system box (set by e/r) is untouched
+        assert (editor.system.top, editor.system.bottom) == (100, 260)
 
-    def test_shrink(self) -> None:
+    def test_shrink_grows_the_gap(self) -> None:
         editor = _editor([_page([self._uneven()])])
 
-        editor.resize_staves(-2)  # 'h' — target max(40, 60) - 2 = 58
+        editor.resize_staves(-2)  # 'h' — height 48 each within [100, 260]
 
-        assert [s.box.height for s in editor.system.staves] == [58, 58]
+        s0, s1 = editor.system.staves
+        assert [s.box.height for s in (s0, s1)] == [48, 48]
+        assert (s0.box.bottom, s1.box.top) == (148, 212)  # gap widened, box fixed
+        assert (editor.system.top, editor.system.bottom) == (100, 260)
+
+    def test_does_not_exceed_outer_box(self) -> None:
+        # asking for more total stave height than the box holds is a no-op.
+        editor = _editor([_page([self._uneven()])])
+        before = [(s.box.top, s.box.bottom) for s in editor.system.staves]
+
+        editor.resize_staves(100)
+
+        after = [(s.box.top, s.box.bottom) for s in editor.system.staves]
+        assert after == before
 
     def test_noop_when_no_system_selected(self) -> None:
         editor = _editor([_page([self._uneven()])], system_index=-1)
@@ -298,6 +315,42 @@ class TestApplySystemRatio:
             for sys in editor.page.systems
         ]
         assert after == before
+
+
+class TestReviewWalk:
+    @staticmethod
+    def _bad_page(page_number: int) -> Page:
+        # one system whose two staves differ by 60px -> staff_height fires.
+        sys = System(
+            bar_numbers=[1],
+            bars=[10, 500],
+            staves=[
+                Staff(box=Box(10, 100, 500, 140)),
+                Staff(box=Box(10, 160, 500, 260)),
+            ],
+        )
+        return _page([sys], page_number=page_number)
+
+    def test_walks_flagged_pages_then_stops(self) -> None:
+        editor = _editor([self._bad_page(1), self._bad_page(2)], page_index=0)
+        editor.review_names = ["staff_height"]
+
+        assert editor._pending_review_pages() == [2]  # from page 1 -> page 2
+        editor.page_index = 1
+        assert editor._pending_review_pages() == []  # nothing after the last flagged
+
+    def test_none_when_not_a_review_walk(self) -> None:
+        editor = _editor([self._bad_page(1), self._bad_page(2)], page_index=0)
+        # review_names defaults to None -> 'n' would go straight to the next score
+        assert editor._pending_review_pages() == []
+
+    def test_skips_already_fixed_pages(self) -> None:
+        # page 2 has equal staves (no finding), so from page 1 there's nothing left.
+        good = _page([_sys(100, 250, [10, 500])], page_number=2)
+        editor = _editor([self._bad_page(1), good], page_index=0)
+        editor.review_names = ["staff_height"]
+
+        assert editor._pending_review_pages() == []
 
 
 class TestBarEditing:

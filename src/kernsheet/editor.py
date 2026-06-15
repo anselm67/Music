@@ -51,6 +51,13 @@ class StaffEditor:
     max_size: tuple[int, int]
     actions: dict[int, Action]
     fast_mode: bool
+    # The reviews being walked (``edit --review``); ``n`` steps through their
+    # flagged pages within a score before advancing to the next one. None = not a
+    # review walk, so ``n`` goes straight to the next score.
+    review_names: list[str] | None = None
+    # This score's (1-based position, total) in the review worklist, for the
+    # done/todo count printed on ``n``.
+    review_progress: tuple[int, int] | None = None
 
     # Current state of the editor.
     page_index: int = 0
@@ -149,29 +156,34 @@ class StaffEditor:
         self.replace_system(staves=staves)
 
     def resize_staves(self, delta: int) -> None:
-        # Sets every staff in the selected system to one common height, nudged by
-        # ``delta`` — the grand-staff invariant the staff_height review checks. Each
-        # staff keeps its top; its bottom becomes top + height. The target is the
-        # current tallest staff (so nothing clips) plus delta, so the first press
-        # also equalises staves that had drifted apart.
-        if self.system_index < 0 or self.system.staff_count == 0:
+        # Adjusts only the INTERIOR lines of a grand staff — the top staff's bottom
+        # and the bottom staff's top — to give every staff one common height, while
+        # leaving the system's OUTER box (set with e/r) fixed. The first/last staves
+        # stay anchored to the system top/bottom; the common height is the current
+        # average nudged by ``delta`` (so the first press also equalises drifted
+        # staves) and the leftover space is shared evenly as centred gaps.
+        if self.system_index < 0 or self.system.staff_count < 2:
             return
-        height = max(staff.box.height for staff in self.system.staves) + delta
-        if height <= 0:
+        staves = self.system.staves
+        sys_top, sys_bottom = staves[0].box.top, staves[-1].box.bottom
+        n = len(staves)
+        height = round(sum(s.box.height for s in staves) / n) + delta
+        if height <= 0 or n * height > sys_bottom - sys_top:
             return
-        staves = [
-            replace(
-                staff,
-                box=Box(
-                    staff.box.left,
-                    staff.box.top,
-                    staff.box.right,
-                    staff.box.top + height,
-                ),
+        gap = (sys_bottom - sys_top - n * height) / (n - 1)
+        new = []
+        for j, staff in enumerate(staves):
+            top = (
+                sys_bottom - height
+                if j == n - 1
+                else round(sys_top + j * (height + gap))
             )
-            for staff in self.system.staves
-        ]
-        self.replace_system(staves=staves)
+            new.append(
+                replace(
+                    staff, box=Box(staff.box.left, top, staff.box.right, top + height)
+                )
+            )
+        self.replace_system(staves=new)
 
     def apply_system_ratio(self) -> None:
         # Copies the selected system's internal stave geometry — stave height and
@@ -179,9 +191,9 @@ class StaffEditor:
         # shares one grand-staff shape (what the staff_height review checks). Each
         # target system keeps its own vertical position (top) and horizontal extent
         # (bars / left-right); its staves are re-laid from its top with the reference
-        # height and gap. Height is the tallest reference stave (matching resize_staves,
-        # so it's well-defined even if the reference isn't equalised yet); the gap is
-        # the reference's first inter-staff gap, applied uniformly to every target gap.
+        # height and gap. Height is the tallest reference stave (well-defined even if
+        # the reference isn't equalised yet); the gap is the reference's first
+        # inter-staff gap, applied uniformly to every target gap.
         if self.system_index < 0 or self.system.staff_count == 0:
             return
         ref = self.system.staves
@@ -659,19 +671,43 @@ class StaffEditor:
             image = cv2.resize(image, new_size)
         cv2.imshow(self.STAFFER_WINDOW, image)
 
+    def _pending_review_pages(self) -> list[int]:
+        """Pages after the current one still flagged by the walked reviews (findings
+        recompute live, so fixed pages drop out); empty when this isn't a review walk
+        or the rest of this score is clean."""
+        if self.review_names is None:
+            return []
+        return sorted(
+            n
+            for n in {
+                f.page_number for f in score_findings(self.score, self.review_names)
+            }
+            if n > self.page.page_number
+        )
+
     def edit(
-        self, fast_mode: bool = False, start_page_number: int | None = None
+        self,
+        fast_mode: bool = False,
+        start_page_number: int | None = None,
+        review_names: list[str] | None = None,
+        review_progress: tuple[int, int] | None = None,
     ) -> bool:
         """Edits the staff.
 
         start_page_number: open on this 1-based page instead of the first (used by
             ``edit --review`` to land on the flagged page).
+        review_names: the reviews being walked, so ``n`` steps through their flagged
+            pages within this score before moving to the next.
+        review_progress: this score's (1-based position, total) in the worklist, for
+            the done/todo count printed on ``n``.
 
         Returns:
             bool: True if the user wishes to continue editing further documents,
                 False otherwise.
         """
 
+        self.review_names = review_names
+        self.review_progress = review_progress
         self.clear()
         print(f"id : {self.id}")
         print(f"{self.kern.bar_count} bars in kern file.")
@@ -700,10 +736,40 @@ class StaffEditor:
 
             if key == ord("q"):  # Quits editing.
                 return False
-            elif key == ord("n"):  # Moves onto the next document if any.
+            elif key == ord("n"):  # Next flagged page in this score, else next score.
                 if self.fast_mode:
                     self.replace_page(status=Status.VALIDATED)
                     self.save()
+                pending = self._pending_review_pages()
+                if self.review_progress is not None:
+                    done, total = self.review_progress
+                    if pending:
+                        print(
+                            f"[review: score {done}/{total} · {len(pending)} more "
+                            f"flagged page(s) in this score]"
+                        )
+                    else:
+                        print(
+                            f"[review: {done}/{total} scores done, "
+                            f"{total - done} to go]"
+                        )
+                nxt = (
+                    next(
+                        (
+                            i
+                            for i, p in enumerate(self.score.pages)
+                            if p.page_number == pending[0]
+                        ),
+                        None,
+                    )
+                    if pending
+                    else None
+                )
+                if nxt is not None:
+                    self.page_index = nxt
+                    self._reset_selection()
+                    self.print_page_status()
+                    continue
                 return True
             elif key == ord("1"):
                 if self.confirm(f"Delete score {self.id}?"):

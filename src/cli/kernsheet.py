@@ -167,11 +167,14 @@ def edit(
         worklist = [
             (key, score.id, None) for key, score in ks.items(prefix, valid=edit_all)
         ]
-    for key, score_id, start_page in worklist:
+    for i, (key, score_id, start_page) in enumerate(worklist, 1):
         if not ks.has_score(score_id):
             continue  # deleted earlier this session (the score or its whole entry)
         if not StaffEditor(ks, key, score_id).edit(
-            fast_mode=fast, start_page_number=start_page
+            fast_mode=fast,
+            start_page_number=start_page,
+            review_names=names if review else None,
+            review_progress=(i, len(worklist)) if review else None,
         ):
             return
 
