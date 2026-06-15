@@ -87,6 +87,35 @@ def _bar_numbers(score: Score) -> Iterator[Finding]:
             )
 
 
+@register("bar_drift")
+def _bar_drift(score: Score) -> Iterator[Finding]:
+    """A system's stored start number must continue where the previous system's
+    barlines left off: ``first_bar_number == prev.first_bar_number + prev.bar_count``
+    (``bar_count`` is geometry, ``len(bars) - 1``). The editor edits barline geometry
+    without ever rewriting ``bar_numbers``, so adding/removing a barline silently
+    desyncs the stored numbering from the geometry — and the noter/scorer datasets
+    slice the kern by the stale ``first_bar_number``, mislabelling the system. Walks
+    systems in reading order across the whole score (numbering is continuous over page
+    breaks) and flags each system whose stored start breaks the chain. The first
+    numbered system anchors the chain (its start is assumed correct); barless systems
+    are skipped — they're the ``bar_numbers`` review's job."""
+    expected: int | None = None
+    for page in score.pages:
+        for system in page.systems:
+            if system.staff_count == 0 or not system.bar_numbers:
+                continue
+            if expected is not None and system.first_bar_number != expected:
+                yield Finding(
+                    "bar_drift",
+                    score.id,
+                    page.page_number,
+                    f"system starts at bar {system.first_bar_number}, expected "
+                    f"{expected} from the preceding systems' barline counts "
+                    f"(barlines edited without renumbering)",
+                )
+            expected = system.first_bar_number + system.bar_count
+
+
 def _needs_attention(page: Page, review: str) -> bool:
     """A finding needs human attention unless the page is already rejected
     (excluded anyway) or a human has acknowledged this review on it."""

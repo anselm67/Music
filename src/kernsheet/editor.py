@@ -661,7 +661,30 @@ class StaffEditor:
             else:
                 print(f"Unknown key: '{key}', press 'h' for help.")
 
+    def renumber_bars(self) -> None:
+        """Rewrite every system's ``bar_numbers`` as a sequential run derived from the
+        barline geometry, so the stored numbering stays consistent with ``bars`` (what
+        the human edits) and continuous across the score. The editor edits ``bars`` but
+        never ``bar_numbers``, so without this the two desync and the noter/scorer
+        datasets slice the kern by a stale ``first_bar_number`` (see the ``bar_drift``
+        review). Anchored on ``get_bar_offset(0)`` — the same base the on-screen numbers
+        use — so the saved data matches the display."""
+        bar_number = self.get_bar_offset(0)
+        for page_index, page in enumerate(self.score.pages):
+            systems = []
+            for system in page.systems:
+                count = system.bar_count
+                if system.staff_count > 0 and count > 0:
+                    system = replace(
+                        system,
+                        bar_numbers=list(range(bar_number, bar_number + count)),
+                    )
+                    bar_number += count
+                systems.append(system)
+            self.score.pages[page_index] = replace(page, systems=systems)
+
     def save(self) -> None:
+        self.renumber_bars()
         self.kern_sheet.save_score(self.id, self.score)
         print(f"{self.score.page_count} pages reviewed and saved.")
 
@@ -670,7 +693,7 @@ class StaffEditor:
         return cv2.waitKey() == ord("y")
 
     def delete_score(self) -> None:
-        self.kern_sheet.delete_score(self.key, self.kern_sheet.id2score[self.id])
+        self.kern_sheet.delete_score(self.key, self.kern_sheet.get_score(self.id))
         print(f"Deleted score {self.id} from the catalog.")
 
     def delete_entry(self) -> None:
@@ -743,6 +766,10 @@ class StaffEditor:
     def title(self) -> None:
         self.clear()
         print(f"id : {self.id}")
+        score = self.kern_sheet.get_score(self.id)
+        print(f"image  : {self.kern_sheet.png_path(self.id, self.page.page_number)}")
+        print(f"layout : {self.kern_sheet.layout_path(score)}")
+        print(f"pdf    : {self.kern_sheet.pdf_path(score)}")
         print("Fast move on!" if self.fast_mode else "Fast mode off.")
         print(f"Page {self.page.page_number} status: {self.page.status.value}")
         findings = self.page_findings()

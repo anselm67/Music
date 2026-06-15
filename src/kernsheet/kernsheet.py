@@ -120,6 +120,9 @@ class KernSheet:
     def get_kern_scores(self, key: str) -> list[KernScore]:
         return self.catalog.entries[key].scores
 
+    def get_score(self, id: str) -> KernScore:
+        return self.id2score[id]
+
     def load_score(self, id: str) -> Score:
         score = self.id2score[id]
         if not score.json_path:

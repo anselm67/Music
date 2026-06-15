@@ -468,6 +468,30 @@ class TestBarCounting:
 
         assert "Yuck" in capsys.readouterr().out
 
+    def test_renumber_bars_is_sequential_across_pages(self) -> None:
+        # _two_systems seeds both systems with the stale bar_numbers=[1]; each has
+        # 2 bars (3 barlines). Renumber rebuilds them from geometry, continuous
+        # across the page break.
+        editor = _editor(
+            [_page(_two_systems()), _page(_two_systems(), page_number=2)],
+            kern=_FakeKern(first_bar=1),
+        )
+
+        editor.renumber_bars()
+
+        numbers = [s.bar_numbers for p in editor.score.pages for s in p.systems]
+        assert numbers == [[1, 2], [3, 4], [5, 6], [7, 8]]
+
+    def test_renumber_bars_honours_kern_anchor(self) -> None:
+        # bar-zero pickup + first_bar 3 => start at 0 + (3 - 1) = 2.
+        editor = _editor(
+            [_page(_two_systems())], kern=_FakeKern(bar_zero=True, first_bar=3)
+        )
+
+        editor.renumber_bars()
+
+        assert [s.bar_numbers for s in editor.page.systems] == [[2, 3], [4, 5]]
+
 
 class TestIoCommands:
     def test_save_writes_score(self) -> None:
@@ -480,6 +504,19 @@ class TestIoCommands:
 
         kern_sheet.save_score.assert_called_once_with(editor.id, editor.score)
 
+    def test_save_renumbers_before_writing(self) -> None:
+        # save must resync bar_numbers from geometry so the written score is never
+        # left drifted (the noter/scorer slice the kern by first_bar_number).
+        kern_sheet = MagicMock()
+        editor = _editor(
+            [_page(_two_systems())], kern=_FakeKern(first_bar=1), kern_sheet=kern_sheet
+        )
+
+        editor.save()
+
+        saved = kern_sheet.save_score.call_args.args[1]
+        assert [s.bar_numbers for s in saved.pages[0].systems] == [[1, 2], [3, 4]]
+
     def test_delete_score_removes_from_catalog(self) -> None:
         kern_sheet = MagicMock()
         editor = _editor(
@@ -489,7 +526,7 @@ class TestIoCommands:
         editor.delete_score()  # '1'
 
         kern_sheet.delete_score.assert_called_once_with(
-            editor.key, kern_sheet.id2score[editor.id]
+            editor.key, kern_sheet.get_score(editor.id)
         )
 
     def test_delete_entry_removes_entry(self) -> None:

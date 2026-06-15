@@ -70,6 +70,62 @@ class TestBarNumbers:
         assert findings[0].score_id == "x"
 
 
+class TestBarDrift:
+    @staticmethod
+    def _sys(first: int, n_bars: int, *, numbered: bool = True) -> System:
+        """A system starting at bar ``first`` with ``n_bars`` complete bars
+        (``n_bars + 1`` barlines). ``numbered=False`` seeds an empty bar_numbers."""
+        bars = [i * 100 for i in range(n_bars + 1)]
+        return System(
+            bar_numbers=[first] if numbered else [],
+            bars=bars,
+            staves=[Staff(box=Box(0, 0, 100, 50))],
+        )
+
+    @classmethod
+    def _score(cls, *systems: System, page_number: int = 1) -> Score:
+        page = Page(
+            page_number=page_number,
+            image_width=200,
+            image_height=300,
+            systems=list(systems),
+            status=Status.PENDING,
+            reviewed=[],
+        )
+        return Score(id="x", pages=[page])
+
+    def test_contiguous_chain_no_finding(self) -> None:
+        # 1(+3)->4(+2)->6(+5)->11
+        score = self._score(self._sys(1, 3), self._sys(4, 2), self._sys(6, 5))
+        assert score_findings(score, names=["bar_drift"]) == []
+
+    def test_single_system_anchors_no_finding(self) -> None:
+        assert score_findings(self._score(self._sys(1, 3)), names=["bar_drift"]) == []
+
+    def test_break_flags_offending_system(self) -> None:
+        # second system should start at 4 (1 + 3) but stored 5
+        score = self._score(self._sys(1, 3), self._sys(5, 2))
+        findings = score_findings(score, names=["bar_drift"])
+        assert [f.review for f in findings] == ["bar_drift"]
+        assert "expected 4" in findings[0].message
+
+    def test_break_spans_page_boundary(self) -> None:
+        # numbering is continuous across pages: p1 ends expecting 4, p2 starts at 6
+        p1 = self._score(self._sys(1, 3)).pages[0]
+        p2 = self._score(self._sys(6, 2), page_number=2).pages[0]
+        score = Score(id="x", pages=[p1, p2])
+        findings = score_findings(score, names=["bar_drift"])
+        assert [(f.review, f.page_number) for f in findings] == [("bar_drift", 2)]
+
+    def test_barless_system_skipped(self) -> None:
+        # the empty system is the bar_numbers review's job; it doesn't break the
+        # chain, which continues 1(+3) -> 4.
+        score = self._score(
+            self._sys(1, 3), self._sys(0, 0, numbered=False), self._sys(4, 2)
+        )
+        assert score_findings(score, names=["bar_drift"]) == []
+
+
 class TestSuppression:
     def _bad(
         self, *, status: Status = Status.PENDING, reviewed: list[str] | None = None
