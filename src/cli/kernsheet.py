@@ -170,6 +170,11 @@ def edit(
     for i, (key, score_id, start_page) in enumerate(worklist, 1):
         if not ks.has_score(score_id):
             continue  # deleted earlier this session (the score or its whole entry)
+        if not ks.tokens_path(key).is_file():
+            # The editor needs the kern token file (bar counts / 'k' / renumber);
+            # skip rather than crash the whole walk on an un-built score.
+            click.echo(f"skipping {score_id}: no tokens — run `kernsheet make`")
+            continue
         if not StaffEditor(ks, key, score_id).edit(
             fast_mode=fast,
             start_page_number=start_page,
