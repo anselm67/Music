@@ -835,7 +835,7 @@ class StaffEditor:
             Action(
                 "x",
                 self.delete_selected_system,
-                "Deletes the staff currently selected.",
+                "Deletes the selected system (whole grand staff, bars or not).",
             ),
             Action(
                 "d", self.delete_selected_bar, "Deletes the bar currently selected."

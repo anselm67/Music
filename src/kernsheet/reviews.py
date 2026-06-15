@@ -56,17 +56,31 @@ def _staff_height(score: Score) -> Iterator[Finding]:
     """Staves within a page should share a height (one grand-staff geometry). A
     large spread means the detector merged or split a staff, or a box is wrong."""
     for page in score.pages:
-        heights = [staff.box.height for sys in page.systems for staff in sys.staves]
-        if len(heights) < 2:
+        staves = [
+            (si, ti, staff.box)
+            for si, sys in enumerate(page.systems)
+            for ti, staff in enumerate(sys.staves)
+        ]
+        if len(staves) < 2:
             continue
-        spread = max(heights) - min(heights)
+        heights = [box.height for _, _, box in staves]
+        lo, hi = min(heights), max(heights)
+        spread = hi - lo
         if spread > STAFF_HEIGHT_TOLERANCE_PX:
+
+            def mark(h: int) -> str:
+                return " (min)" if h == lo else " (max)" if h == hi else ""
+
+            detail = ", ".join(
+                f"sys{si} staff{ti} {box.width}x{box.height}{mark(box.height)}"
+                for si, ti, box in staves
+            )
             yield Finding(
                 "staff_height",
                 score.id,
                 page.page_number,
-                f"stave heights {sorted(heights)} spread {spread}px "
-                f"(> {STAFF_HEIGHT_TOLERANCE_PX}px)",
+                f"stave height spread {spread}px (> {STAFF_HEIGHT_TOLERANCE_PX}px): "
+                f"{detail}",
             )
 
 

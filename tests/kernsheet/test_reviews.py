@@ -44,6 +44,13 @@ class TestStaffHeight:
     def test_single_staff_never_flags(self) -> None:
         assert score_findings(_score(_page([50]))) == []
 
+    def test_message_pinpoints_system_stave_and_dims(self) -> None:
+        # _page staves are Box(0, 0, 100, h): width 100, height h.
+        msg = score_findings(_score(_page([50, 59])))[0].message
+        assert "spread 9px" in msg
+        assert "sys0 staff0 100x50 (min)" in msg
+        assert "sys0 staff1 100x59 (max)" in msg
+
 
 class TestBarNumbers:
     def _page(self, bar_numbers: list[int]) -> Page:
