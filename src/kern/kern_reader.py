@@ -87,13 +87,20 @@ class KernReader:
         if end_barno is None:
             end_barno = start_barno + 1
         bos = self.bars.get(start_barno, -1)
-        if bos >= 0:
-            preamble = self.preambles.get(start_barno, [])
-            # Includes the marker for the next bar, feels more comfortable.
-            eos = self.bars.get(end_barno, -1) + 1
-            return preamble + (self.lines[bos:eos] if eos > 0 else self.lines[bos:])
-        else:
+        if bos < 0:
             return None
+        preamble = self.preambles.get(start_barno, [])
+        # End at the first bar marker at or after end_barno in FILE order (and
+        # include that marker line — it reads more comfortably). Looking up by
+        # ``end_barno`` directly breaks on non-consecutive numbering — a pickup
+        # ``=0`` then ``=2`` (no bar 1) — where ``end_barno`` may not be a real bar;
+        # the old code then fell through to the end of the piece. NB ``self.bars``
+        # keeps only the LAST line for a repeated bar number, so first-ending voltas
+        # (a bar number appearing twice) still slice imperfectly — a pre-existing
+        # limitation that needs a list-per-bar index to fix.
+        later = [ln for bn, ln in self.bars.items() if bn >= end_barno]
+        eos = min(later) + 1 if later else len(self.lines)
+        return preamble + self.lines[bos:eos]
 
     def header(self) -> list[str]:
         return self.lines[:10]

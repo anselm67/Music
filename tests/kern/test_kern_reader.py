@@ -72,6 +72,27 @@ bar
         )
         self.assertEqual(reader.get_text(2, 99), ["=2", "bar"])
 
+    def test_get_text_handles_non_consecutive_bars(self) -> None:
+        # pickup =0 then jumps to =2 (no bar 1), like chopin/prelude/prelude28-02.
+        # The editor's running number for the pickup comes out below first_bar and
+        # is remapped to 0; end (1) is not a real bar, so the old code fell through
+        # to EOF — it must return ONLY the pickup bar.
+        reader = get_kern_reader(
+            """
+=0
+pickup
+=2
+two
+=3
+three
+""".strip()
+        )
+        self.assertEqual(reader.first_bar, 2)
+        self.assertTrue(reader.has_bar_zero())
+        self.assertEqual(reader.get_text(1), ["=0", "pickup", "=2"])
+        self.assertEqual(reader.get_text(0), ["=0", "pickup", "=2"])
+        self.assertEqual(reader.get_text(2), ["=2", "two", "=3"])
+
     def test_start_before_first_bar_adjusts_to_zero(self) -> None:
         reader = get_kern_reader(
             """
