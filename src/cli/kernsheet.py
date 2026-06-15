@@ -152,7 +152,7 @@ def edit(
     """Open the layout editor on every score whose catalog key starts with PREFIX
     (all scores when PREFIX is omitted). Validated scores are skipped unless --all
     is given. With --review, only scores a review flags are opened, on the flagged
-    page. Press 'h' in the editor for help."""
+    page. Press '?' in the editor for help."""
     from kernsheet.editor import StaffEditor
 
     ks = ctx.kern_sheet

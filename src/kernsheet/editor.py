@@ -148,6 +148,63 @@ class StaffEditor:
             )
         self.replace_system(staves=staves)
 
+    def resize_staves(self, delta: int) -> None:
+        # Sets every staff in the selected system to one common height, nudged by
+        # ``delta`` — the grand-staff invariant the staff_height review checks. Each
+        # staff keeps its top; its bottom becomes top + height. The target is the
+        # current tallest staff (so nothing clips) plus delta, so the first press
+        # also equalises staves that had drifted apart.
+        if self.system_index < 0 or self.system.staff_count == 0:
+            return
+        height = max(staff.box.height for staff in self.system.staves) + delta
+        if height <= 0:
+            return
+        staves = [
+            replace(
+                staff,
+                box=Box(
+                    staff.box.left,
+                    staff.box.top,
+                    staff.box.right,
+                    staff.box.top + height,
+                ),
+            )
+            for staff in self.system.staves
+        ]
+        self.replace_system(staves=staves)
+
+    def apply_system_ratio(self) -> None:
+        # Copies the selected system's internal stave geometry — stave height and
+        # inter-staff gap — onto every other system on the page, so the whole page
+        # shares one grand-staff shape (what the staff_height review checks). Each
+        # target system keeps its own vertical position (top) and horizontal extent
+        # (bars / left-right); its staves are re-laid from its top with the reference
+        # height and gap. Height is the tallest reference stave (matching resize_staves,
+        # so it's well-defined even if the reference isn't equalised yet); the gap is
+        # the reference's first inter-staff gap, applied uniformly to every target gap.
+        if self.system_index < 0 or self.system.staff_count == 0:
+            return
+        ref = self.system.staves
+        height = max(staff.box.height for staff in ref)
+        gap = ref[1].box.top - ref[0].box.bottom if len(ref) > 1 else 0
+        for i, system in enumerate(self.page.systems):
+            if i == self.system_index or system.staff_count == 0:
+                continue
+            top = system.staves[0].box.top
+            staves = [
+                replace(
+                    staff,
+                    box=Box(
+                        staff.box.left,
+                        top + j * (height + gap),
+                        staff.box.right,
+                        top + j * (height + gap) + height,
+                    ),
+                )
+                for j, staff in enumerate(system.staves)
+            ]
+            self.page.systems[i] = replace(system, staves=staves)
+
     @property
     def bar_number(self) -> int:
         bar_number = self.bar_offset
@@ -659,7 +716,7 @@ class StaffEditor:
             elif key in self.MODIFIER_KEYS:
                 pass  # bare Shift/Ctrl/Alt press on its own; ignore silently
             else:
-                print(f"Unknown key: '{key}', press 'h' for help.")
+                print(f"Unknown key: '{key}', press '?' for help.")
 
     def renumber_bars(self) -> None:
         """Rewrite every system's ``bar_numbers`` as a sequential run derived from the
@@ -855,6 +912,22 @@ class StaffEditor:
                 "Shrinks the selected system up.",
             ),
             Action(
+                "g",
+                lambda: self.resize_staves(2),
+                "Makes both staves taller (common height).",
+            ),
+            Action(
+                "h",
+                lambda: self.resize_staves(-2),
+                "Makes both staves shorter (common height).",
+            ),
+            Action(
+                "u",
+                self.apply_system_ratio,
+                "Applies the selected system's stave height and gap to all systems "
+                "on the page.",
+            ),
+            Action(
                 "i",
                 lambda: self.move_system(2),
                 "Moves the selected system up.",
@@ -889,7 +962,6 @@ class StaffEditor:
                 self.select_prev_system,
                 "Moves to and selects previous pairs of staves.",
             ),
-            Action("h", self.help, "Displays this help text."),
             Action("?", self.help, "Displays this help text."),
             Action(
                 "k", self.print_kerns, "Prints the kern tokens for the selected bar."

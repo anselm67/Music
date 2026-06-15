@@ -57,30 +57,26 @@ def _staff_height(score: Score) -> Iterator[Finding]:
     large spread means the detector merged or split a staff, or a box is wrong."""
     for page in score.pages:
         staves = [
-            (si, ti, staff.box)
+            (si, staff.box.height)
             for si, sys in enumerate(page.systems)
-            for ti, staff in enumerate(sys.staves)
+            for staff in sys.staves
         ]
         if len(staves) < 2:
             continue
-        heights = [box.height for _, _, box in staves]
+        heights = [h for _, h in staves]
         lo, hi = min(heights), max(heights)
         spread = hi - lo
         if spread > STAFF_HEIGHT_TOLERANCE_PX:
-
-            def mark(h: int) -> str:
-                return " (min)" if h == lo else " (max)" if h == hi else ""
-
-            detail = ", ".join(
-                f"sys{si} staff{ti} {box.width}x{box.height}{mark(box.height)}"
-                for si, ti, box in staves
-            )
+            tall_sys = next(si for si, h in staves if h == hi)
+            short_sys = next(si for si, h in staves if h == lo)
+            typical = sorted(heights)[len(heights) // 2]
             yield Finding(
                 "staff_height",
                 score.id,
                 page.page_number,
                 f"stave height spread {spread}px (> {STAFF_HEIGHT_TOLERANCE_PX}px): "
-                f"{detail}",
+                f"tallest sys{tall_sys} {hi}px, shortest sys{short_sys} {lo}px "
+                f"(typical {typical}px)",
             )
 
 

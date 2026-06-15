@@ -181,6 +181,125 @@ class TestResizeSystem:
         assert after == before
 
 
+class TestResizeStaves:
+    @staticmethod
+    def _uneven() -> System:
+        # two staves of unequal height (40 and 60), tops at 100 and 200.
+        return System(
+            bar_numbers=[1],
+            bars=[10, 500],
+            staves=[
+                Staff(box=Box(10, 100, 500, 140)),
+                Staff(box=Box(10, 200, 500, 260)),
+            ],
+        )
+
+    def test_equalises_to_common_height_keeping_tops(self) -> None:
+        editor = _editor([_page([self._uneven()])])
+
+        editor.resize_staves(2)  # 'g' — target max(40, 60) + 2 = 62
+
+        s0, s1 = editor.system.staves
+        assert (s0.box.top, s0.box.height) == (100, 62)
+        assert (s1.box.top, s1.box.height) == (200, 62)
+
+    def test_shrink(self) -> None:
+        editor = _editor([_page([self._uneven()])])
+
+        editor.resize_staves(-2)  # 'h' — target max(40, 60) - 2 = 58
+
+        assert [s.box.height for s in editor.system.staves] == [58, 58]
+
+    def test_noop_when_no_system_selected(self) -> None:
+        editor = _editor([_page([self._uneven()])], system_index=-1)
+        before = [s.box.height for s in editor.score.pages[0].systems[0].staves]
+
+        editor.resize_staves(2)  # must not raise
+
+        after = [s.box.height for s in editor.score.pages[0].systems[0].staves]
+        assert after == before
+
+
+class TestApplySystemRatio:
+    def test_copies_height_and_gap_keeping_top_and_sides(self) -> None:
+        # sys0 (selected): height 40, gap 20 (160-140). sys1: different shape,
+        # top 300, sides 20..400 — must adopt 40/20 while keeping top and sides.
+        sys0 = System(
+            bar_numbers=[1],
+            bars=[10, 500],
+            staves=[
+                Staff(box=Box(10, 100, 500, 140)),
+                Staff(box=Box(10, 160, 500, 200)),
+            ],
+        )
+        sys1 = System(
+            bar_numbers=[1],
+            bars=[20, 400],
+            staves=[
+                Staff(box=Box(20, 300, 400, 360)),
+                Staff(box=Box(20, 400, 400, 470)),
+            ],
+        )
+        editor = _editor([_page([sys0, sys1])], system_index=0)
+
+        editor.apply_system_ratio()  # 'u'
+
+        s0, s1 = editor.page.systems[1].staves
+        # height 40, gap 20, top 300 and sides 20..400 preserved
+        assert (s0.box.left, s0.box.top, s0.box.right, s0.box.bottom) == (
+            20,
+            300,
+            400,
+            340,
+        )
+        assert (s1.box.left, s1.box.top, s1.box.right, s1.box.bottom) == (
+            20,
+            360,
+            400,
+            400,
+        )
+        # the selected reference system is untouched
+        assert [s.box.height for s in editor.page.systems[0].staves] == [40, 40]
+
+    def test_single_staff_target_adopts_height(self) -> None:
+        # reference is 2-staff (height 40); a 1-staff target adopts the height,
+        # keeping its own top (300) and sides (20..400).
+        sys0 = System(
+            bar_numbers=[1],
+            bars=[10, 500],
+            staves=[
+                Staff(box=Box(10, 100, 500, 140)),
+                Staff(box=Box(10, 160, 500, 200)),
+            ],
+        )
+        sys1 = System(
+            bar_numbers=[1],
+            bars=[20, 400],
+            staves=[Staff(box=Box(20, 300, 400, 380))],
+        )
+        editor = _editor([_page([sys0, sys1])], system_index=0)
+
+        editor.apply_system_ratio()  # 'u'
+
+        (s,) = editor.page.systems[1].staves
+        assert (s.box.left, s.box.top, s.box.right, s.box.bottom) == (20, 300, 400, 340)
+
+    def test_noop_when_no_system_selected(self) -> None:
+        page = _page(_two_systems())
+        editor = _editor([page], system_index=-1)
+        before = [
+            [(s.box.top, s.box.bottom) for s in sys.staves] for sys in page.systems
+        ]
+
+        editor.apply_system_ratio()  # must not raise
+
+        after = [
+            [(s.box.top, s.box.bottom) for s in sys.staves]
+            for sys in editor.page.systems
+        ]
+        assert after == before
+
+
 class TestBarEditing:
     def test_add_bar_inserts_after_selected(self) -> None:
         editor = _editor([_page([_sys(100, 250, [10, 200, 400])])], bar_index=1)
