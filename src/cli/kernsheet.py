@@ -117,7 +117,9 @@ def _review_worklist(
 @click.command()
 @click.pass_obj
 def make(ctx: ClickContext) -> None:
-    """Pre-render the page-image cache (build/png) for all scores, or one ID."""
+    """Build the derived cache for every entry: the kern token file (build/tokens,
+    tokenised from the .krn) and the per-page images (build/png). Existing outputs
+    are left as-is, so it only fills in what's missing."""
     ctx.kern_sheet.make()
 
 
