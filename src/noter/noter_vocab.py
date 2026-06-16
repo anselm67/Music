@@ -47,10 +47,6 @@ class Vocab:
     def decode(self, int_tok: int) -> str:
         return self._i2tok.get(int_tok, self.UNK_T[1])
 
-    def barline_ids(self) -> set[int]:
-        """Ids of barline tokens (the bar-number-stripped form starts with '=')."""
-        return {i for s, i in self._tok2i.items() if s.startswith("=")}
-
     def tok2i(self, tokens: list[str], max_chords: int) -> Tensor:
         if len(tokens) > max_chords:
             raise ValueError(

@@ -27,6 +27,7 @@ from noter import (
     NoterConfig,
     NoterDataModule,
     NoterDataset,
+    NoterModel,
     NoterModule,
     Vocab,
     grow_state_dict,
@@ -187,17 +188,18 @@ def show(ctx: ClickContext) -> None:
     vocab = Vocab.load(ctx.home / "build/vocab.json")
     dataset = NoterDataset(ctx.config, ctx.source, vocab)
     cv2.namedWindow("Staff")
-    while True:
+    quit_ = False
+    while not quit_:
         index = random.randint(0, len(dataset) - 1)
         score_id, page_number = dataset.items[index][:2]
-        img_tensor, _, seq_tensor = dataset[index]
-        img = to_display(img_tensor)
-        tokens = dataset.vocab.i2tok(seq_tensor)
+        images, _, sequences, mask = dataset[index]
         print(ctx.source.image_path(score_id, page_number))
-        print(tokens)
-        cv2.imshow("Staff", img)
-        if cv2.waitKey(0) == ord("q"):
-            break
+        for g in mask.nonzero(as_tuple=True)[0].tolist():
+            print(dataset.vocab.i2tok(sequences[g]))
+            cv2.imshow("Staff", to_display(images[g]))
+            if cv2.waitKey(0) == ord("q"):
+                quit_ = True
+                break
     cv2.destroyAllWindows()
 
 
@@ -250,12 +252,13 @@ def image_stats(ctx: ClickContext, num_workers: int) -> None:
     pix_sum = 0
     pix_sum2 = 0
     pix_count = 0
-    for images, _, _ in loader:
-        for batch_index in range(len(images)):
-            img = images[batch_index].squeeze(0).cpu().numpy()
-            pix_sum += img.sum()
-            pix_sum2 += (img**2).sum()
-            pix_count += img.shape[0] * img.shape[1]
+    for images, _, _, masks in loader:
+        # (B, S, 1, H, W) → only the real staves (masks True); pad slots are zeros.
+        for img in images[masks]:
+            arr = img.squeeze(0).cpu().numpy()
+            pix_sum += arr.sum()
+            pix_sum2 += (arr**2).sum()
+            pix_count += arr.shape[0] * arr.shape[1]
     mean = pix_sum / pix_count
     std = math.sqrt(pix_sum2 / pix_count - mean**2)
     print(f"Scanned {len(ds)} images.")
@@ -270,6 +273,7 @@ def summary(ctx: ClickContext) -> None:
     config = NoterConfig()
     config.use_vocab(Vocab.load(ctx.home / "build/vocab.json"))
     B = config.batch_size
+    S = config.max_staves
     T = config.max_seqlen
     H = config.max_chords
 
@@ -277,9 +281,10 @@ def summary(ctx: ClickContext) -> None:
     # by the TransformerDecoder.
     model = NoterModule(config)
     model.forward(
-        torch.zeros(B, config.in_channels, *config.input_shape),  # source
-        torch.full((B,), config.input_shape[1]),  # source_widths
-        torch.zeros(B, T, H, dtype=torch.long),  # target
+        torch.zeros(B, S, config.in_channels, *config.input_shape),  # source
+        torch.full((B, S), config.input_shape[1]),  # source_widths
+        torch.zeros(B, S, T, H, dtype=torch.long),  # target
+        torch.ones(B, S, dtype=torch.bool),  # stave_mask
     )
     print(model)
 
@@ -568,12 +573,22 @@ def train(
                 if isinstance(loaded, dict) and "state_dict" in loaded
                 else loaded
             )
-            try:
-                module.load_state_dict(state)
-            except RuntimeError as e:
+            # A single-stave checkpoint uses a fused nn.Transformer; remap its keys
+            # onto the split encoder/decoder. The cross-stave params have no legacy
+            # counterpart and stay at init (zero gate → identical to the base noter),
+            # so load non-strict but reject anything missing beyond those.
+            state = NoterModel.remap_legacy_state_dict(state)
+            result = module.load_state_dict(state, strict=False)
+            stray = [
+                k
+                for k in result.missing_keys
+                if "cross_stave" not in k and "norm_xs" not in k and "xs_gate" not in k
+            ]
+            if stray or result.unexpected_keys:
                 raise click.ClickException(
-                    f"--init-from state dict mismatch: {e}"
-                ) from e
+                    f"--init-from state dict mismatch: missing {stray}, "
+                    f"unexpected {result.unexpected_keys}"
+                )
             logging.info(f"Initialized weights from {init_from}")
 
     source = ctx.source
@@ -765,19 +780,24 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
 
     similarities: list[float] = []
     for idx in tqdm(indices, desc="Evaluating"):
-        image, source_width, gt_sequence = dataset[idx]
+        images, widths, gt_sequences, mask = dataset[idx]
+        valid = mask.nonzero(as_tuple=True)[0]
 
         device = module.device
+        # Lockstep-decode the whole system at once (one batch item, S staves).
         predicted = module.predict(
-            image.unsqueeze(0).to(device), source_width.unsqueeze(0).to(device)
-        )
+            images.unsqueeze(0).to(device),
+            widths.unsqueeze(0).to(device),
+            mask.unsqueeze(0).to(device),
+        )[0]  # (S, T, max_chords)
 
-        gt_content = strip_eos(gt_sequence[1:], Vocab.EOS)
-        pred_content = strip_eos(predicted[0].cpu(), Vocab.EOS)
-        edit_dist = sequence_edit_distance(gt_content, pred_content, Vocab.PAD)
-        max_cost = max(len(gt_content), len(pred_content)) * config.max_chords
-        similarity = 1.0 - edit_dist / max_cost if max_cost > 0 else 1.0
-        similarities.append(similarity)
+        for g in valid.tolist():
+            gt_content = strip_eos(gt_sequences[g][1:], Vocab.EOS)
+            pred_content = strip_eos(predicted[g].cpu(), Vocab.EOS)
+            edit_dist = sequence_edit_distance(gt_content, pred_content, Vocab.PAD)
+            max_cost = max(len(gt_content), len(pred_content)) * config.max_chords
+            similarity = 1.0 - edit_dist / max_cost if max_cost > 0 else 1.0
+            similarities.append(similarity)
 
     if not similarities:
         print("No samples to evaluate.")
@@ -812,39 +832,49 @@ def predict(ctx: ClickContext, name: str) -> None:
     n_samples = 0
 
     cv2.namedWindow("Staff")
+    quit_ = False
     for idx in shuffled_indices:
+        if quit_:
+            break
         score_id, page_number = dataset.items[idx][:2]
-        image, source_width, gt_sequence = dataset[idx]
+        images, widths, gt_sequences, mask = dataset[idx]
+        valid = mask.nonzero(as_tuple=True)[0]
 
         device = module.device
         predicted = module.predict(
-            image.unsqueeze(0).to(device), source_width.unsqueeze(0).to(device)
-        )  # (1, T, max_chords)
+            images.unsqueeze(0).to(device),
+            widths.unsqueeze(0).to(device),
+            mask.unsqueeze(0).to(device),
+        )[0]  # (S, T, max_chords)
 
-        gt_tokens = dataset.vocab.i2tok(gt_sequence[1:])  # skip SOS
-        pred_tokens = dataset.vocab.i2tok(predicted[0].cpu())
+        for rank, g in enumerate(valid.tolist()):
+            gt_sequence, image = gt_sequences[g], images[g]
+            gt_tokens = dataset.vocab.i2tok(gt_sequence[1:])  # skip SOS
+            pred_tokens = dataset.vocab.i2tok(predicted[g].cpu())
 
-        gt_content = strip_eos(gt_sequence[1:], Vocab.EOS)
-        pred_content = strip_eos(predicted[0].cpu(), Vocab.EOS)
-        edit_dist = sequence_edit_distance(gt_content, pred_content, Vocab.PAD)
-        max_cost = max(len(gt_content), len(pred_content)) * config.max_chords
-        similarity = 1.0 - edit_dist / max_cost if max_cost > 0 else 1.0
+            gt_content = strip_eos(gt_sequence[1:], Vocab.EOS)
+            pred_content = strip_eos(predicted[g].cpu(), Vocab.EOS)
+            edit_dist = sequence_edit_distance(gt_content, pred_content, Vocab.PAD)
+            max_cost = max(len(gt_content), len(pred_content)) * config.max_chords
+            similarity = 1.0 - edit_dist / max_cost if max_cost > 0 else 1.0
 
-        total_similarity += similarity
-        n_samples += 1
-        avg_similarity = total_similarity / n_samples
+            total_similarity += similarity
+            n_samples += 1
+            avg_similarity = total_similarity / n_samples
 
-        click.clear()
-        print(ctx.source.image_path(score_id, page_number))
-        print(f"Item {idx}")
-        print(format_sequence_columns(gt_tokens, pred_tokens))
-        print(f"\nSimilarity: {similarity:.1%}  (edit {edit_dist} / max {max_cost})")
-        print(f"   Avg sim: {avg_similarity:.1%}  ({n_samples} samples)")
+            click.clear()
+            print(ctx.source.image_path(score_id, page_number))
+            print(f"Item {idx}  staff {rank + 1}/{len(valid)}")
+            print(format_sequence_columns(gt_tokens, pred_tokens))
+            print(
+                f"\nSimilarity: {similarity:.1%}  (edit {edit_dist} / max {max_cost})"
+            )
+            print(f"   Avg sim: {avg_similarity:.1%}  ({n_samples} samples)")
 
-        cv2.imshow("Staff", to_display(image))
-
-        if cv2.waitKey(0) == ord("q"):
-            break
+            cv2.imshow("Staff", to_display(image))
+            if cv2.waitKey(0) == ord("q"):
+                quit_ = True
+                break
     cv2.destroyAllWindows()
 
 

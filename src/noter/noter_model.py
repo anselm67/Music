@@ -3,6 +3,7 @@
 from dataclasses import asdict, dataclass, field
 
 import torch
+import torch.nn.functional as F
 from torch import Tensor, nn
 from torchvision.transforms import InterpolationMode
 
@@ -29,6 +30,10 @@ class NoterConfig:
     input_shape: list[int] = field(default_factory=lambda: [64, 6 * 128])
     max_chords: int = 8
     max_seqlen: int = 128  # Also known as T
+    # Staves per system — the cross-stave decode unit. A system's staves are
+    # row-aligned (one shared barline grid), batched together and padded to this
+    # width (a stave_mask marks the real ones). 2 covers the System2 corpus.
+    max_staves: int = 2
     vocab_size: int = -1
     pad_idx: int = -1
 
@@ -138,89 +143,199 @@ class TargetEmbedder(nn.Module):
         return self.dropout(self.norm(x + self.pos_embed[:T]))
 
 
+class CrossStaveDecoderLayer(nn.Module):
+    """A post-norm Transformer decoder layer + a gated cross-stave attention branch.
+
+    The first three sublayers (causal self-attention, image cross-attention, FFN)
+    and their submodule names (``self_attn`` / ``multihead_attn`` / ``linear1`` /
+    ``linear2`` / ``norm1-3``) match ``nn.TransformerDecoderLayer`` exactly, so a
+    single-stave noter checkpoint loads straight in (see ``remap_legacy_state_dict``).
+    The 4th sublayer lets a staff attend to the **other staves of its system** along
+    the row axis (kern is a row-aligned spine grid). Its contribution is scaled by a
+    **zero-initialised gate**, so at init the layer is identical to the pretrained one
+    and a single-staff system — whose siblings are all masked — stays identical.
+    """
+
+    def __init__(self, config: NoterConfig) -> None:
+        super().__init__()
+        d, h, p = config.embed_dim, config.num_head, config.dropout
+        # --- standard decoder sublayers (names match nn.TransformerDecoderLayer) ---
+        self.self_attn = nn.MultiheadAttention(d, h, dropout=p, batch_first=True)
+        self.multihead_attn = nn.MultiheadAttention(d, h, dropout=p, batch_first=True)
+        self.linear1 = nn.Linear(d, config.mlp_dim)
+        self.linear2 = nn.Linear(config.mlp_dim, d)
+        self.norm1 = nn.LayerNorm(d)
+        self.norm2 = nn.LayerNorm(d)
+        self.norm3 = nn.LayerNorm(d)
+        self.dropout = nn.Dropout(p)
+        self.dropout1 = nn.Dropout(p)
+        self.dropout2 = nn.Dropout(p)
+        self.dropout3 = nn.Dropout(p)
+        # --- new: gated cross-stave attention branch (identity at init) ---
+        self.cross_stave_attn = nn.MultiheadAttention(d, h, dropout=p, batch_first=True)
+        self.norm_xs = nn.LayerNorm(d)
+        self.dropout_xs = nn.Dropout(p)
+        self.xs_gate = nn.Parameter(torch.zeros(1))
+
+    def forward(
+        self,
+        x: Tensor,  # (B*S, T, D)
+        memory: Tensor,  # (B*S, P, D)
+        tgt_mask: Tensor,  # (T, T) causal
+        tgt_kpm: Tensor,  # (B*S, T)
+        mem_kpm: Tensor,  # (B*S, P)
+        xs_mask: Tensor,  # (S*T, S*T) cross-stave time-causal
+        xs_kpm: Tensor,  # (B, S*T) — True on padded staves
+        bsz: int,
+        staves: int,
+    ) -> Tensor:
+        a = self.self_attn(
+            x, x, x, attn_mask=tgt_mask, key_padding_mask=tgt_kpm, need_weights=False
+        )[0]
+        x = self.norm1(x + self.dropout1(a))
+        a = self.multihead_attn(
+            x, memory, memory, key_padding_mask=mem_kpm, need_weights=False
+        )[0]
+        x = self.norm2(x + self.dropout2(a))
+        # Cross-stave: couple a system's staves along the (shared) row axis.
+        t, d = x.shape[1], x.shape[2]
+        xq = x.view(bsz, staves, t, d).reshape(bsz, staves * t, d)
+        h = self.norm_xs(xq)
+        a = self.cross_stave_attn(
+            h, h, h, attn_mask=xs_mask, key_padding_mask=xs_kpm, need_weights=False
+        )[0]
+        xq = xq + self.xs_gate * self.dropout_xs(a)
+        x = xq.view(bsz, staves, t, d).reshape(bsz * staves, t, d)
+        a = self.linear2(self.dropout(F.relu(self.linear1(x))))
+        return self.norm3(x + self.dropout3(a))
+
+
+class CrossStaveDecoder(nn.Module):
+    """Stack of ``CrossStaveDecoderLayer`` + a final norm (matches legacy decoder)."""
+
+    def __init__(self, config: NoterConfig) -> None:
+        super().__init__()
+        self.layers = nn.ModuleList(
+            CrossStaveDecoderLayer(config) for _ in range(config.num_decoder_layers)
+        )
+        self.norm = nn.LayerNorm(config.embed_dim)
+
+    def forward(self, x: Tensor, *args: object) -> Tensor:
+        for layer in self.layers:
+            x = layer(x, *args)  # type: ignore[arg-type]
+        return self.norm(x)
+
+
 class NoterModel(nn.Module):
     def __init__(self, config: NoterConfig) -> None:
         super().__init__()
         self.config = config
         self.source_embedder = SourceEmbedding(config)
         self.target_embedder = TargetEmbedder(config)
-        self.transformer = nn.Transformer(
+        encoder_layer = nn.TransformerEncoderLayer(
             d_model=config.embed_dim,
             nhead=config.num_head,
-            num_encoder_layers=config.num_encoder_layers,
-            num_decoder_layers=config.num_decoder_layers,
             dim_feedforward=config.mlp_dim,
             dropout=config.dropout,
             batch_first=True,
         )
+        self.encoder = nn.TransformerEncoder(
+            encoder_layer,
+            config.num_encoder_layers,
+            norm=nn.LayerNorm(config.embed_dim),
+        )
+        self.decoder = CrossStaveDecoder(config)
         self.mlp = nn.Linear(config.embed_dim, config.max_chords * config.vocab_size)
 
     def make_src_padding_mask(self, widths: Tensor) -> Tensor:
         """
-        widths: (B,) actual image widths in pixels
-        returns: (B, num_patches) True where patch is padding
+        widths: (N,) actual image widths in pixels
+        returns: (N, num_patches) True where patch is padding
         """
         c = self.config
         num_patches_h = c.input_shape[0] // c.patch_height
         num_patches_w = c.input_shape[1] // c.patch_width
-        valid_patches_w = widths // c.patch_width  # (B,)
+        valid_patches_w = widths // c.patch_width  # (N,)
 
         # patch index in the flattened sequence: row * num_patches_w + col
         # a patch is padding if its column >= valid_patches_w
         col_indices = torch.arange(num_patches_w, device=widths.device)  # (W,)
         col_mask = col_indices.unsqueeze(0) >= valid_patches_w.unsqueeze(
             1
-        )  # (B, num_patches_w)
+        )  # (N, num_patches_w)
 
-        # expand to all rows: (B, num_patches_h * num_patches_w)
+        # expand to all rows: (N, num_patches_h * num_patches_w)
         return (
             col_mask.unsqueeze(1).expand(-1, num_patches_h, -1).reshape(len(widths), -1)
         )
 
-    def forward(
-        self,
-        source: Tensor,
-        source_widths: Tensor,
-        target: Tensor,
-        attention_mask: Tensor,
-        tgt_pad_mask: Tensor,
+    def _cross_stave_mask(
+        self, staves: int, seqlen: int, device: torch.device
     ) -> Tensor:
-        source_embeds = self.source_embedder(source)
-        target_embeds = self.target_embedder(target)
-        src_padding_mask = self.make_src_padding_mask(source_widths)
-        outs = self.transformer(
-            src=source_embeds,
-            tgt=target_embeds,
-            tgt_mask=attention_mask,
-            src_key_padding_mask=src_padding_mask,
-            tgt_key_padding_mask=tgt_pad_mask,
-            memory_key_padding_mask=src_padding_mask,
-        )
-        B, T, _ = target.shape
-        return self.mlp(outs).view(B, T, self.config.max_chords, -1)
+        """``(S*T, S*T)`` bool, True where disallowed: query ``(i, t)`` may attend
+        key ``(j, s)`` for any staff pair iff ``s <= t`` — causal in the shared row
+        clock, free across staves."""
+        times = torch.arange(seqlen, device=device).repeat(staves)  # (S*T,)
+        return times.unsqueeze(0) > times.unsqueeze(1)  # [query, key]: key_t > query_t
 
     def encode(self, source: Tensor, source_widths: Tensor) -> tuple[Tensor, Tensor]:
+        """Per-staff encode of flat crops ``(N, 1, H, W)`` → memory ``(N, P, D)``."""
         src_pad_mask = self.make_src_padding_mask(source_widths)
-        memory = self.transformer.encoder(
+        memory = self.encoder(
             self.source_embedder(source), src_key_padding_mask=src_pad_mask
         )
         return memory, src_pad_mask
 
     def decode(
         self,
-        target: Tensor,
-        memory: Tensor,
-        target_mask: Tensor,
-        tgt_pad_mask: Tensor,
-        memory_pad_mask: Tensor,
+        target: Tensor,  # (B, S, T, max_chords)
+        memory: Tensor,  # (B*S, P, D)
+        memory_pad_mask: Tensor,  # (B*S, P)
+        stave_mask: Tensor,  # (B, S) — True on real staves
+        target_mask: Tensor,  # (T, T) causal
     ) -> Tensor:
-        target_embeds = self.target_embedder(target)
-        outs = self.transformer.decoder(
-            target_embeds,
+        """Decode a batch of systems → logits ``(B, S, T, max_chords, vocab_size)``."""
+        bsz, staves, t, mc = target.shape
+        tgt_flat = target.reshape(bsz * staves, t, mc)
+        tgt_embeds = self.target_embedder(tgt_flat)  # (B*S, T, D)
+        tgt_kpm = (tgt_flat == self.config.pad_idx).all(dim=-1)  # (B*S, T)
+        xs_mask = self._cross_stave_mask(staves, t, target.device)
+        xs_kpm = (~stave_mask).unsqueeze(-1).expand(bsz, staves, t).reshape(bsz, -1)
+        outs = self.decoder(
+            tgt_embeds,
             memory,
-            tgt_mask=target_mask,
-            tgt_key_padding_mask=tgt_pad_mask,
-            memory_key_padding_mask=memory_pad_mask,
+            target_mask,
+            tgt_kpm,
+            memory_pad_mask,
+            xs_mask,
+            xs_kpm,
+            bsz,
+            staves,
         )
-        B, T, _ = outs.shape
-        return self.mlp(outs).view(B, T, self.config.max_chords, -1)
+        return self.mlp(outs).view(bsz, staves, t, mc, -1)
+
+    def forward(
+        self,
+        source: Tensor,  # (B, S, 1, H, W)
+        source_widths: Tensor,  # (B, S)
+        target: Tensor,  # (B, S, T, max_chords)
+        stave_mask: Tensor,  # (B, S)
+        target_mask: Tensor,  # (T, T) causal
+    ) -> Tensor:
+        bsz, staves = source.shape[:2]
+        flat_src = source.reshape(bsz * staves, *source.shape[2:])
+        memory, mem_pad = self.encode(flat_src, source_widths.reshape(bsz * staves))
+        return self.decode(target, memory, mem_pad, stave_mask, target_mask)
+
+    @staticmethod
+    def remap_legacy_state_dict(state: dict[str, Tensor]) -> dict[str, Tensor]:
+        """Map a single-stave (``nn.Transformer``) noter state dict onto this split
+        encoder/decoder. Keys are prefix-renamed; the new cross-stave params have no
+        legacy counterpart and load fresh (zero gate). Works on bare or ``model.``-
+        prefixed dicts."""
+        return {
+            k.replace("transformer.encoder", "encoder").replace(
+                "transformer.decoder", "decoder"
+            ): v
+            for k, v in state.items()
+        }

@@ -30,26 +30,28 @@ class NoterModule(L.LightningModule):
     def _causal_mask(self, size: int) -> Tensor:
         return self._causal_mask_buf[:size, :size]
 
-    def forward(self, source: Tensor, source_widths: Tensor, target: Tensor) -> Tensor:
-        attention_mask = self._causal_mask(target.shape[1])
-        tgt_pad_mask = (target == Vocab.PAD).all(
-            dim=-1
-        )  # (B, T) — True if all chord slots are PAD
-        return self.model(source, source_widths, target, attention_mask, tgt_pad_mask)
+    def forward(
+        self, source: Tensor, source_widths: Tensor, target: Tensor, stave_mask: Tensor
+    ) -> Tensor:
+        # target: (B, S, T, max_chords); the model builds the per-staff and
+        # cross-stave masks internally from stave_mask.
+        causal = self._causal_mask(target.shape[2])
+        return self.model(source, source_widths, target, stave_mask, causal)
 
     def _step(self, batch: tuple, stage: str) -> Tensor:
-        source, source_widths, target = batch
-        # target: (B, T, max_chords) — teacher-forced input is target[:, :-1]
-        # labels: target[:, 1:] shifted by one
+        source, source_widths, target, stave_mask = batch
+        # target: (B, S, T, max_chords) — teacher-forced input is target[:, :, :-1],
+        # labels shifted by one. Padded staves are excluded from the loss.
         logits = self.forward(
-            source, source_widths, target[:, :-1]
-        )  # (B, T-1, max_chords, vocab_size)
-        labels = target[:, 1:]  # (B, T-1, max_chords)
+            source, source_widths, target[:, :, :-1], stave_mask
+        )  # (B, S, T-1, max_chords, vocab_size)
+        labels = target[:, :, 1:].clone()  # (B, S, T-1, max_chords)
+        labels[~stave_mask] = Vocab.PAD
 
-        B, T, H, V = logits.shape
+        V = logits.shape[-1]
         loss = F.cross_entropy(
-            logits.reshape(B * T * H, V),
-            labels.reshape(B * T * H),
+            logits.reshape(-1, V),
+            labels.reshape(-1),
             ignore_index=Vocab.PAD,
         )
 
@@ -67,26 +69,34 @@ class NoterModule(L.LightningModule):
         return loss
 
     @torch.no_grad()
-    def predict(self, source: Tensor, source_widths: Tensor) -> Tensor:
-        B, c = source.shape[0], self.config
+    def predict(
+        self, source: Tensor, source_widths: Tensor, stave_mask: Tensor
+    ) -> Tensor:
+        """Lockstep decode of a batch of systems → ``(B, S, T-1, max_chords)``.
+
+        Each row ``t`` is generated for all ``S`` staves at once, so a staff sees its
+        siblings' rows ``< t`` through the cross-stave attention. A staff finishes at
+        its own EOS; padded staves start finished.
+        """
+        B, S, c = source.shape[0], source.shape[1], self.config
+        flat_src = source.reshape(B * S, *source.shape[2:])
+        memory, mem_pad = self.model.encode(flat_src, source_widths.reshape(B * S))
         generated = torch.full(
-            (B, 1, c.max_chords), Vocab.SOS, device=self.device, dtype=torch.long
+            (B, S, 1, c.max_chords), Vocab.SOS, device=self.device, dtype=torch.long
         )
-        memory, src_pad_mask = self.model.encode(source, source_widths)
-        done = torch.zeros(B, dtype=torch.bool, device=self.device)
+        done = ~stave_mask.clone()  # padded staves emit EOS immediately
         for _ in range(c.max_seqlen - 1):
-            T = generated.shape[1]
-            tgt_pad_mask = (generated == Vocab.SIL).all(dim=-1)
+            T = generated.shape[2]
             logits = self.model.decode(
-                generated, memory, self._causal_mask(T), tgt_pad_mask, src_pad_mask
+                generated, memory, mem_pad, stave_mask, self._causal_mask(T)
             )
-            next_tokens = logits[:, -1, :, :].argmax(dim=-1)  # (B, max_chords)
-            next_tokens[done] = Vocab.EOS  # keep finished sequences at EOS
-            done = done | (next_tokens[:, 0] == Vocab.EOS)
-            generated = torch.cat([generated, next_tokens.unsqueeze(1)], dim=1)
+            next_tokens = logits[:, :, -1, :, :].argmax(dim=-1)  # (B, S, max_chords)
+            next_tokens[done] = Vocab.EOS  # keep finished staves at EOS
+            done = done | (next_tokens[..., 0] == Vocab.EOS)
+            generated = torch.cat([generated, next_tokens.unsqueeze(2)], dim=2)
             if done.all():
                 break
-        return generated[:, 1:]  # strip SOS
+        return generated[:, :, 1:]  # strip SOS
 
     def training_step(self, batch: tuple, batch_idx: int) -> Tensor:
         return self._step(batch, "train")

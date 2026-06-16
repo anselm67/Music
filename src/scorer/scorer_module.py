@@ -13,7 +13,7 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
 from torchvision.transforms.functional import InterpolationMode
 
-from noter import Vocab
+from noter import NoterModel, Vocab
 from staffer import StafferLoss, assign_staves
 from staffer.staffer_loss import generalized_iou
 
@@ -89,6 +89,39 @@ def active_grouping(
     return active, owners
 
 
+def group_systems(
+    assign_q: list[Tensor],
+    sys_ids: list[Tensor],
+    max_staves: int,
+    device: torch.device,
+) -> tuple[Tensor, Tensor]:
+    """Group the flat per-stave batch into systems for the cross-stave decode.
+
+    The flat batch is ordered page-by-page then by each page's GT-stave order — the
+    same order ``build_stave_boxes`` and the target ``cat`` use. Staves sharing a page
+    and a system index form one system, capped and padded to ``max_staves``. Returns
+    ``(grouped_idx, stave_mask)`` both ``(num_systems, max_staves)``: ``grouped_idx``
+    indexes the flat batch (0 on pad slots — the caller masks them via ``stave_mask``,
+    which is True only on real staves).
+    """
+    groups: list[list[int]] = []
+    k = 0
+    for q, sid in zip(assign_q, sys_ids):
+        by_sys: dict[int, list[int]] = {}
+        for j in range(q.shape[0]):
+            by_sys.setdefault(int(sid[j].item()), []).append(k)
+            k += 1
+        groups.extend(by_sys[s][:max_staves] for s in sorted(by_sys))
+    ng = len(groups)
+    grouped_idx = torch.zeros((ng, max_staves), dtype=torch.long, device=device)
+    stave_mask = torch.zeros((ng, max_staves), dtype=torch.bool, device=device)
+    for g, members in enumerate(groups):
+        for slot, kk in enumerate(members):
+            grouped_idx[g, slot] = kk
+            stave_mask[g, slot] = True
+    return grouped_idx, stave_mask
+
+
 class ScorerModule(L.LightningModule):
     _causal_mask_buf: Tensor
 
@@ -154,17 +187,26 @@ class ScorerModule(L.LightningModule):
         accuracy = torch.zeros((), device=image.device)
         if targets.shape[0] > 0:
             crops, widths = self.model.crop(image, boxes)
-            memory, src_pad = self.model.noter.encode(crops, widths)
-            tgt_in, labels = targets[:, :-1], targets[:, 1:]
-            tgt_pad = (tgt_in == Vocab.PAD).all(dim=-1)
-            logits = self.model.noter.decode(
-                tgt_in, memory, self._causal_mask(tgt_in.shape[1]), tgt_pad, src_pad
+            memory, mem_pad = self.model.noter.encode(crops, widths)  # (K,P,D),(K,P)
+            # Group the flat staves into systems so the noter couples each system's
+            # staves in the cross-stave decode (shared barline grid).
+            max_staves = self.config.noter.max_staves
+            grouped_idx, stave_mask = group_systems(
+                assign_q, sys_ids, max_staves, image.device
             )
-            K, T, H, V = logits.shape
+            ng = grouped_idx.shape[0]
+            mem_g = memory[grouped_idx].reshape(ng * max_staves, *memory.shape[1:])
+            pad_g = mem_pad[grouped_idx].reshape(ng * max_staves, -1)
+            tgt = targets[grouped_idx]  # (ng, max_staves, T, max_chords)
+            tgt_in = tgt[:, :, :-1]
+            labels = tgt[:, :, 1:].clone()
+            labels[~stave_mask] = Vocab.PAD  # exclude padded staves from the loss
+            logits = self.model.noter.decode(
+                tgt_in, mem_g, pad_g, stave_mask, self._causal_mask(tgt_in.shape[2])
+            )  # (ng, max_staves, T-1, max_chords, V)
+            V = logits.shape[-1]
             tr = F.cross_entropy(
-                logits.reshape(K * T * H, V),
-                labels.reshape(K * T * H),
-                ignore_index=Vocab.PAD,
+                logits.reshape(-1, V), labels.reshape(-1), ignore_index=Vocab.PAD
             )
             with torch.no_grad():
                 mask = labels != Vocab.PAD
@@ -213,13 +255,7 @@ class ScorerModule(L.LightningModule):
         self._step(batch, "val")
 
     @torch.no_grad()
-    def predict(
-        self,
-        image: Tensor,
-        use_beam: bool = True,
-        barline_ids: set[int] | None = None,
-        beam_width: int = 8,
-    ) -> tuple[Tensor, Tensor, Tensor]:
+    def predict(self, image: Tensor) -> tuple[Tensor, Tensor, Tensor]:
         """End-to-end inference for a single page: detect → crop → transcribe.
 
         ``image``: ``(1, 1, H, W)``. Returns ``(boxes, tokens, owners)``:
@@ -228,8 +264,9 @@ class ScorerModule(L.LightningModule):
           SOS stripped; ``owners`` ``(K,)`` — system index per stave.
           ``K`` is the detected stave count (0 if none fired).
 
-        When ``barline_ids`` is given, decode with the per-system agreement reranker
-        (``_generate_rerank``, which implies beam search); otherwise beam/greedy.
+        Each detected system's staves are decoded together in lockstep (the cross-stave
+        noter), so cross-staff barline agreement is structural — superseding the former
+        per-stave beam + agreement reranker.
         """
         stave_tb, stave_logits, boundary_logits, sys_lr, _ = self.model.detect(image)
         sel, owners = active_grouping(
@@ -244,223 +281,76 @@ class ScorerModule(L.LightningModule):
             )
             return boxes, tokens, torch.empty(0, dtype=torch.long, device=image.device)
         crops, widths = self.model.crop(image, boxes)
-        if barline_ids is not None:
-            tokens = self._generate_rerank(
-                crops, widths, owners, barline_ids, beam_width
-            )
-        elif use_beam:
-            tokens = self._generate_beam(crops, widths, beam_width)
-        else:
-            tokens = self._generate_greedy(crops, widths)
+        tokens = self._generate_grouped(crops, widths, owners)
         return boxes, tokens, owners
 
     @torch.no_grad()
-    def _generate_greedy(self, crops: Tensor, widths: Tensor) -> Tensor:
-        """Autoregressively decode token sequences for K staff crops (greedy)."""
-        c = self.config.noter
-        K = crops.shape[0]
-        generated = torch.full(
-            (K, 1, c.max_chords), Vocab.SOS, dtype=torch.long, device=crops.device
-        )
-        memory, src_pad = self.model.noter.encode(crops, widths)
-        done = torch.zeros(K, dtype=torch.bool, device=crops.device)
-        for _ in range(c.max_seqlen - 1):
-            tgt_pad = (generated == Vocab.SIL).all(dim=-1)
-            logits = self.model.noter.decode(
-                generated,
-                memory,
-                self._causal_mask(generated.shape[1]),
-                tgt_pad,
-                src_pad,
-            )
-            next_tokens = logits[:, -1, :, :].argmax(dim=-1)  # (K, max_chords)
-            next_tokens[done] = Vocab.EOS
-            done = done | (next_tokens[:, 0] == Vocab.EOS)
-            generated = torch.cat([generated, next_tokens.unsqueeze(1)], dim=1)
-            if bool(done.all()):
-                break
-        return generated[:, 1:]  # strip SOS
-
-    @torch.no_grad()
-    def _generate_beam(
-        self, crops: Tensor, widths: Tensor, beam_width: int = 8
+    def _generate_grouped(
+        self, crops: Tensor, widths: Tensor, owners: Tensor
     ) -> Tensor:
-        """Autoregressively decode token sequences for K staff crops (beam search).
+        """Lockstep-decode each system's staves together → ``(K, T-1, max_chords)``.
 
-        Processes each stave independently so peak memory scales with beam_width,
-        not K*beam_width.  Beams over slot 0 (the primary/structural token that
-        governs null records and sequence length); slots 1+ are decoded greedily
-        from the selected beam's logits.
+        Staves sharing an ``owners`` index are decoded as one system: row ``t`` is
+        generated for all its staves at once, each seeing its siblings' rows ``< t``
+        through the cross-stave attention. Returns the tokens in the original (K) stave
+        order, SOS stripped.
         """
-        return torch.cat(
-            [
-                self._beam_single(crops[k : k + 1], widths[k : k + 1], beam_width)
-                for k in range(crops.shape[0])
-            ],
-            dim=0,
-        )
-
-    @torch.no_grad()
-    def _beam_some(
-        self, crop: Tensor, width: Tensor, beam_width: int, keep: int
-    ) -> tuple[Tensor, Tensor]:
-        """Beam search for one stave crop → the top-``keep`` candidates + scores.
-
-        Beams over slot 0 (the primary/structural token governing null records and
-        sequence length); slots 1+ greedy from the selected beam. Returns
-        ``(cands, scores)``, best-first, with ``keep <= beam_width``: ``cands``
-        ``(keep, max_seqlen-1, max_chords)`` is SOS-stripped and PAD-padded so
-        independent staves concatenate; ``scores`` ``(keep,)`` is the slot-0 logprob.
-        """
-        assert keep <= beam_width
         c = self.config.noter
-        device = crop.device
-        B = beam_width
-
-        memory, src_pad = self.model.noter.encode(crop, width)
-        memory = memory.repeat_interleave(B, dim=0)  # (B, S, D)
-        src_pad = src_pad.repeat_interleave(B, dim=0)  # (B, S)
-
-        generated = torch.full(
-            (B, 1, c.max_chords), Vocab.SOS, dtype=torch.long, device=device
-        )
-        scores = torch.full((B,), float("-inf"), device=device)
-        scores[0] = 0.0
-        done = torch.zeros(B, dtype=torch.bool, device=device)
-
-        for _ in range(c.max_seqlen - 1):
-            tgt_pad = (generated == Vocab.SIL).all(dim=-1)
-            logits = self.model.noter.decode(
-                generated,
-                memory,
-                self._causal_mask(generated.shape[1]),
-                tgt_pad,
-                src_pad,
-            )
-            step_logits = logits[:, -1, :, :]  # (B, max_chords, V)
-            V = step_logits.shape[-1]
-
-            slot0_lp = step_logits[:, 0, :].log_softmax(-1)  # (B, V)
-            slot0_lp[done] = float("-inf")
-            slot0_lp[done, Vocab.EOS] = 0.0
-
-            # (B, V) candidates → keep top B, best-first (the rerank relies on
-            # the returned candidates being sorted by score).
-            top_scores, top_idx = (
-                (scores.unsqueeze(-1) + slot0_lp).view(B * V).topk(B, sorted=True)
-            )
-            beam_from = top_idx // V
-            token0 = top_idx % V
-
-            scores = top_scores
-            done = done[beam_from]
-            generated = generated[beam_from]
-
-            next_tokens = step_logits[beam_from].argmax(-1)  # (B, max_chords)
-            next_tokens[:, 0] = token0
-            next_tokens[done] = Vocab.EOS
-            done = done | (next_tokens[:, 0] == Vocab.EOS)
-
-            generated = torch.cat([generated, next_tokens.unsqueeze(1)], dim=1)
-            if bool(done.all()):
-                break
-
-        cands = generated[:keep, 1:]  # (keep, T, max_chords); strip SOS
-        # Pad to max_seqlen - 1 so staves can be concatenated across independent runs.
-        pad_len = c.max_seqlen - 1 - cands.shape[1]
-        if pad_len > 0:
-            pad = torch.full(
-                (keep, pad_len, c.max_chords),
-                Vocab.PAD,
-                dtype=torch.long,
-                device=device,
-            )
-            cands = torch.cat([cands, pad], dim=1)
-        return cands, scores[:keep]
-
-    @torch.no_grad()
-    def _beam_single(self, crop: Tensor, width: Tensor, B: int) -> Tensor:
-        """Beam search for one stave crop → best candidate ``(1, max_seqlen-1, mc)``."""
-        cands, _ = self._beam_some(crop, width, B, 1)
-        return cands
-
-    @torch.no_grad()
-    def _generate_rerank(
-        self,
-        crops: Tensor,
-        widths: Tensor,
-        owners: Tensor,
-        barline_ids: set[int],
-        beam_width: int = 8,
-    ) -> Tensor:
-        """Per-system agreement rerank over slot-0 beam candidates.
-
-        Each stave keeps its top-``keep`` beam candidates + scores. The staves of a
-        system (sharing an ``owners`` index) must share one barline skeleton, so pick
-        the barline signature present in *every* stave's candidates that maximises the
-        summed logprob, and emit each stave's best candidate for it. Falls back to each
-        stave's argmax (beam 0) when the staves share no signature. Returns
-        ``(K, max_seqlen-1, max_chords)`` in stave order, like ``_generate_beam``.
-        """
-        cands: list[Tensor] = []
-        scores: list[Tensor] = []
-        for k in range(crops.shape[0]):
-            ck, sk = self._beam_some(
-                crops[k : k + 1], widths[k : k + 1], beam_width, beam_width
-            )
-            cands.append(ck)
-            scores.append(sk)
-
-        def signature(seq: Tensor) -> tuple[int, ...]:
-            """Timestep indices carrying a barline in slot 0, up to EOS."""
-            positions: list[int] = []
-            for t in range(seq.shape[0]):
-                tok = int(seq[t, 0].item())
-                if tok == Vocab.EOS:
-                    break
-                if tok in barline_ids:
-                    positions.append(t)
-            return tuple(positions)
-
-        chosen = [0] * crops.shape[0]  # candidate index per stave; default = argmax
+        K, device = crops.shape[0], crops.device
+        smax = c.max_staves
+        # Group flat staves by owner into (Ng, smax) slots (pad slots index 0, masked).
         by_sys: dict[int, list[int]] = {}
-        for k in range(crops.shape[0]):
+        for k in range(K):
             by_sys.setdefault(int(owners[k].item()), []).append(k)
+        groups = [by_sys[s][:smax] for s in sorted(by_sys)]
+        ng = len(groups)
+        grouped_idx = torch.zeros((ng, smax), dtype=torch.long, device=device)
+        stave_mask = torch.zeros((ng, smax), dtype=torch.bool, device=device)
+        for g, members in enumerate(groups):
+            for slot, k in enumerate(members):
+                grouped_idx[g, slot] = k
+                stave_mask[g, slot] = True
 
-        for ks in by_sys.values():
-            if len(ks) < 2:
-                continue  # no cross-staff agreement to enforce
-            # per stave: barline signature -> (best logprob, candidate index)
-            best: list[dict[tuple[int, ...], tuple[float, int]]] = []
-            for k in ks:
-                d: dict[tuple[int, ...], tuple[float, int]] = {}
-                for b in range(cands[k].shape[0]):
-                    sig = signature(cands[k][b])
-                    sc = float(scores[k][b].item())
-                    if sig not in d or sc > d[sig][0]:
-                        d[sig] = (sc, b)
-                best.append(d)
-            sets = [set(d) for d in best]
-            common = sets[0].intersection(*sets[1:])
-            if not common:
-                continue  # no shared skeleton → keep each stave's argmax
-            target = max(common, key=lambda s: sum((d[s][0] for d in best), 0.0))
-            for k, d in zip(ks, best):
-                chosen[k] = d[target][1]
+        memory, mem_pad = self.model.noter.encode(crops, widths)  # (K,P,D),(K,P)
+        mem_g = memory[grouped_idx].reshape(ng * smax, *memory.shape[1:])
+        pad_g = mem_pad[grouped_idx].reshape(ng * smax, -1)
 
-        return torch.cat(
-            [cands[k][chosen[k] : chosen[k] + 1] for k in range(crops.shape[0])], dim=0
+        generated = torch.full(
+            (ng, smax, 1, c.max_chords), Vocab.SOS, dtype=torch.long, device=device
         )
+        done = ~stave_mask.clone()  # padded staves emit EOS immediately
+        for _ in range(c.max_seqlen - 1):
+            T = generated.shape[2]
+            logits = self.model.noter.decode(
+                generated, mem_g, pad_g, stave_mask, self._causal_mask(T)
+            )
+            next_tokens = logits[:, :, -1, :, :].argmax(dim=-1)  # (ng, smax, mc)
+            next_tokens[done] = Vocab.EOS
+            done = done | (next_tokens[..., 0] == Vocab.EOS)
+            generated = torch.cat([generated, next_tokens.unsqueeze(2)], dim=2)
+            if bool(done.all()):
+                break
+
+        gen = generated[:, :, 1:]  # (ng, smax, T-1, mc); strip SOS
+        out = gen.new_full((K, gen.shape[2], c.max_chords), Vocab.PAD)
+        for g, members in enumerate(groups):
+            for slot, k in enumerate(members):
+                out[k] = gen[g, slot]
+        return out
 
     @classmethod
     def load_from_checkpoints(
         cls, config: ScorerConfig, staffer_ckpt: Path, noter_ckpt: Path
     ) -> "ScorerModule":
-        """Build a Scorer and load both standalone checkpoints whole.
+        """Build a Scorer and load both standalone checkpoints.
 
         Each Lightning checkpoint stores its model under a ``model.`` prefix
         (``StafferModule.model`` / ``NoterModule.model``); we strip it and load the
-        state dict straight into the matching Scorer sub-module — every key transfers.
+        state dict into the matching Scorer sub-module. The staffer transfers whole. A
+        single-stave noter checkpoint is remapped onto the cross-stave encoder/decoder
+        (``NoterModel.remap_legacy_state_dict``) and loaded non-strict — the cross-stave
+        params have no legacy counterpart and stay at init (zero gate ⇒ identical to the
+        base noter); anything missing beyond those is an error.
         """
         torch.serialization.add_safe_globals([InterpolationMode])
         module = cls(config)
@@ -471,7 +361,18 @@ class ScorerModule(L.LightningModule):
             return {k[len(prefix) :]: v for k, v in sd.items() if k.startswith(prefix)}
 
         module.model.staffer.load_state_dict(submodel_state(staffer_ckpt))
-        module.model.noter.load_state_dict(submodel_state(noter_ckpt))
+        noter_state = NoterModel.remap_legacy_state_dict(submodel_state(noter_ckpt))
+        result = module.model.noter.load_state_dict(noter_state, strict=False)
+        stray = [
+            k
+            for k in result.missing_keys
+            if not any(s in k for s in ("cross_stave", "norm_xs", "xs_gate"))
+        ]
+        if stray or result.unexpected_keys:
+            raise RuntimeError(
+                f"noter checkpoint mismatch: missing {stray}, "
+                f"unexpected {result.unexpected_keys}"
+            )
         return module
 
     def configure_optimizers(self) -> OptimizerLRSchedulerConfig:

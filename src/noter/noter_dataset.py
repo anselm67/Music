@@ -126,7 +126,7 @@ class NoterDataset(Dataset):
                         case _:
                             logging.error(
                                 f"{score.id}: too many staves in system "
-                                f"({system.staff_count} vs 2)"
+                                f"({system.staff_count} vs {self.config.max_staves})"
                             )
                             continue
                     if not system.bar_numbers:
@@ -134,17 +134,18 @@ class NoterDataset(Dataset):
                             f"{score.id}: system with no bar numbers, skipping"
                         )
                         continue
-                    for idx, staff in enumerate(system.staves):
-                        self.items.append(
-                            (
-                                score.id,
-                                page.page_number,
-                                staff.box,
-                                spine_numbers[idx],
-                                system.first_bar_number,
-                                system.last_bar_number,
-                            )
+                    # One item per system: its staves' boxes + spine numbers, kept
+                    # aligned. The staves are decoded together (shared barline grid).
+                    self.items.append(
+                        (
+                            score.id,
+                            page.page_number,
+                            [staff.box for staff in system.staves],
+                            spine_numbers,
+                            system.first_bar_number,
+                            system.last_bar_number,
                         )
+                    )
             if count >= 0 and len(self.items) >= count:
                 self.items = self.items[:count]
                 break
@@ -180,9 +181,16 @@ class NoterDataset(Dataset):
         return len(self.items)
 
     def get_item_stats(self, idx: int) -> tuple[tuple[int, int], int]:
-        score_id, _, box, _, first_bar_number, last_bar_number = self.items[idx]
+        """Per-system: (max staff height, max staff width) and record count.
+
+        The staves of a system share one bar range, so the record count is the
+        sequence length for every staff; the box dims are the largest staff's.
+        """
+        score_id, _, boxes, _, first_bar_number, last_bar_number = self.items[idx]
         records = self.source.records(score_id, first_bar_number, last_bar_number)
-        return (box.height, box.width), len(records) if records else -1
+        max_h = max(box.height for box in boxes)
+        max_w = max(box.width for box in boxes)
+        return (max_h, max_w), len(records) if records else -1
 
     def _load_image(
         self, score_id: str, page_number: int, box: Box
@@ -238,22 +246,70 @@ class NoterDataset(Dataset):
         bottom = max(top + 1, box.bottom + delta("bot"))
         return Box(left, top, right, bottom)
 
-    def __getitem__(self, idx: int) -> tuple[Tensor, Tensor, Tensor]:
+    def _load_staff(
+        self,
+        score_id: str,
+        page_number: int,
+        box: Box,
+        spine_number: int,
+        first_bar: int,
+        last_bar: int,
+    ) -> tuple[Tensor, int, Tensor] | None:
+        """One staff's (image, width, sequence), or None if either can't load."""
+        if self.jitter and random.random() < self.jitter:
+            box = self._jitter_box(box)
+        if (result := self._load_image(score_id, page_number, box)) is None:
+            return None
+        if (
+            seq := self.load_sequence(score_id, spine_number, first_bar, last_bar)
+        ) is None:
+            return None
+        image, actual_width = result
+        return image, actual_width, seq
+
+    def _pad_staves(
+        self, images: list[Tensor], widths: list[int], sequences: list[Tensor]
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+        """Stack a system's G staves and pad to ``max_staves`` with masked slots.
+
+        A padding slot is a zero image (full-width so no encoder patch is masked →
+        no all-masked NaN) and an SOS-only sequence; the returned ``stave_mask``
+        is True for the G real staves, False for the pad, so the model excludes
+        the pad from loss and cross-stave attention.
+        """
+        c = self.config
+        g, s = len(images), c.max_staves
+        h, w = c.input_shape
+        pad_img = torch.zeros(s - g, 1, h, w)
+        pad_w = torch.full((s - g,), w)
+        pad_seq = torch.full((s - g, c.max_seqlen, c.max_chords), self.vocab.PAD)
+        pad_seq[:, 0, :] = self.vocab.SOS
+        out_img = torch.cat([torch.stack(images), pad_img], dim=0)
+        out_w = torch.cat([torch.tensor(widths), pad_w], dim=0)
+        out_seq = torch.cat([torch.stack(sequences), pad_seq], dim=0)
+        mask = torch.arange(s) < g
+        return out_img, out_w, out_seq, mask
+
+    def __getitem__(self, idx: int) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+        """A system: ``(images, widths, sequences, stave_mask)`` padded to max_staves.
+
+        Shapes ``(S, 1, 64, 768)``, ``(S,)``, ``(S, max_seqlen, max_chords)``, ``(S,)``
+        with ``S = max_staves``. If any staff of the system fails to load the whole
+        system is skipped (advance to the next item).
+        """
         while True:
-            score_id, page_number, box, spine_number, first_bar, last_bar = self.items[
-                idx
-            ]
+            score_id, page_number, boxes, spine_numbers, first_bar, last_bar = (
+                self.items[idx]
+            )
             logging.debug(f"Loading {score_id}")
-            if self.jitter and random.random() < self.jitter:
-                box = self._jitter_box(box)
-            if (result := self._load_image(score_id, page_number, box)) is None:
+            loaded = [
+                self._load_staff(score_id, page_number, box, spine, first_bar, last_bar)
+                for box, spine in zip(boxes, spine_numbers)
+            ]
+            if any(staff is None for staff in loaded):
                 idx = (idx + 1) % len(self)
-            elif (
-                sequence := self.load_sequence(
-                    score_id, spine_number, first_bar, last_bar
-                )
-            ) is None:
-                idx = (idx + 1) % len(self)
-            else:
-                image, actual_width = result
-                return (image, torch.tensor(actual_width), sequence)
+                continue
+            images = [staff[0] for staff in loaded if staff is not None]
+            widths = [staff[1] for staff in loaded if staff is not None]
+            sequences = [staff[2] for staff in loaded if staff is not None]
+            return self._pad_staves(images, widths, sequences)
