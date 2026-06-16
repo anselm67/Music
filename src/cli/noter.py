@@ -6,6 +6,7 @@ import shutil
 import sys
 from collections import Counter
 from dataclasses import dataclass, replace
+from itertools import zip_longest
 from pathlib import Path
 from typing import Any, cast
 
@@ -13,6 +14,7 @@ import click
 import cv2
 import lightning as L
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import torch
 from lightning.pytorch.callbacks import Callback, EarlyStopping, ModelCheckpoint
@@ -181,25 +183,40 @@ def extend_vocab(ctx: ClickContext, kernsheet_home: Path) -> None:
     logging.info(f"Wrote combined vocab ({len(combined):,} tokens) -> {out}")
 
 
+def _format_spines(columns: list[list[str]]) -> str:
+    """Render a system's row-aligned token spines side by side, one column per staff.
+
+    Each ``columns[i]`` is a staff's per-timestep token strings (from ``i2tok``); the
+    staves share a barline grid so the rows line up across columns.
+    """
+    headers = [f"staff {i + 1}" for i in range(len(columns))]
+    widths = [
+        max([len(h), *(len(row) for row in col)]) for col, h in zip(columns, headers)
+    ]
+    lines = [" | ".join(h.ljust(w) for h, w in zip(headers, widths))]
+    lines.append("-+-".join("-" * w for w in widths))
+    for cells in zip_longest(*columns, fillvalue=""):
+        lines.append(" | ".join(c.ljust(w) for c, w in zip(cells, widths)))
+    return "\n".join(lines)
+
+
 @click.command()
 @click.pass_obj
 def show(ctx: ClickContext) -> None:
-    """Displays random samples from the dataset."""
+    """Displays random samples, one system (all its staves) per frame."""
     vocab = Vocab.load(ctx.home / "build/vocab.json")
     dataset = NoterDataset(ctx.config, ctx.source, vocab)
-    cv2.namedWindow("Staff")
-    quit_ = False
-    while not quit_:
+    cv2.namedWindow("System")
+    while True:
         index = random.randint(0, len(dataset) - 1)
         score_id, page_number = dataset.items[index][:2]
         images, _, sequences, mask = dataset[index]
+        staves = mask.nonzero(as_tuple=True)[0].tolist()
         print(ctx.source.image_path(score_id, page_number))
-        for g in mask.nonzero(as_tuple=True)[0].tolist():
-            print(dataset.vocab.i2tok(sequences[g]))
-            cv2.imshow("Staff", to_display(images[g]))
-            if cv2.waitKey(0) == ord("q"):
-                quit_ = True
-                break
+        print(_format_spines([dataset.vocab.i2tok(sequences[g]) for g in staves]))
+        cv2.imshow("System", np.vstack([to_display(images[g]) for g in staves]))
+        if cv2.waitKey(0) == ord("q"):
+            break
     cv2.destroyAllWindows()
 
 
