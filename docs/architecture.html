@@ -252,16 +252,64 @@
 </div>
 
 <div class="callout">
-  <strong>Planned: cross-stave (system-level) transcription.</strong> Each staff above is decoded
-  in <em>isolation</em>, so the spines of a system can disagree on the barline grid — the dominant
-  real-scan ceiling (see <a href="journal.html">the cross-stave entry in the journal</a>). The
-  planned evolution makes the <strong>unit a system</strong>: the dataset emits a system's
-  <code>G</code> staff crops + their <strong>row-aligned</strong> token sequences (kern is a spine
-  grid — a barline sits at an identical row index across spines), and each decoder layer gains a
-  4th, <strong>zero-initialised</strong> sublayer where a staff attends to its siblings under the
-  same causal mask. Decoding runs in <strong>lockstep</strong> (row <code>t</code> for all staves
-  at once), so cross-staff agreement is structural rather than a post-hoc rerank. Zero-init means
-  the model starts bit-identical to this one and single-staff systems stay identical.
+  <strong>Planned target: cross-stave (system-level) transcription.</strong> The diagram above is
+  the <em>current</em> single-staff noter. Each staff is decoded in <em>isolation</em>, so the
+  spines of one system can disagree on the barline grid — the dominant real-scan ceiling (see
+  <a href="journal.html">the cross-stave entry in the journal</a>). The target model below keeps
+  every part of the diagram and makes the <strong>unit a system</strong> of <code>G</code> staves,
+  coupling them in the decoder. This subsection is the working spec until the model is built and the
+  diagram is redrawn.
+
+  <p style="margin:0.7rem 0 0.3rem"><strong>Enabling fact — kern is a row-aligned spine grid.</strong>
+  A <code>.tokens</code> file is rows × spines: each row is one musical timestep, tab-separated cells
+  are the spines, and a barline (<code>=N</code>) sits at an <strong>identical row index across all
+  spines</strong>. <code>.</code> null tokens pad spines to keep the rows aligned; length and EOS row
+  are shared. (Confirmed: of 674 multi-spine KernSheet files, 1 ragged and 0 barline-skewed.) So a
+  system's staves share one timeline by construction — the basis for lockstep decoding.</p>
+
+  <ul style="margin:0.4rem 0 0.2rem">
+    <li><strong>Sample = a system.</strong> The dataset emits, per system, <code>G</code> staff crops
+      <code>(G, 1, 64, 768)</code> + their <code>G</code> row-aligned target sequences
+      <code>(G, T, 8)</code> + a <code>stave_mask (G,)</code>. <code>G</code> is padded to
+      <code>max_staves</code> (2 today; the design is <code>G</code>-general, a free step toward
+      &gt;2-staff systems). Spine order stays <code>[1, 0]</code> for 2-staff.</li>
+    <li><strong>Encoder — unchanged, per staff.</strong> The <code>G</code> crops are encoded
+      independently (the SourceEmbedding + Transformer encoder above), giving per-staff memory
+      <code>(B, G, 192, 256)</code>. No cross-staff mixing on the image side — the coupling is purely
+      temporal/decoder.</li>
+    <li><strong>Decoder hidden state <code>(B, G, T, 256)</code>.</strong> Each decoder layer runs
+      <em>four</em> sublayers (the first two unchanged from above):
+      <ol style="margin:0.2rem 0">
+        <li><em>Causal self-attention</em> over <code>T</code>, independent per staff.</li>
+        <li><em>Cross-attention</em> to that staff's <em>own</em> image memory.</li>
+        <li><strong>NEW — cross-stave attention.</strong> Query <code>(staff i, row t)</code> attends
+          over <em>all staves of its system at rows ≤ t</em> (same causal time-mask; padded staves
+          masked out by <code>stave_mask</code>). Its output projection is
+          <strong>zero-initialised</strong>, so at init this sublayer is a no-op.</li>
+        <li><em>FFN.</em></li>
+      </ol></li>
+    <li><strong>Head — shared, per staff.</strong> The same <code>Linear(256 → 8·V)</code> as above is
+      applied across the <code>G</code> axis, giving logits <code>(B, G, T, 8, V)</code>. Head size is
+      unchanged (no per-staff growth).</li>
+    <li><strong>Inference — lockstep decode.</strong> Generate row <code>t</code> for all
+      <code>G</code> staves <em>simultaneously</em>; when computing row <code>t</code> each staff sees
+      its siblings' rows <code>&lt; t</code> through sublayer&nbsp;3, so "my sibling just emitted a
+      barline / a <code>.</code> here" is an <strong>input</strong>, not a post-hoc vote. The system
+      terminates on a shared EOS row. Cross-staff barline agreement is therefore
+      <strong>structural</strong> — superseding the <code>--rerank</code> agreement pass (§4).</li>
+    <li><strong>Warm-start &amp; degradation.</strong> Encoder, self-attn, image-cross-attn, FFN, and
+      head all transfer <strong>wholesale</strong> from the production single-staff noter; only the
+      zero-init cross-stave sublayer is new. So the model starts <em>bit-identical</em> to the current
+      one, and a single-staff system (<code>G=1</code>, or all-but-one staff masked) stays identical
+      forever — sublayer&nbsp;3 has no sibling to attend to.</li>
+  </ul>
+
+  <p style="margin:0.5rem 0 0"><strong>Why this shape.</strong> A gated additive sublayer is chosen
+  over a single interleaved per-row sequence (kills disagreement by construction but can't warm-start
+  and forces a giant <code>G·8·V</code> head) and over encoder-side coupling (wrong place — the
+  problem is temporal). It targets the ceiling's named failure modes directly: the <code>.</code>-grid
+  (a staff now knows when to emit a null to stay aligned), runaway / early-EOS (siblings pull a
+  diverging length back), leaving only the ~4.6% shared-wrong-timeline floor it cannot beat.</p>
 </div>
 </section>
 
@@ -417,8 +465,9 @@
   staffer's boundary <code>cumsum</code>) and currently only uses it in the <code>--rerank</code>
   pass. The new path <strong>groups the crops by that system index</strong> and calls noter's
   lockstep system decode instead of a flat <code>K</code>-batch — so staffer's grouping feeds
-  directly into the coupled decode. The agreement reranker then becomes <strong>redundant</strong>
-  (agreement is structural inside the noter), kept only as optional belt-and-suspenders.
+  directly into the coupled decode. The agreement reranker is <strong>removed</strong> — agreement
+  is now structural inside the noter, so the former per-stave beam + barline-agreement rerank
+  (and the <code>--rerank</code> flag) are superseded by the lockstep decode.
 </div>
 
 <div class="diagram-wrap">
