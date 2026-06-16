@@ -22,11 +22,21 @@
 #   scripts/train_scorer_pipeline.sh <NAME> [SCORER_NAME]
 #   DRYRUN=1 scripts/train_scorer_pipeline.sh my-model
 #
+# FINE-TUNE-ONLY re-runs (BASE=<existing>): when you only changed the KernSheet
+# data (e.g. a layout fix) the PDMX bases and the vocab are unaffected, so reuse
+# them instead of retraining. Set BASE to the existing base name; stages 1 & 3
+# are then skipped (the bases are reused via --init-from) and only the three
+# rehearsal-mix FT stages run, under the new <NAME> lineage. No asset rebuild is
+# needed — layout edits don't touch build/png or build/tokens.
+#
+#   BASE=mahler scripts/train_scorer_pipeline.sh mahler-sh   # reuse mahler bases
+#
 set -euo pipefail
 cd "$(dirname "$0")/.."   # repo root
 
 NAME="${1:?usage: $0 <name> [scorer_name]}"
 SCORER_NAME="${2:-$NAME}"
+BASE="${BASE:-$NAME}"   # PDMX bases to fine-tune FROM; defaults to NAME (train them)
 
 # ---------------------------------------------------------------------------
 # Config — these are the documented best-run recipes; edit to taste. The
@@ -101,8 +111,11 @@ if [[ ! -f "$VOCAB" ]]; then
 fi
 
 # --- Stage 1: staffer PDMX base ---
-stage "1/5  staffer PDMX base -> checkpoints/staffer/$NAME"
-if done_ckpt staffer "$NAME"; then
+stage "1/5  staffer PDMX base -> checkpoints/staffer/$BASE"
+if [[ "$BASE" != "$NAME" ]]; then
+  echo "  reusing base checkpoints/staffer/$BASE (BASE=$BASE) — not training"
+  [[ -f "checkpoints/staffer/$BASE/last.ckpt" ]] || { echo "  missing base checkpoint" >&2; exit 1; }
+elif done_ckpt staffer "$NAME"; then
   echo "  exists — skipping (FORCE=1 to retrain)"
 else
   tag "train/$NAME"
@@ -117,7 +130,7 @@ if done_ckpt staffer "$NAME-mixed"; then
 else
   tag "train/$NAME-mixed"
   run staffer --log-file "logs/staffer/$NAME-mixed.log" \
-    train --init-from "checkpoints/staffer/$NAME/last.ckpt" \
+    train --init-from "checkpoints/staffer/$BASE/last.ckpt" \
     --kern-sheet "$KS" "$MIX" \
     --train-len "$STAFFER_FT_TRAIN" --valid-len "$STAFFER_FT_VALID" \
     --lr "$STAFFER_FT_LR" --warmup-steps "$STAFFER_FT_WARMUP" \
@@ -126,8 +139,11 @@ else
 fi
 
 # --- Stage 3: noter PDMX base (trains directly on the KernSheet vocab) ---
-stage "3/5  noter PDMX base -> checkpoints/noter/$NAME"
-if done_ckpt noter "$NAME"; then
+stage "3/5  noter PDMX base -> checkpoints/noter/$BASE"
+if [[ "$BASE" != "$NAME" ]]; then
+  echo "  reusing base checkpoints/noter/$BASE (BASE=$BASE) — not training"
+  [[ -f "checkpoints/noter/$BASE/last.ckpt" ]] || { echo "  missing base checkpoint" >&2; exit 1; }
+elif done_ckpt noter "$NAME"; then
   echo "  exists — skipping (FORCE=1 to retrain)"
 else
   tag "train/$NAME"
@@ -144,7 +160,7 @@ if done_ckpt noter "$NAME-mixed"; then
 else
   tag "train/$NAME-mixed"
   run noter --log-file "logs/noter/$NAME-mixed.log" \
-    train --init-from "checkpoints/noter/$NAME/last.ckpt" \
+    train --init-from "checkpoints/noter/$BASE/last.ckpt" \
     --kern-sheet "$KS" "$MIX" --vocab "$VOCAB" \
     --train-len "$NOTER_FT_TRAIN" --valid-len "$NOTER_FT_VALID" \
     --lr "$NOTER_FT_LR" --warmup-steps "$NOTER_FT_WARMUP" \
