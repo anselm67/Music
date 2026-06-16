@@ -146,6 +146,54 @@ def test_numbered_double_barline_keeps_its_number(tmp_path: Path) -> None:
     ]
 
 
+def test_repeat_barline_opening_is_bar_one_not_pickup(tmp_path: Path) -> None:
+    """A piece that opens on a numbered repeat barline (`=||:1`, the measure number
+    after the style marks, as in bach/inventions/inven06) starts *at* bar 1 with no
+    pickup. The number must be captured and no spurious `=0` invented — otherwise the
+    editor's bar offset slips by one and the layout no longer aligns to the kern."""
+    kern = """
+**kern
+*clefG2
+*M3/8
+=||:1
+4r
+=2
+4r
+==
+""".strip()
+    reader = tokenize_input(tmp_path, kern)
+    assert reader.lines == [
+        "clef-GG",
+        "3/8",
+        "=1||",
+        "rest/4",
+        "=2",
+        "rest/4",
+        "==3",
+    ]
+    assert reader.first_bar == 1
+    assert not reader.has_bar_zero()
+
+
+def test_repeat_barline_opening_after_pickup_keeps_bar_zero(tmp_path: Path) -> None:
+    """Contrast: when real pickup notes precede the opening barline, the bar zero is
+    genuine and must still be emitted (the fix only suppresses the *spurious* one)."""
+    kern = """
+**kern
+*clefG2
+*M3/8
+4r
+=||:1
+4r
+=2
+4r
+==
+""".strip()
+    reader = tokenize_input(tmp_path, kern)
+    assert reader.has_bar_zero()
+    assert reader.first_bar == 1
+
+
 def test_instrument_mixed_with_spine_path_skipped(tmp_path: Path) -> None:
     """Rows mixing instrument and spine-path tokens must not appear in output."""
     kern = """

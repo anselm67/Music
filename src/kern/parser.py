@@ -124,11 +124,16 @@ class KernSpineHolder[T](SpineHolder):
     REST_RE = re.compile(
         r"^\.*Z*(\d+%)?-?([qN\&<>\{\[\(\)\]\}\\/y]*)([\d]+)?(\.*)r(.*)$"
     )
-    BAR_RE = re.compile(r"^=(=?)\s*(\d+)?(.*)$")
+    # The measure number may sit before or after the barline-style marks: both
+    # `=21:||` and the style-first `=:||:21` / `=||:1` occur in human-authored
+    # Humdrum. Capture the digits wherever they fall and stitch the style chars
+    # (the part before and after the number) back together as `additional`.
+    BAR_RE = re.compile(r"^=(=?)\s*([^\d]*)(\d+)?(.*)$")
 
     def parse_event(self, text: str) -> Token:
         if m := self.BAR_RE.match(text):
-            is_final, barno, additional = m.group(1), m.group(2), m.group(3)
+            is_final, pre, barno, post = m.group(1, 2, 3, 4)
+            additional = pre + post
             barno = int(barno) if barno else -1
             return Bar(
                 text,

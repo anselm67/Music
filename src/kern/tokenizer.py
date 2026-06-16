@@ -258,9 +258,13 @@ class NormHandler(BaseHandler):
         def requires_bar(t: Token) -> bool:
             if isinstance(t, (Note, Chord, Rest)):
                 return True
-            # A non numbered repeat bar also requires a preceeding bar zero.
-            if isinstance(t, Bar) and not cast(Bar, t).requires_valid_bar_number():
-                return True
+            # A repeat/double barline that carries no measure number of its own
+            # still needs a preceding bar zero (it can't be measure 1). But a
+            # numbered one — e.g. a piece that opens on `=||:1` with no pickup — IS
+            # its own measure 1, so it must not trigger a spurious bar zero.
+            if isinstance(t, Bar):
+                bar = cast(Bar, t)
+                return not bar.requires_valid_bar_number() and bar.barno < 0
             return False
 
         # If we see a note or chord before any bar, emit a fake bar 0. Route it

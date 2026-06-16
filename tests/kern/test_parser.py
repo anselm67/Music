@@ -296,6 +296,49 @@ class TestHumdrumParser(unittest.TestCase):
             ),
         )
 
+    def test_style_first_bar_number(self) -> None:
+        # Human-authored Humdrum (e.g. bach/inventions/inven06) writes the measure
+        # number after the barline-style marks; the number must still be captured.
+        self.parse_one_token(
+            "=||:1\n",
+            Bar(
+                "=||:1",
+                barno=1,
+                is_final=False,
+                is_repeat_start=True,
+                is_repeat_end=False,
+                is_invisible=False,
+                is_double=True,
+            ),
+        )
+        self.parse_one_token(
+            "=:||:21\n",
+            Bar(
+                "=:||:21",
+                barno=21,
+                is_final=False,
+                is_repeat_start=True,
+                is_repeat_end=True,
+                is_invisible=False,
+                is_double=True,
+            ),
+        )
+
+    def test_number_first_bar_style_unchanged(self) -> None:
+        # Regression: the usual number-first form keeps parsing as before.
+        self.parse_one_token(
+            "=21:||\n",
+            Bar(
+                "=21:||",
+                barno=21,
+                is_final=False,
+                is_repeat_start=False,
+                is_repeat_end=True,
+                is_invisible=False,
+                is_double=True,
+            ),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
