@@ -93,6 +93,93 @@
      following the format of the entries that follow. Keep newest-first order.
      ════════════════════════════════════════════════════════════════════════ -->
 
+<!-- ── Cross-stave (system-level) transcription ── -->
+<article class="entry">
+  <h2>Cross-stave transcription: decode a system's staves in lockstep with a gated cross-stave attention sublayer</h2>
+  <div class="entry-meta">
+    <span>2026-06-16</span>
+    <span class="badge deferred">Planned</span>
+    <span class="ref">noter (<code>NoterModel</code>, <code>NoterDataset</code>) + scorer decode · supersedes the agreement reranker (<code>_generate_rerank</code>) · cf. the ceiling-decomposition entry below</span>
+  </div>
+
+  <h3>Context</h3>
+  <p>
+    The ceiling-decomposition entry below pinned the real-scan limiter on <em>transcription, not
+    detection</em>: staffer's system grouping is ~99% correct on KernSheet (the constraint-layer
+    diagnostic: 5681 pred vs 5670 GT staves, 5 miscounts, 2789/2816 systems clean), so detection is
+    not the ceiling. The ceiling is the <strong>78% of systems whose independently-decoded spines
+    disagree on the barline grid</strong>. Two of the named levers point the same way: the
+    <code>.</code>-continuation grid is worth <strong>~+2.4pp</strong> (how many continuations a staff
+    emits is set by when the <em>other</em> staff has events — a per-stave decoder cannot know it),
+    and the runaway / early-EOS tail is a length-disagreement between siblings. The
+    agreement reranker (<code>_generate_rerank</code>) already attacks this, but only <em>post-hoc</em>: it reranks
+    independently-decoded beams toward cross-staff barline agreement. It cannot inject information a
+    stave never decoded.
+  </p>
+  <p>
+    The enabling fact is in the data. A <code>.tokens</code> file is a <strong>row-aligned spine
+    grid</strong>: each row is one musical timestep, tab-separated cells are the spines, the
+    <code>.</code> null tokens exist precisely to keep every spine on the same row, and a barline
+    (<code>=N</code>) lands at an <em>identical row index across all spines</em>. Length and EOS row
+    are shared too. A scan of all 674 multi-spine KernSheet files found 1 ragged file (0.1%, a
+    mid-piece spine split that the existing per-sample skip already drops) and 0 barline-skewed rows
+    — real-scan kern is as cleanly aligned as Verovio-canonical PDMX. And because the layout JSON
+    carries one bar range <em>per system</em>, a per-stave bar mismatch is structurally
+    inexpressible. So synchronized cross-stave decoding has honest, aligned labels by construction.
+  </p>
+
+  <h3>Decision</h3>
+  <p>
+    Make the transcription <strong>unit a system</strong> (its <code>G</code> staves) instead of a
+    single stave, and couple the staves in the decoder. The whole change lives in <strong>noter</strong>;
+    scorer inherits it because it embeds a <code>NoterModel</code>.
+  </p>
+  <ul>
+    <li><strong>Sample unit.</strong> <code>NoterDataset.items</code> becomes per-system: each item
+      yields <code>G</code> stave crops + <code>G</code> row-aligned token sequences (same <code>T</code>,
+      same EOS row — they already are in the file), padded to <code>max_staves</code> with a
+      stave-mask. <code>G</code>-general, so it is also a free step toward &gt;2-staff systems.</li>
+    <li><strong>Gated cross-stave attention sublayer.</strong> Keep the noter decoder layer's three
+      existing ops (causal self-attention over time, cross-attention to the staff's <em>own</em>
+      image memory, FFN) and add a 4th: every stave attends to the <em>other staves of its system</em>
+      along the row axis under the <em>same</em> causal mask (<code>stave i, row t</code> sees
+      <code>stave j, rows ≤ t</code>). Hidden state per system is <code>(G, T, D)</code>. The
+      sublayer's output projection is <strong>zero-initialised</strong>, so at init the model is
+      bit-identical to the production noter and single-stave systems stay identical forever.</li>
+    <li><strong>Lockstep decode.</strong> Generate row <code>t</code> for all <code>G</code> staves
+      simultaneously; each stave sees its siblings' rows <code>&lt; t</code>, so "my sibling just put
+      a barline here" is an <em>input</em>, not a post-hoc vote. Agreement becomes structural; the
+      <code>--rerank</code> reranker becomes redundant (kept only as optional belt-and-suspenders).</li>
+    <li><strong>Scorer.</strong> The crop bridge is untouched — it still cuts individual stave crops.
+      Scorer groups them by the system index it already computes (<code>sys_ids</code> at train,
+      <code>owners</code> at inference) and calls noter's system-level decode instead of a flat
+      <code>K</code>-batch. Both standalone checkpoints still transfer wholesale.</li>
+  </ul>
+
+  <h3>Rationale</h3>
+  <p>
+    The gated additive sublayer is chosen over two alternatives. A <em>single interleaved sequence</em>
+    (concatenate all staves per row) kills disagreement by construction but cannot warm-start from the
+    production noter and forces a giant <code>G·max_chords·V</code> head. <em>Encoder-side coupling</em>
+    (letting crops see each other) does not address what is a decoder/temporal problem. The gated
+    decoder sublayer is the one design that is both principled and reuses the production checkpoint —
+    the same additive-bridge philosophy the scorer already uses for the crop bridge. It targets the
+    decomposition's named failure modes directly: the <code>.</code>-grid (a stave now knows when to
+    emit a null to stay aligned), runaway / early-EOS (siblings pull a diverging length back), and
+    leaves only the ~4.6% shared-wrong-timeline floor it structurally cannot beat.
+  </p>
+
+  <h3>Status / next</h3>
+  <p>
+    Planned. Build order: dataset restructure + system-collate, then the
+    <code>CrossStaveDecoderLayer</code> (noter can no longer use <code>nn.Transformer</code> wholesale),
+    train standalone noter warm-started from <span class="tag">mahler</span>'s noter, then re-merge into
+    a scorer run. Eval cards land in <code>noter-training.html</code> / <code>scorer-training.html</code>
+    afterward; success criterion is closing the ~2.4pp <code>.</code>-grid gap and lifting the 78%
+    desync population's joint-correctness past the reranker's 33.8%.
+  </p>
+</article>
+
 <!-- ── The KernSheet ~91% similarity ceiling, decomposed ── -->
 <article class="entry">
   <h2>Why KernSheet end-to-end is stuck at ~91% — it's a transcription ceiling, not a detection one — <code>mahler-ks</code></h2>

@@ -250,6 +250,19 @@
 <text x="55" y="635" font-size="10" fill="#94a3b8">src_padding_mask: derived from actual staff pixel width — variable-width staves masked in self-attention.</text>
 </svg>
 </div>
+
+<div class="callout">
+  <strong>Planned: cross-stave (system-level) transcription.</strong> Each staff above is decoded
+  in <em>isolation</em>, so the spines of a system can disagree on the barline grid — the dominant
+  real-scan ceiling (see <a href="journal.html">the cross-stave entry in the journal</a>). The
+  planned evolution makes the <strong>unit a system</strong>: the dataset emits a system's
+  <code>G</code> staff crops + their <strong>row-aligned</strong> token sequences (kern is a spine
+  grid — a barline sits at an identical row index across spines), and each decoder layer gains a
+  4th, <strong>zero-initialised</strong> sublayer where a staff attends to its siblings under the
+  same causal mask. Decoding runs in <strong>lockstep</strong> (row <code>t</code> for all staves
+  at once), so cross-staff agreement is structural rather than a post-hoc rerank. Zero-init means
+  the model starts bit-identical to this one and single-staff systems stay identical.
+</div>
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -395,6 +408,18 @@
   one addition — the transcription loss now backpropagates through the <code>grid_sample</code>
   crop into the stave/system box position.
 </p>
+
+<div class="callout">
+  <strong>Planned: scorer consumes the cross-stave noter.</strong> When the noter becomes
+  system-level (§2 callout), the scorer change is small and the <strong>crop bridge is untouched</strong>
+  — it still cuts individual stave crops. The scorer already computes which staves form a system
+  (<code>sys_ids</code> at train, from the GT routing; <code>owners</code> at inference, from
+  staffer's boundary <code>cumsum</code>) and currently only uses it in the <code>--rerank</code>
+  pass. The new path <strong>groups the crops by that system index</strong> and calls noter's
+  lockstep system decode instead of a flat <code>K</code>-batch — so staffer's grouping feeds
+  directly into the coupled decode. The agreement reranker then becomes <strong>redundant</strong>
+  (agreement is structural inside the noter), kept only as optional belt-and-suspenders.
+</div>
 
 <div class="diagram-wrap">
 <svg viewBox="0 0 950 780" width="950" xmlns="http://www.w3.org/2000/svg"
