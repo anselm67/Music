@@ -93,6 +93,65 @@
      following the format of the entries that follow. Keep newest-first order.
      ════════════════════════════════════════════════════════════════════════ -->
 
+<!-- ── The KernSheet ~91% similarity ceiling, decomposed ── -->
+<article class="entry">
+  <h2>Why KernSheet end-to-end is stuck at ~91% — it's a transcription ceiling, not a detection one — <code>mahler-ks</code></h2>
+  <div class="entry-meta">
+    <span>2026-06-16</span>
+    <span class="badge rejected">Not promoted</span>
+    <span class="ref"><code>scripts/scorer_ceiling_probe.py</code> · run <span class="tag">mahler-ks</span> · cf. the ScanAugment &amp; rehearsal-mix entries</span>
+  </div>
+
+  <h3>Context</h3>
+  <p>
+    A recurring frustration: KernSheet end-to-end similarity sits near <strong>91%</strong> no matter
+    the intervention — ScanAugment (a clean detector win), letterboxing, and now <span class="tag">mahler-ks</span>,
+    a fine-tune off 128 hand-corrected <code>staff_height</code> scores whose boxes were visibly
+    "all over the place". <span class="tag">mahler-ks</span> vs <span class="tag">mahler</span> on the
+    <em>same</em> current (edited) KS data: <strong>90.9% vs 90.8%</strong> (rerank 91.4 vs 91.3),
+    miscount 14 vs 11 — a wash. The data is genuinely cleaner and that is banked; it simply doesn't
+    show up here. Rather than run another model, we instrumented the eval to ask <em>why nothing
+    moves it</em>.
+  </p>
+
+  <h3>What we found</h3>
+  <p>
+    The eval metric matches staves by center-y and then scores <em>token similarity on the matched
+    staves</em> — detection quality shows up separately as miscount. So the 91% is a
+    <strong>transcription</strong> number sitting <em>downstream of detection</em>: augment, box
+    cleaning, and letterboxing are all detector-side and structurally cannot move it. The crop the
+    noter receives was already good enough.
+  </p>
+  <p>
+    Decomposing 300 pages / 3401 matched staves (<code>scorer_ceiling_probe.py</code>):
+  </p>
+  <ul>
+    <li>raw mean <strong>91.0%</strong>, but <strong>median 94.3%</strong> — a tail, not a uniform error;</li>
+    <li><code>.</code>-stripped mean <strong>93.4%</strong> → a cross-stave/system joint decode is worth
+        <strong>~+2.4pp</strong>. The <code>.</code> continuation tokens encode a <em>shared</em> system
+        time-grid (how many continuations a staff emits is set by when the <em>other</em> staff has
+        events), which a per-stave decoder cannot know — so <code>.</code> counts drift both ways;</li>
+    <li>U-shaped in length: 30–60-token staves score 92% and are 90% of the data; both extremes are worse;</li>
+    <li>the <strong>&lt;80% tail (11% of staves)</strong> splits <strong>76% note-divergence</strong>
+        (right length, wrong notes), 17% runaway-repeat (decoder loops into a <code>rest/8</code>/<code>.</code>
+        wall), 7% early-EOS (truncates — a real un-length-normalized beam bias in
+        <code>_beam_some</code>).</li>
+  </ul>
+
+  <h3>The reading</h3>
+  <p>
+    "Stuck at 91%" is really "a high median with an 11% tail." The levers are now concrete and
+    <em>none are detector work</em>: (1) the dominant tail — note-divergence — is unadjudicated and
+    splits the future: genuine model misreads (a model/training lever) vs <strong>edition mismatch</strong>
+    between the scanned IMSLP edition and the Humdrum <code>.krn</code> (an irreducible label ceiling,
+    fixed only by curating/excluding bad-edition pages); (2) decode-time safeguards
+    (length-normalization for early-EOS, a max-consecutive-repeat cap for runaways) recover ~1–1.5pp
+    with no retraining, applied surgically since music repeats legitimately; (3) a system-level joint
+    decode recovers the ~2.4pp <code>.</code>-grid. <span class="tag">mahler</span> stays production.
+    Next step is eyeballing the 55–80% note-divergence band against the scans to settle (1).
+  </p>
+</article>
+
 <!-- ── ScanAugment: clean detector win, no end-to-end payoff ── -->
 <article class="entry">
   <h2>Scan-look augmentation helps the detector and nothing downstream — <code>augment no good</code></h2>

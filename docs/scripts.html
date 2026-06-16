@@ -104,6 +104,28 @@
   <p class="no-match" id="no-match">No scripts match the selected tags.</p>
 
   <!-- ───────────────────────────────────────────────── eval_predicted_boxes -->
+  <!-- ──────────────────────────────────────────────────── scorer_ceiling_probe -->
+  <div class="script">
+    <div class="script-header">
+      <span class="script-name">scorer_ceiling_probe.py</span>
+      <span class="badge badge-blue">diagnostic</span>
+      <span class="badge badge-blue">scorer</span>
+    </div>
+    <p class="script-desc">
+      Decomposes the KernSheet end-to-end similarity ceiling. The scorer eval reports only
+      min/avg/max matched-stave similarity; this keeps every per-stave score with its
+      <code>(score_id, page)</code> and prints the <em>distribution</em>, a
+      <code>.</code>-stripped similarity (sizes the cross-stave time-grid slice a system-level
+      joint decode could recover), mean similarity by GT length, the failure-mode mix of the
+      &lt;80% tail (note-divergence / runaway-repeat / early-EOS), and the worst staves plus a
+      55–80% <em>note-divergence</em> adjudication set (GT vs prediction, to classify
+      model-misread vs edition-mismatch against the scans). KernSheet only; read-only, no training.
+    </p>
+    <div class="label">Usage</div>
+<pre>uv run python scripts/scorer_ceiling_probe.py mahler-ks --size 300 --worst 20</pre>
+  </div>
+
+  <!-- ──────────────────────────────────────────────────────── eval_predicted_boxes -->
   <div class="script">
     <div class="script-header">
       <span class="script-name">eval_predicted_boxes.py</span>
