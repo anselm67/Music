@@ -14,6 +14,7 @@ from pathlib import Path
 
 import click
 
+from kern import KernReader
 from kernsheet import KernSheet, review_names, score_findings
 from kernsheet.reviews import Finding
 from utils import log_uncaught_exceptions, print_histogram
@@ -97,7 +98,17 @@ def _scan(
         except Exception as e:
             logging.error(f"review load {kern_score.id}: {e}")
             continue
-        for finding in score_findings(score, names):
+        # The bar_count review needs the kern total; other reviews ignore it. An
+        # un-built or malformed token file just runs the rest without bar_count,
+        # rather than crashing the whole corpus scan on one bad entry.
+        kern = None
+        tokens = ks.tokens_path(key)
+        if tokens.is_file():
+            try:
+                kern = KernReader(tokens)
+            except Exception as e:
+                logging.error(f"review kern {kern_score.id}: {e}")
+        for finding in score_findings(score, names, kern=kern):
             out.append((key, finding))
     return out
 

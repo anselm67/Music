@@ -1,3 +1,4 @@
+from kern import KernReader
 from sheetmusic import Box, Page, Score, Staff, Status, System
 from kernsheet.reviews import STAFF_HEIGHT_TOLERANCE_PX, score_findings
 
@@ -130,6 +131,54 @@ class TestBarDrift:
             self._sys(1, 3), self._sys(0, 0, numbered=False), self._sys(4, 2)
         )
         assert score_findings(score, names=["bar_drift"]) == []
+
+
+class _Kern(KernReader):
+    """A KernReader with a fixed bar total, bypassing the token-file load."""
+
+    def __init__(self, bar_count: int, *, bar_zero: bool = False) -> None:
+        self._bar_count = bar_count
+        self._bar_zero = bar_zero
+
+    @property
+    def bar_count(self) -> int:
+        return self._bar_count
+
+    def has_bar_zero(self) -> bool:
+        return self._bar_zero
+
+
+class TestBarCount:
+    # _page([..]) is one system of one bar (bars=[0, 100]); the '/' total adds one,
+    # so the geometry accounts for 2 kern bars.
+    def test_matching_total_no_finding(self) -> None:
+        score = _score(_page([50, 50]))
+        assert score_findings(score, names=["bar_count"], kern=_Kern(2)) == []
+
+    def test_mismatch_flags_first_page(self) -> None:
+        score = _score(_page([50, 50]))
+        findings = score_findings(score, names=["bar_count"], kern=_Kern(5))
+        assert [f.review for f in findings] == ["bar_count"]
+        assert findings[0].page_number == 1
+        assert findings[0].score_id == "x"
+        assert "layout has 2 bars" in findings[0].message
+        assert "kern has 5" in findings[0].message
+
+    def test_bar_zero_counts_the_same(self) -> None:
+        # a leading bar 0 and a leading bar 1 each contribute one to the total.
+        score = _score(_page([50, 50]))
+        assert (
+            score_findings(score, names=["bar_count"], kern=_Kern(2, bar_zero=True))
+            == []
+        )
+
+    def test_no_kern_skips(self) -> None:
+        # without the token file the check can't run, even on a mismatch.
+        assert score_findings(_score(_page([50, 50])), names=["bar_count"]) == []
+
+    def test_empty_kern_skips(self) -> None:
+        score = _score(_page([50, 50]))
+        assert score_findings(score, names=["bar_count"], kern=_Kern(0)) == []
 
 
 class TestSuppression:

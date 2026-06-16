@@ -84,7 +84,9 @@ class StaffEditor:
         """Un-suppressed review findings for ``page`` (the current page by default)."""
         page = page if page is not None else self.page
         return [
-            f for f in score_findings(self.score) if f.page_number == page.page_number
+            f
+            for f in score_findings(self.score, kern=self.kern)
+            if f.page_number == page.page_number
         ]
 
     def cycle_status(self) -> None:
@@ -680,7 +682,8 @@ class StaffEditor:
         return sorted(
             n
             for n in {
-                f.page_number for f in score_findings(self.score, self.review_names)
+                f.page_number
+                for f in score_findings(self.score, self.review_names, kern=self.kern)
             }
             if n > self.page.page_number
         )

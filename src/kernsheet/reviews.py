@@ -6,12 +6,14 @@ the layout they describe. On a flagged page a human either fixes the layout (the
 finding then stops firing), marks the page ``REJECTED`` (``Status.REJECTED``), or
 acknowledges the review ("ok") — which records its name in ``Page.reviewed`` so it
 stops being flagged. Each check reads only the ``Score`` geometry, so scanning the
-whole corpus is a cheap pass over the layout JSON (no images, no model).
+whole corpus is a cheap pass over the layout JSON (plus, for ``bar_count``, the
+small kern token file — still no images, no model).
 """
 
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
+from kern import KernReader
 from sheetmusic import Page, Score, Status
 
 # A within-page spread of stave heights wider than this many pixels is flagged.
@@ -31,7 +33,9 @@ class Finding:
     message: str
 
 
-Review = Callable[[Score], Iterator[Finding]]
+# A review reads the score geometry and, when one is available, the kern token file
+# (``bar_count`` needs the expected total; the geometry-only reviews ignore it).
+Review = Callable[[Score, KernReader | None], Iterator[Finding]]
 REGISTRY: dict[str, Review] = {}
 
 
@@ -52,7 +56,7 @@ def review_names() -> list[str]:
 
 
 @register("staff_height")
-def _staff_height(score: Score) -> Iterator[Finding]:
+def _staff_height(score: Score, _kern: KernReader | None) -> Iterator[Finding]:
     """Staves within a page should share a height (one grand-staff geometry). A
     large spread means the detector merged or split a staff, or a box is wrong."""
     for page in score.pages:
@@ -81,7 +85,7 @@ def _staff_height(score: Score) -> Iterator[Finding]:
 
 
 @register("bar_numbers")
-def _bar_numbers(score: Score) -> Iterator[Finding]:
+def _bar_numbers(score: Score, _kern: KernReader | None) -> Iterator[Finding]:
     """Every system needs bar numbers — they pin its transcription target. A system
     with none was added in the editor (``_make_system`` seeds ``bar_numbers=[]``) and
     validated before its bars were ever assigned; it cannot be transcribed and crashes
@@ -98,7 +102,7 @@ def _bar_numbers(score: Score) -> Iterator[Finding]:
 
 
 @register("bar_drift")
-def _bar_drift(score: Score) -> Iterator[Finding]:
+def _bar_drift(score: Score, _kern: KernReader | None) -> Iterator[Finding]:
     """A system's stored start number must continue where the previous system's
     barlines left off: ``first_bar_number == prev.first_bar_number + prev.bar_count``
     (``bar_count`` is geometry, ``len(bars) - 1``). The editor edits barline geometry
@@ -126,19 +130,55 @@ def _bar_drift(score: Score) -> Iterator[Finding]:
             expected = system.first_bar_number + system.bar_count
 
 
+@register("bar_count")
+def _bar_count(score: Score, kern: KernReader | None) -> Iterator[Finding]:
+    """The page geometry must account for every bar in the kern: summing each
+    system's barline count across the whole score must equal ``kern.bar_count``.
+    This is exactly the editor's '/' check (``StaffEditor.check_bar_count``), run as
+    a corpus review — a mismatch means barlines are un-split, merged, or spurious, so
+    the kern can't be sliced onto the systems. Needs the kern token file, so it is
+    skipped when one isn't available or is empty (un-built / corrupt). The whole-score
+    total is reported against the first page, where a recount starts."""
+    if kern is None or kern.bar_count == 0 or not score.pages:
+        return
+    # Mirrors check_bar_count: a leading bar 0 and a leading bar 1 each add one to
+    # the count, so the has_bar_zero branches contribute the same +1 either way.
+    count = 0 if kern.has_bar_zero() else 1
+    for page in score.pages:
+        for system in page.systems:
+            if system.staff_count > 0:
+                count += max(system.bar_count, 0)
+    if kern.has_bar_zero():
+        count += 1
+    if count != kern.bar_count:
+        yield Finding(
+            "bar_count",
+            score.id,
+            score.pages[0].page_number,
+            f"layout has {count} bars, kern has {kern.bar_count} "
+            f"(barlines added/removed without matching the kern)",
+        )
+
+
 def _needs_attention(page: Page, review: str) -> bool:
     """A finding needs human attention unless the page is already rejected
     (excluded anyway) or a human has acknowledged this review on it."""
     return page.status != Status.REJECTED and review not in page.reviewed
 
 
-def score_findings(score: Score, names: list[str] | None = None) -> list[Finding]:
-    """All un-suppressed findings for one score, for the given reviews (all if None)."""
+def score_findings(
+    score: Score,
+    names: list[str] | None = None,
+    kern: KernReader | None = None,
+) -> list[Finding]:
+    """All un-suppressed findings for one score, for the given reviews (all if None).
+    ``kern`` is the score's token file when available; ``bar_count`` needs it and is
+    silently skipped without it (the geometry-only reviews ignore it)."""
     selected = names if names is not None else review_names()
     pages = {p.page_number: p for p in score.pages}
     return [
         finding
         for name in selected
-        for finding in REGISTRY[name](score)
+        for finding in REGISTRY[name](score, kern)
         if _needs_attention(pages[finding.page_number], name)
     ]
