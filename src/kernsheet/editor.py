@@ -616,9 +616,16 @@ class StaffEditor:
             self.bar_index = 0
 
     def check_bar_count(self) -> None:
-        bar_count = self.get_bar_offset() - (self.kern.first_bar - 1)
-        if self.kern.has_bar_zero():
-            bar_count += 1
+        # The kern's bar count is the number of real measures (a pickup `=0` counts,
+        # the closing `==` does not). That equals the layout's barline geometry —
+        # one bar per gap between barlines, summed over the staved systems — so the
+        # two compare directly, with no terminal-barline fudge.
+        bar_count = sum(
+            max(system.bar_count, 0)
+            for page in self.score.pages
+            for system in page.systems
+            if system.staff_count > 0
+        )
         if bar_count == self.kern.bar_count:
             self.beep()
             print(f"Yeay! {bar_count} is what we want, victory !")

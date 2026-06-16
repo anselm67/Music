@@ -113,13 +113,14 @@ def test_unnumbered_double_barline_is_a_glyph(tmp_path: Path) -> None:
         "=||",
         "=2",
         "rest/4",
-        "==3",
+        "==",
     ]
 
 
 def test_numbered_double_barline_keeps_its_number(tmp_path: Path) -> None:
-    """A numbered `=2||` is a real measure boundary: the number must survive (for
-    score alignment) while still rendering as a double bar, never as final `==`."""
+    """A mid-piece numbered `=2||` is a real measure boundary: the number must
+    survive (for score alignment) while still rendering as a double bar. (The closing
+    `==` is unnumbered — it is not a measure; see the bar-count tests.)"""
     kern = """
 **kern
 *clefG2
@@ -142,7 +143,7 @@ def test_numbered_double_barline_keeps_its_number(tmp_path: Path) -> None:
         "rest/4",
         "=3",
         "rest/4",
-        "==4",
+        "==",
     ]
 
 
@@ -169,7 +170,7 @@ def test_repeat_barline_opening_is_bar_one_not_pickup(tmp_path: Path) -> None:
         "rest/4",
         "=2",
         "rest/4",
-        "==3",
+        "==",
     ]
     assert reader.first_bar == 1
     assert not reader.has_bar_zero()

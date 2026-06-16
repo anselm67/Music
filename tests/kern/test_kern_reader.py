@@ -93,6 +93,28 @@ three
         self.assertEqual(reader.get_text(0), ["=0", "pickup", "=2"])
         self.assertEqual(reader.get_text(2), ["=2", "two", "=3"])
 
+    def test_closing_barline_not_counted(self) -> None:
+        # A bar marker that no music follows is the piece's closing barline, not a
+        # measure: written ==N, =N, =|| or ==, it must not inflate the bar count.
+        for terminal in ["==4", "=4", "=||", "=="]:
+            reader = get_kern_reader(f"=1\na\n=2\nb\n=3\nc\n{terminal}")
+            self.assertEqual(reader.bar_count, 3, terminal)
+            self.assertEqual(sorted(reader.bars), [1, 2, 3], terminal)
+
+    def test_content_ending_keeps_last_bar(self) -> None:
+        # When music (not a barline) ends the file every bar marker has content
+        # after it, so none is dropped and a real layout/kern off-by-one still shows.
+        reader = get_kern_reader("=1\na\n=2\nb")
+        self.assertEqual(reader.bar_count, 2)
+        self.assertEqual(sorted(reader.bars), [1, 2])
+
+    def test_only_the_final_barline_dropped_not_a_run(self) -> None:
+        # A content-free final measure: `=3` then the closing `==4` with nothing
+        # between. Only the closing barline (last line) is dropped; bar 3 survives.
+        reader = get_kern_reader("=1\na\n=2\nb\n=3\n==4")
+        self.assertEqual(reader.bar_count, 3)
+        self.assertIn(3, reader.bars)
+
     def test_start_before_first_bar_adjusts_to_zero(self) -> None:
         reader = get_kern_reader(
             """

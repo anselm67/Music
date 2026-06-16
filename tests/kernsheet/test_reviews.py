@@ -149,11 +149,11 @@ class _Kern(KernReader):
 
 
 class TestBarCount:
-    # _page([..]) is one system of one bar (bars=[0, 100]); the '/' total adds one,
-    # so the geometry accounts for 2 kern bars.
+    # _page([..]) is one system of one bar (bars=[0, 100]); the layout geometry must
+    # equal the kern's real-measure count directly (the closing barline is not a bar).
     def test_matching_total_no_finding(self) -> None:
         score = _score(_page([50, 50]))
-        assert score_findings(score, names=["bar_count"], kern=_Kern(2)) == []
+        assert score_findings(score, names=["bar_count"], kern=_Kern(1)) == []
 
     def test_mismatch_flags_first_page(self) -> None:
         score = _score(_page([50, 50]))
@@ -161,14 +161,15 @@ class TestBarCount:
         assert [f.review for f in findings] == ["bar_count"]
         assert findings[0].page_number == 1
         assert findings[0].score_id == "x"
-        assert "layout has 2 bars" in findings[0].message
+        assert "layout has 1 bars" in findings[0].message
         assert "kern has 5" in findings[0].message
 
-    def test_bar_zero_counts_the_same(self) -> None:
-        # a leading bar 0 and a leading bar 1 each contribute one to the total.
+    def test_bar_zero_does_not_shift_the_count(self) -> None:
+        # The count is pure geometry vs kern total — a pickup bar 0 is already in
+        # kern.bar_count and does not add a fudge term either way.
         score = _score(_page([50, 50]))
         assert (
-            score_findings(score, names=["bar_count"], kern=_Kern(2, bar_zero=True))
+            score_findings(score, names=["bar_count"], kern=_Kern(1, bar_zero=True))
             == []
         )
 

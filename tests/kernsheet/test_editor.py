@@ -550,11 +550,11 @@ class TestPageCommands:
 
     def test_acknowledge_reviews_records_firing_reviews(self) -> None:
         # A system with mismatched staff heights fires the staff_height review.
-        # Its 3 bars (4 barlines) match the default _FakeKern total, so bar_count
+        # Its 4 bars (5 barlines) match the default _FakeKern total, so bar_count
         # stays quiet and only staff_height is in play.
         bad = System(
             bar_numbers=[1],
-            bars=[10, 140, 270, 400],
+            bars=[10, 140, 270, 400, 530],
             staves=[
                 Staff(box=Box(10, 0, 400, 40)),
                 Staff(box=Box(10, 60, 400, 200)),
@@ -629,7 +629,9 @@ class TestBarCounting:
         assert editor.bar_number == 14
 
     def test_check_bar_count_match(self, capsys) -> None:  # type: ignore[no-untyped-def]
-        editor = _editor([_page(_two_systems())], kern=_FakeKern(bar_count=5))
+        # Two systems of 2 bars each = 4 bars of geometry, which must equal the kern's
+        # real-measure count directly (the closing barline is not a measure).
+        editor = _editor([_page(_two_systems())], kern=_FakeKern(bar_count=4))
 
         editor.check_bar_count()  # '/'
 

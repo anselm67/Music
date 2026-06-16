@@ -82,7 +82,10 @@ class TokenFormatter:
         else:
             barno_str = ""
         if bar.is_final:
-            return f"=={barno_str}"
+            # The closing `==` ends the last measure; it is not a measure itself, so
+            # it never carries a number — whether the source numbered it (`==28`) or
+            # not. This keeps the bar count equal to the real-measure count.
+            return "=="
         elif bar.is_double:
             return f"={barno_str}||"
         else:
@@ -298,16 +301,12 @@ class NormHandler(BaseHandler):
             ):
                 self.bar_number += 1
 
-            bars = [
-                replace(bar, barno=self.bar_number)
-                if bar.is_final and bar.barno < 0
-                else bar
-                for bar in bars
-            ]
-            # TODO We're not supposed to see any more bars, so it's ok
-            # not to incrememt self.bar_number
-
-            if any((bar.barno >= 0 or bar.is_double for bar in bars)):
+            # The final barline (`==`) closes the last measure — it is NOT a new
+            # measure, so it must keep its own (absent) number and stay unnumbered.
+            # Emit it as the end-of-piece glyph; the bar count then equals the number
+            # of real measures, matching the layout geometry (and the editor's bar
+            # count check) rather than over-counting by a phantom trailing bar.
+            if any((bar.barno >= 0 or bar.is_double or bar.is_final for bar in bars)):
                 return list(zip([spine for spine, _ in tokens], bars))
             else:
                 return None

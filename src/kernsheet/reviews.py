@@ -141,15 +141,14 @@ def _bar_count(score: Score, kern: KernReader | None) -> Iterator[Finding]:
     total is reported against the first page, where a recount starts."""
     if kern is None or kern.bar_count == 0 or not score.pages:
         return
-    # Mirrors check_bar_count: a leading bar 0 and a leading bar 1 each add one to
-    # the count, so the has_bar_zero branches contribute the same +1 either way.
-    count = 0 if kern.has_bar_zero() else 1
-    for page in score.pages:
-        for system in page.systems:
-            if system.staff_count > 0:
-                count += max(system.bar_count, 0)
-    if kern.has_bar_zero():
-        count += 1
+    # Mirrors check_bar_count: kern.bar_count is the real-measure count (a pickup `=0`
+    # counts, the closing `==` does not), which equals the layout's barline geometry.
+    count = sum(
+        max(system.bar_count, 0)
+        for page in score.pages
+        for system in page.systems
+        if system.staff_count > 0
+    )
     if count != kern.bar_count:
         yield Finding(
             "bar_count",

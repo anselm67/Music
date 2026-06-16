@@ -76,6 +76,19 @@ class KernReader:
                         bar_number, clef, keys, sig
                     )
 
+        # The closing barline of a piece is not a measure: a final barline written
+        # with a number at the very end — `==150`, or a bare trailing `=150` — opens a
+        # bar that no music fills. It is the file's last line (an unnumbered `==`/`=||`
+        # was never counted; content-ending scores have no trailing barline at all), so
+        # drop the bar marker sitting on that last line. The count is then the real
+        # measure count, matching the layout geometry, whatever the final glyph.
+        last_line = next(
+            (i for i in reversed(range(len(self.lines))) if self.lines[i]), -1
+        )
+        for bar_number in [b for b, ln in self.bars.items() if ln == last_line]:
+            del self.bars[bar_number]
+            self.preambles.pop(bar_number, None)
+
     def has_bar_zero(self) -> bool:
         return 0 in self.bars
 
