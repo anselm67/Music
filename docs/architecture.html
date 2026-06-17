@@ -184,17 +184,18 @@
   padded with <code>SIL</code> where unused.
 </p>
 <div class="diagram-wrap">
-<svg viewBox="0 0 840 660" width="840" xmlns="http://www.w3.org/2000/svg"
+<svg viewBox="0 0 880 675" width="880" xmlns="http://www.w3.org/2000/svg"
      font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
 <defs>
   <marker id="a2"  markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#64748b"/></marker>
   <marker id="a2g" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#059669"/></marker>
+  <marker id="a2v" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#7c3aed"/></marker>
 </defs>
 <text x="180" y="20" text-anchor="middle" font-weight="700" font-size="12" fill="#94a3b8">ENCODER</text>
 <text x="650" y="20" text-anchor="middle" font-weight="700" font-size="12" fill="#94a3b8">DECODER</text>
 <rect x="55" y="28" width="250" height="56" rx="6" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
-<text x="180" y="50" text-anchor="middle" font-weight="600" font-size="13" fill="#1e40af">Staff Crop Image</text>
-<text x="180" y="70" text-anchor="middle" font-size="11" fill="#1e40af" font-family="monospace">(B, 1, 64, 768)  — centre-padded</text>
+<text x="180" y="50" text-anchor="middle" font-weight="600" font-size="13" fill="#1e40af">Staff Crop Images  (G per system)</text>
+<text x="180" y="70" text-anchor="middle" font-size="11" fill="#1e40af" font-family="monospace">(B, G, 1, 64, 768)  — encoded per staff</text>
 <line x1="180" y1="84" x2="180" y2="126" stroke="#64748b" stroke-width="1.5" marker-end="url(#a2)"/>
 <rect x="55" y="127" width="250" height="100" rx="6" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
 <text x="180" y="149" text-anchor="middle" font-weight="600" font-size="13" fill="#1e40af">SourceEmbedding</text>
@@ -203,22 +204,22 @@
 <text x="180" y="203" text-anchor="middle" font-size="11" fill="#1e40af" font-family="monospace">→ (B, 256, 1, 192) → flatten</text>
 <text x="180" y="220" text-anchor="middle" font-size="11" fill="#1e40af" font-family="monospace">+ pos_embed (192, 256)</text>
 <line x1="180" y1="227" x2="180" y2="272" stroke="#64748b" stroke-width="1.5" marker-end="url(#a2)"/>
-<text x="186" y="253" font-size="11" fill="#64748b" font-family="monospace">(B, 192, 256)</text>
+<text x="186" y="253" font-size="11" fill="#64748b" font-family="monospace">(B, G, 192, 256)</text>
 <rect x="55" y="273" width="250" height="100" rx="6" fill="#d1fae5" stroke="#059669" stroke-width="1.5"/>
 <text x="180" y="295" text-anchor="middle" font-weight="600" font-size="13" fill="#065f46">Transformer Encoder</text>
 <text x="180" y="313" text-anchor="middle" font-size="11" fill="#065f46">4 layers  d=256  n_head=8  ffn=1 024</text>
 <text x="180" y="331" text-anchor="middle" font-size="11" fill="#065f46">full self-attention (no causal mask)</text>
 <text x="180" y="349" text-anchor="middle" font-size="11" fill="#065f46">src_padding_mask from actual staff width</text>
-<text x="180" y="365" text-anchor="middle" font-size="10.5" fill="#065f46" font-family="monospace">out: (B, 192, 256)  ← memory</text>
+<text x="180" y="365" text-anchor="middle" font-size="10.5" fill="#065f46" font-family="monospace">out: (B, G, 192, 256)  ← per-staff memory</text>
 <rect x="55" y="400" width="250" height="42" rx="5" fill="#f0fdf4" stroke="#059669" stroke-width="1" stroke-dasharray="5,3"/>
 <text x="180" y="418" text-anchor="middle" font-size="11" fill="#065f46" font-style="italic">memory</text>
-<text x="180" y="434" text-anchor="middle" font-size="11" fill="#065f46" font-family="monospace">(B, 192, 256)</text>
+<text x="180" y="434" text-anchor="middle" font-size="11" fill="#065f46" font-family="monospace">(B, G, 192, 256)</text>
 <line x1="180" y1="373" x2="180" y2="400" stroke="#059669" stroke-width="1" stroke-dasharray="4,2"/>
 <line x1="305" y1="421" x2="524" y2="421" stroke="#059669" stroke-width="1.5" stroke-dasharray="7,3" marker-end="url(#a2g)"/>
-<text x="415" y="413" text-anchor="middle" font-size="10.5" fill="#059669">cross-attention (memory K,V)</text>
+<text x="415" y="413" text-anchor="middle" font-size="10.5" fill="#059669">image cross-attn (each staff's own memory)</text>
 <rect x="525" y="28" width="250" height="56" rx="6" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
-<text x="650" y="50" text-anchor="middle" font-weight="600" font-size="13" fill="#4c1d95">Target Tokens  (teacher-forced)</text>
-<text x="650" y="70" text-anchor="middle" font-size="11" fill="#4c1d95" font-family="monospace">(B, T=128, H=8)  — int64</text>
+<text x="650" y="50" text-anchor="middle" font-weight="600" font-size="13" fill="#4c1d95">Target Tokens  (row-aligned, teacher-forced)</text>
+<text x="650" y="70" text-anchor="middle" font-size="11" fill="#4c1d95" font-family="monospace">(B, G, T=128, H=8)  — int64</text>
 <line x1="650" y1="84" x2="650" y2="126" stroke="#64748b" stroke-width="1.5" marker-end="url(#a2)"/>
 <rect x="525" y="127" width="250" height="110" rx="6" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
 <text x="650" y="149" text-anchor="middle" font-weight="600" font-size="13" fill="#4c1d95">TargetEmbedder</text>
@@ -228,89 +229,75 @@
 <text x="650" y="221" text-anchor="middle" font-size="11" fill="#4c1d95" font-family="monospace">+ pos_embed (128, 256)</text>
 <line x1="650" y1="237" x2="650" y2="272" stroke="#64748b" stroke-width="1.5" marker-end="url(#a2)"/>
 <text x="656" y="258" font-size="11" fill="#64748b" font-family="monospace">(B, 128, 256)</text>
-<rect x="525" y="273" width="250" height="100" rx="6" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
-<text x="650" y="295" text-anchor="middle" font-weight="600" font-size="13" fill="#4c1d95">Transformer Decoder</text>
-<text x="650" y="313" text-anchor="middle" font-size="11" fill="#4c1d95">4 layers  d=256  n_head=8  ffn=1 024</text>
-<text x="650" y="331" text-anchor="middle" font-size="11" fill="#4c1d95">causal mask ✓  (autoregressive)</text>
-<text x="650" y="349" text-anchor="middle" font-size="11" fill="#4c1d95">cross-attn over memory (B, 192, 256)</text>
-<text x="650" y="365" text-anchor="middle" font-size="10.5" fill="#4c1d95" font-family="monospace">out: (B, 128, 256)</text>
-<line x1="650" y1="373" x2="650" y2="413" stroke="#64748b" stroke-width="1.5" marker-end="url(#a2)"/>
-<text x="656" y="397" font-size="11" fill="#64748b" font-family="monospace">(B, 128, 256)</text>
+<rect x="525" y="273" width="250" height="116" rx="6" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="650" y="293" text-anchor="middle" font-weight="600" font-size="13" fill="#4c1d95">CrossStaveDecoder</text>
+<text x="650" y="310" text-anchor="middle" font-size="11" fill="#4c1d95">4 layers  d=256  n_head=8  ffn=1 024 — per layer:</text>
+<text x="650" y="326" text-anchor="middle" font-size="10.5" fill="#4c1d95">1 causal self-attn · 2 image cross-attn (own memory)</text>
+<text x="650" y="342" text-anchor="middle" font-size="10.5" fill="#7c3aed" font-weight="600">3 gated cross-stave attn (zero-init) · 4 FFN</text>
+<text x="650" y="358" text-anchor="middle" font-size="10.5" fill="#4c1d95">stave i, row t  ←  siblings j, rows ≤ t</text>
+<text x="650" y="376" text-anchor="middle" font-size="10.5" fill="#4c1d95" font-family="monospace">out: (B, G, 128, 256)</text>
+<line x1="650" y1="389" x2="650" y2="413" stroke="#64748b" stroke-width="1.5" marker-end="url(#a2)"/>
+<text x="656" y="405" font-size="11" fill="#64748b" font-family="monospace">(B, G, 128, 256)</text>
+<path d="M 775 312 C 824 312, 824 362, 775 362" fill="none" stroke="#7c3aed" stroke-width="1.6" marker-end="url(#a2v)"/>
+<text x="831" y="337" text-anchor="middle" font-size="9" fill="#7c3aed" transform="rotate(90 831 337)">cross-stave (lockstep)</text>
 <rect x="525" y="414" width="250" height="65" rx="6" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
 <text x="650" y="436" text-anchor="middle" font-weight="600" font-size="13" fill="#4c1d95">MLP Head</text>
 <text x="650" y="454" text-anchor="middle" font-size="11" fill="#4c1d95">Linear(256 → 8·V)  →  view</text>
-<text x="650" y="472" text-anchor="middle" font-size="10.5" fill="#4c1d95" font-family="monospace">V = vocab_size  (4 784)</text>
+<text x="650" y="472" text-anchor="middle" font-size="10.5" fill="#4c1d95" font-family="monospace">V = vocab_size  (4 785 PDMX · 5 492 KS)</text>
 <line x1="650" y1="479" x2="650" y2="519" stroke="#64748b" stroke-width="1.5" marker-end="url(#a2)"/>
-<text x="656" y="503" font-size="11" fill="#64748b" font-family="monospace">(B, 128, 8, V)</text>
+<text x="656" y="503" font-size="11" fill="#64748b" font-family="monospace">(B, G, 128, 8, V)</text>
 <rect x="525" y="520" width="250" height="56" rx="6" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
 <text x="650" y="543" text-anchor="middle" font-weight="600" font-size="13" fill="#4c1d95">Token Logits</text>
-<text x="650" y="563" text-anchor="middle" font-size="11" fill="#4c1d95" font-family="monospace">(B, T=128, H=8, vocab_size)</text>
+<text x="650" y="563" text-anchor="middle" font-size="11" fill="#4c1d95" font-family="monospace">(B, G, T=128, H=8, vocab_size)</text>
 <text x="55" y="605" font-size="10" fill="#94a3b8">Special tokens:  PAD=0  UNK=1  SOS=2  EOS=3  SIL=4 (empty chord-slot padding)</text>
 <text x="55" y="620" font-size="10" fill="#94a3b8">Patch: height=64 (full staff height in one conv), width=4px → 192 patches.  Key inductive bias: each position sees the full vertical pitch range.</text>
 <text x="55" y="635" font-size="10" fill="#94a3b8">src_padding_mask: derived from actual staff pixel width — variable-width staves masked in self-attention.</text>
+<text x="55" y="652" font-size="10" fill="#7c3aed">Cross-stave: the unit is a SYSTEM of G staves (G=2 today, G-general). Encoder/self-attn/image-cross-attn/FFN/head are per-staff &amp; warm-start wholesale; only sublayer 3 (zero-init gate) is new. Decode is lockstep over a shared row grid → barline agreement is structural (no rerank).</text>
 </svg>
 </div>
 
-<div class="callout">
-  <strong>Planned target: cross-stave (system-level) transcription.</strong> The diagram above is
-  the <em>current</em> single-staff noter. Each staff is decoded in <em>isolation</em>, so the
-  spines of one system can disagree on the barline grid — the dominant real-scan ceiling (see
-  <a href="journal.html">the cross-stave entry in the journal</a>). The target model below keeps
-  every part of the diagram and makes the <strong>unit a system</strong> of <code>G</code> staves,
-  coupling them in the decoder. This subsection is the working spec until the model is built and the
-  diagram is redrawn.
-
-  <p style="margin:0.7rem 0 0.3rem"><strong>Enabling fact — kern is a row-aligned spine grid.</strong>
-  A <code>.tokens</code> file is rows × spines: each row is one musical timestep, tab-separated cells
-  are the spines, and a barline (<code>=N</code>) sits at an <strong>identical row index across all
-  spines</strong>. <code>.</code> null tokens pad spines to keep the rows aligned; length and EOS row
-  are shared. (Confirmed: of 674 multi-spine KernSheet files, 1 ragged and 0 barline-skewed.) So a
-  system's staves share one timeline by construction — the basis for lockstep decoding.</p>
-
-  <ul style="margin:0.4rem 0 0.2rem">
-    <li><strong>Sample = a system.</strong> The dataset emits, per system, <code>G</code> staff crops
-      <code>(G, 1, 64, 768)</code> + their <code>G</code> row-aligned target sequences
-      <code>(G, T, 8)</code> + a <code>stave_mask (G,)</code>. <code>G</code> is padded to
-      <code>max_staves</code> (2 today; the design is <code>G</code>-general, a free step toward
-      &gt;2-staff systems). Spine order stays <code>[1, 0]</code> for 2-staff.</li>
-    <li><strong>Encoder — unchanged, per staff.</strong> The <code>G</code> crops are encoded
-      independently (the SourceEmbedding + Transformer encoder above), giving per-staff memory
-      <code>(B, G, 192, 256)</code>. No cross-staff mixing on the image side — the coupling is purely
-      temporal/decoder.</li>
-    <li><strong>Decoder hidden state <code>(B, G, T, 256)</code>.</strong> Each decoder layer runs
-      <em>four</em> sublayers (the first two unchanged from above):
-      <ol style="margin:0.2rem 0">
-        <li><em>Causal self-attention</em> over <code>T</code>, independent per staff.</li>
-        <li><em>Cross-attention</em> to that staff's <em>own</em> image memory.</li>
-        <li><strong>NEW — cross-stave attention.</strong> Query <code>(staff i, row t)</code> attends
-          over <em>all staves of its system at rows ≤ t</em> (same causal time-mask; padded staves
-          masked out by <code>stave_mask</code>). Its output projection is
-          <strong>zero-initialised</strong>, so at init this sublayer is a no-op.</li>
-        <li><em>FFN.</em></li>
-      </ol></li>
-    <li><strong>Head — shared, per staff.</strong> The same <code>Linear(256 → 8·V)</code> as above is
-      applied across the <code>G</code> axis, giving logits <code>(B, G, T, 8, V)</code>. Head size is
-      unchanged (no per-staff growth).</li>
-    <li><strong>Inference — lockstep decode.</strong> Generate row <code>t</code> for all
-      <code>G</code> staves <em>simultaneously</em>; when computing row <code>t</code> each staff sees
-      its siblings' rows <code>&lt; t</code> through sublayer&nbsp;3, so "my sibling just emitted a
-      barline / a <code>.</code> here" is an <strong>input</strong>, not a post-hoc vote. The system
-      terminates on a shared EOS row. Cross-staff barline agreement is therefore
-      <strong>structural</strong> — superseding the <code>--rerank</code> agreement pass (§4).</li>
-    <li><strong>Warm-start &amp; degradation.</strong> Encoder, self-attn, image-cross-attn, FFN, and
-      head all transfer <strong>wholesale</strong> from the production single-staff noter; only the
-      zero-init cross-stave sublayer is new. So the model starts <em>bit-identical</em> to the current
-      one, and a single-staff system (<code>G=1</code>, or all-but-one staff masked) stays identical
-      forever — sublayer&nbsp;3 has no sibling to attend to.</li>
-  </ul>
-
-  <p style="margin:0.5rem 0 0"><strong>Why this shape.</strong> A gated additive sublayer is chosen
-  over a single interleaved per-row sequence (kills disagreement by construction but can't warm-start
-  and forces a giant <code>G·8·V</code> head) and over encoder-side coupling (wrong place — the
-  problem is temporal). It targets the ceiling's named failure modes directly: the <code>.</code>-grid
-  (a staff now knows when to emit a null to stay aligned), runaway / early-EOS (siblings pull a
-  diverging length back), leaving only the ~4.6% shared-wrong-timeline floor it cannot beat.</p>
-</div>
+<h3>Cross-stave (system-level) decoding</h3>
+<p>
+  The transcription unit is a <strong>system</strong> of <code>G</code> staves, not a single staff
+  (<code>G = 2</code> today; the design is <code>G</code>-general). The encoder, causal self-attention,
+  image cross-attention, FFN and head all run <em>per staff</em>, exactly as drawn above; the staves are
+  coupled only in the decoder, so a system's spines decode in <strong>lockstep</strong> over a shared
+  timeline rather than in isolation. This is what keeps the spines of one system from disagreeing on the
+  barline grid.
+</p>
+<p>
+  Kern makes this well-defined because a <code>.tokens</code> file is a <strong>row-aligned spine
+  grid</strong>: each row is one musical timestep, tab-separated cells are the spines, and a barline
+  (<code>=N</code>) sits at an identical row index across all spines. <code>.</code> null tokens pad the
+  spines to keep rows aligned, and length / EOS row are shared. A system's staves therefore share one
+  timeline by construction.
+</p>
+<p>The decoder hidden state is <code>(B, G, T, 256)</code> and each layer runs four sublayers:</p>
+<ol>
+  <li><em>Causal self-attention</em> over <code>T</code>, independent per staff.</li>
+  <li><em>Image cross-attention</em> to that staff's own encoder memory.</li>
+  <li><strong>Cross-stave attention</strong> — query <code>(staff i, row t)</code> attends over all
+    staves of its system at rows <code>≤ t</code> (the same causal time-mask; padded staves masked by
+    <code>stave_mask</code>). Its output is <strong>zero-initialised and gated</strong>.</li>
+  <li><em>FFN.</em></li>
+</ol>
+<p>
+  The shared head <code>Linear(256 → 8·V)</code> applies across the <code>G</code> axis, giving logits
+  <code>(B, G, T, 8, V)</code> with no per-staff growth. At inference the decode is lockstep — row
+  <code>t</code> is generated for all <code>G</code> staves at once, so each staff sees its siblings'
+  rows <code>&lt; t</code> through sublayer&nbsp;3 ("my sibling just emitted a barline / a
+  <code>.</code>" is an input, not a post-hoc vote) and the system terminates on a shared EOS row.
+  Cross-staff barline agreement is thus <strong>structural</strong>, so no separate agreement reranker
+  is needed (§4).
+</p>
+<p>
+  Because only sublayer&nbsp;3 is new and its gate is zero-initialised, every other weight transfers
+  wholesale from a single-staff noter and the model warm-starts <strong>bit-identical</strong> to it; a
+  single-staff system (<code>G = 1</code>, or all-but-one staff masked) stays identical forever, since
+  sublayer&nbsp;3 then has no sibling to attend to. The alternatives weighed (interleaving the spines
+  into one row sequence; coupling on the encoder side) and why the gated additive sublayer won are
+  recorded in the <a href="journal.html">journal</a>.
+</p>
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -445,8 +432,9 @@
   differentiable crop bridge between them. <strong>Staffer</strong> runs on the full page
   (its own <code>Conv2d(k=16)</code> PatchEmbedding → ViT → Decoder → Heads) and emits stave
   boxes. The <strong>bridge</strong> crops each predicted stave straight from the page image
-  (a 1:1 <code>grid_sample</code> window → <code>(64, 768)</code>). <strong>Noter</strong> runs
-  on those crops (its own SourceEmbedding → Encoder → Decoder → MLP) and emits Kern tokens.
+  (a 1:1 <code>grid_sample</code> window → <code>(64, 768)</code>) and groups the crops by system.
+  <strong>Noter</strong> runs on those crops (its own SourceEmbedding → Encoder → CrossStaveDecoder →
+  MLP), decoding each system's staves in lockstep, and emits Kern tokens.
 </p>
 <p>
   Both checkpoints transfer <strong>wholesale</strong> — nothing discarded, nothing
@@ -457,18 +445,15 @@
   crop into the stave/system box position.
 </p>
 
-<div class="callout">
-  <strong>Planned: scorer consumes the cross-stave noter.</strong> When the noter becomes
-  system-level (§2 callout), the scorer change is small and the <strong>crop bridge is untouched</strong>
-  — it still cuts individual stave crops. The scorer already computes which staves form a system
-  (<code>sys_ids</code> at train, from the GT routing; <code>owners</code> at inference, from
-  staffer's boundary <code>cumsum</code>) and currently only uses it in the <code>--rerank</code>
-  pass. The new path <strong>groups the crops by that system index</strong> and calls noter's
-  lockstep system decode instead of a flat <code>K</code>-batch — so staffer's grouping feeds
-  directly into the coupled decode. The agreement reranker is <strong>removed</strong> — agreement
-  is now structural inside the noter, so the former per-stave beam + barline-agreement rerank
-  (and the <code>--rerank</code> flag) are superseded by the lockstep decode.
-</div>
+<p>
+  The crop bridge cuts individual stave crops; the system coupling happens entirely inside the noter.
+  The scorer computes which staves form a system — <code>sys_ids</code> at training (from the GT routing)
+  and <code>owners</code> at inference (from staffer's boundary <code>cumsum</code>) — then groups the
+  crops by that system index and runs the noter's lockstep system decode rather than a flat
+  <code>K</code>-batch, so staffer's grouping feeds directly into the coupled decode. Because cross-staff
+  barline agreement is structural inside the noter (§2), there is no agreement reranker and no beam
+  search: the scorer decodes greedily in lockstep.
+</p>
 
 <div class="diagram-wrap">
 <svg viewBox="0 0 950 780" width="950" xmlns="http://www.w3.org/2000/svg"
@@ -538,9 +523,10 @@
 
 <!-- bridge → noter -->
 <path d="M 475 397 V 452 H 663" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#a4)"/>
+<text x="560" y="445" text-anchor="middle" font-size="9.5" fill="#7c3aed">crops grouped by system index</text>
 
-<!-- ══ RIGHT: NOTER (unchanged standalone) ══ -->
-<text x="790" y="290" text-anchor="middle" font-weight="700" font-size="12" fill="#7c3aed">NOTER BRANCH  (standalone, unchanged)</text>
+<!-- ══ RIGHT: NOTER (cross-stave decoder) ══ -->
+<text x="790" y="290" text-anchor="middle" font-weight="700" font-size="12" fill="#7c3aed">NOTER BRANCH  (cross-stave, lockstep)</text>
 
 <rect x="665" y="419" width="255" height="66" rx="6" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
 <text x="792" y="441" text-anchor="middle" font-weight="600" font-size="13" fill="#1e40af">Noter SourceEmbedding</text>
@@ -555,9 +541,9 @@
 <line x1="792" y1="572" x2="792" y2="596" stroke="#64748b" stroke-width="1.5" marker-end="url(#a4)"/>
 
 <rect x="665" y="597" width="255" height="62" rx="6" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
-<text x="792" y="619" text-anchor="middle" font-weight="600" font-size="13" fill="#4c1d95">TargetEmbedder + Decoder</text>
-<text x="792" y="637" text-anchor="middle" font-size="11" fill="#4c1d95">4 layers · causal · cross-attn over memory</text>
-<text x="792" y="653" text-anchor="middle" font-size="10.5" fill="#4c1d95" font-family="monospace">out: (N, 128, 256)</text>
+<text x="792" y="617" text-anchor="middle" font-weight="600" font-size="13" fill="#4c1d95">TargetEmbedder + CrossStaveDecoder</text>
+<text x="792" y="634" text-anchor="middle" font-size="10.5" fill="#4c1d95">causal · image cross-attn · <tspan fill="#7c3aed" font-weight="600">cross-stave</tspan> · FFN</text>
+<text x="792" y="651" text-anchor="middle" font-size="10.5" fill="#4c1d95" font-family="monospace">crops grouped by system → lockstep</text>
 <line x1="792" y1="659" x2="792" y2="683" stroke="#64748b" stroke-width="1.5" marker-end="url(#a4)"/>
 
 <rect x="665" y="684" width="255" height="60" rx="6" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
@@ -565,8 +551,8 @@
 <text x="792" y="724" text-anchor="middle" font-size="10.5" fill="#4c1d95" font-family="monospace">(N, 128, 8, vocab_size)</text>
 <text x="792" y="739" text-anchor="middle" font-size="10" fill="#4c1d95">cross-entropy (PAD ignored) · token accuracy</text>
 
-<text x="475" y="765" text-anchor="middle" font-size="10.5" fill="#94a3b8">Both checkpoints transfer wholesale — staffer (PatchEmbed→ViT→Decoder→Heads) and noter (SourceEmbedding→Encoder→Decoder→MLP) are byte-for-byte the standalone models.</text>
-<text x="475" y="779" text-anchor="middle" font-size="10.5" fill="#94a3b8">The bridge adds 0 parameters; its only role is to make the crop differentiable so transcription loss reaches stave_tb / sys_lr.</text>
+<text x="475" y="765" text-anchor="middle" font-size="10.5" fill="#94a3b8">Both checkpoints transfer wholesale — staffer (PatchEmbed→ViT→Decoder→Heads) and the cross-stave noter (SourceEmbedding→Encoder→CrossStaveDecoder→MLP); only the noter's zero-init cross-stave sublayer is new, so warm-start is still bit-identical.</text>
+<text x="475" y="779" text-anchor="middle" font-size="10.5" fill="#94a3b8">The bridge adds 0 parameters; it makes the crop differentiable (transcription loss reaches stave_tb / sys_lr) and groups crops by system so the noter decodes each system's staves in lockstep.</text>
 </svg>
 </div>
 </section>
@@ -575,14 +561,34 @@
 <section id="training">
 <h2>5 — Training Strategy</h2>
 <p>
-  Three stages. Dashed borders indicate weights that may start frozen.
-  Joint loss in Stage 3 = detection loss + transcription cross-entropy (optionally weighted).
+  Each branch is trained standalone, then the two are merged and fine-tuned jointly through the crop
+  bridge — the transcription loss flowing back into the detector is the whole point of "end-to-end."
+  The production corpora span two domains (synthetic <strong>PDMX</strong> and real-scan
+  <strong>KernSheet</strong>), so every stage that touches KernSheet runs as a <strong>rehearsal
+  mix</strong> — PDMX stays primary and KernSheet is folded in at a fixed fraction
+  (<code>--kern-sheet&nbsp;… 0.67</code>) — which keeps the unfrozen weights from forgetting the clean
+  domain.
+</p>
+<p>
+  The authoritative recipe is <code>scripts/train_scorer_pipeline.sh&nbsp;&lt;name&gt;</code>:
+  <strong>five stages</strong> built from the three training mechanisms below.
+</p>
+<ol style="font-size:0.92rem;line-height:1.6;">
+  <li><strong>Staffer PDMX base</strong> — the staffer mechanism (left card) on PDMX.</li>
+  <li><strong>Staffer rehearsal-mix fine-tune</strong> — same mechanism, PDMX + KernSheet → a real-scan detector.</li>
+  <li><strong>Noter PDMX base</strong> — the noter mechanism (middle card) on PDMX: cross-stave decoder, box-jitter augmentation.</li>
+  <li><strong>Noter rehearsal-mix fine-tune</strong> — same mechanism, PDMX + KernSheet → a real-scan transcriber.</li>
+  <li><strong>Scorer merge + rehearsal-mix fine-tune</strong> — the joint mechanism (right card): load the two fine-tuned branches, insert the bridge, train jointly on the mix.</li>
+</ol>
+<p style="font-size:0.88rem;color:#64748b;">
+  Dashed borders below indicate weights that may start frozen. The joint loss in the merge is
+  detection loss + transcription cross-entropy (λ-weighted).
 </p>
 
 <div class="stage-grid">
   <div class="stage-card">
-    <h4>Stage 1 — Staffer pre-training</h4>
-    <p>Train full standalone Staffer (its own 16×16 PatchEmbed). No shared conv yet.</p>
+    <h4>Staffer training  <span style="font-weight:400;color:#94a3b8">(stages 1–2)</span></h4>
+    <p>Train the standalone staffer (its own 16×16 PatchEmbed) on PDMX, then rehearsal-mix fine-tune for real scans.</p>
     <div class="diagram-wrap" style="padding:.5rem;margin:.5rem 0;">
     <svg viewBox="0 0 250 285" width="250" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
     <defs><marker id="at1" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#64748b"/></marker></defs>
@@ -606,12 +612,12 @@
     <text x="125" y="255" text-anchor="middle" font-size="10" fill="#92400e">L1 + GIoU + obj/boundary BCE</text>
     </svg>
     </div>
-    <p style="margin:.2rem 0 0;">Result: sys IoU <strong>0.971</strong> · stave err ≈ 1.0 px (<code>stave-primary-grid</code>, D=128; full-size D=256 retrain for the merge)</p>
+    <p style="margin:.2rem 0 0;">See <a href="staffer-training.html">staffer-training.html</a> for the current production checkpoint and metrics.</p>
   </div>
 
   <div class="stage-card">
-    <h4>Stage 2 — Noter pre-training</h4>
-    <p>Train standalone noter on GT staff crops, with <strong>box-jitter augmentation</strong> (perturb the crop box by staffer's measured predicted-box error distribution) so it tolerates the detector's wobble at merge time. SourceEmbedding + Encoder will be discarded.</p>
+    <h4>Noter training  <span style="font-weight:400;color:#94a3b8">(stages 3–4)</span></h4>
+    <p>Train the standalone cross-stave noter on GT staff crops with <strong>box-jitter augmentation</strong> (perturb the crop box by staffer's measured predicted-box error) so it tolerates the detector's wobble at merge time, then rehearsal-mix fine-tune. The whole noter transfers into the merge — nothing is discarded.</p>
     <div class="diagram-wrap" style="padding:.5rem;margin:.5rem 0;">
     <svg viewBox="0 0 250 285" width="250" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
     <defs><marker id="at2" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#64748b"/></marker></defs>
@@ -620,15 +626,15 @@
     <line x1="125" y1="41" x2="125" y2="58" stroke="#64748b" stroke-width="1.2" marker-end="url(#at2)"/>
     <rect x="25" y="59"  width="200" height="44" rx="5" fill="#dbeafe" stroke="#2563eb" stroke-width="1.2"/>
     <text x="125" y="75"  text-anchor="middle" font-size="11" font-weight="600" fill="#1e40af">SourceEmbed k=(64,4) + Encoder</text>
-    <text x="125" y="90"  text-anchor="middle" font-size="10" fill="#1e40af" font-family="monospace">(B, 192, 256)</text>
-    <text x="125" y="101" text-anchor="middle" font-size="9.5" fill="#1e40af" font-style="italic">[discarded in Stage 3]</text>
+    <text x="125" y="90"  text-anchor="middle" font-size="10" fill="#1e40af" font-family="monospace">(B, G, 192, 256)</text>
+    <text x="125" y="101" text-anchor="middle" font-size="9.5" fill="#1e40af" font-style="italic">per staff</text>
     <line x1="125" y1="103" x2="125" y2="120" stroke="#64748b" stroke-width="1.2" marker-end="url(#at2)"/>
     <rect x="25" y="121" width="200" height="36" rx="5" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.2"/>
     <text x="125" y="137" text-anchor="middle" font-size="11" font-weight="600" fill="#4c1d95">TargetEmbedder</text>
     <text x="125" y="152" text-anchor="middle" font-size="10" fill="#4c1d95" font-family="monospace">(B, 128, 256)</text>
     <line x1="125" y1="157" x2="125" y2="174" stroke="#64748b" stroke-width="1.2" marker-end="url(#at2)"/>
     <rect x="25" y="175" width="200" height="36" rx="5" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.2"/>
-    <text x="125" y="191" text-anchor="middle" font-size="11" font-weight="600" fill="#4c1d95">Transformer Decoder + MLP</text>
+    <text x="125" y="191" text-anchor="middle" font-size="11" font-weight="600" fill="#4c1d95">CrossStaveDecoder + MLP</text>
     <text x="125" y="206" text-anchor="middle" font-size="10" fill="#4c1d95">CE loss ✓</text>
     <line x1="125" y1="211" x2="125" y2="228" stroke="#64748b" stroke-width="1.2" marker-end="url(#at2)"/>
     <rect x="25" y="229" width="200" height="36" rx="5" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.2" stroke-dasharray="5,3"/>
@@ -636,12 +642,12 @@
     <text x="125" y="262" text-anchor="middle" font-size="10" fill="#4c1d95">cross-entropy (PAD ignored)</text>
     </svg>
     </div>
-    <p style="margin:.2rem 0 0;">Result: <strong>99.58%</strong> val token accuracy (<code>enhanced3</code>)</p>
+    <p style="margin:.2rem 0 0;">See <a href="noter-training.html">noter-training.html</a> for the current production checkpoint and metrics.</p>
   </div>
 
   <div class="stage-card">
-    <h4>Stage 3 — End-to-end fine-tuning</h4>
-    <p>Load both full checkpoints, insert the differentiable crop bridge, fine-tune jointly. No new conv layers.</p>
+    <h4>Joint merge  <span style="font-weight:400;color:#94a3b8">(stage 5)</span></h4>
+    <p>Load both fine-tuned checkpoints, insert the differentiable crop bridge, fine-tune jointly on the rehearsal mix. No new conv layers.</p>
     <div class="diagram-wrap" style="padding:.5rem;margin:.5rem 0;">
     <svg viewBox="0 0 250 340" width="250" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
     <defs><marker id="at3" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#64748b"/></marker></defs>
@@ -659,9 +665,9 @@
     <text x="125" y="169" text-anchor="middle" font-size="9" fill="#9f1239" font-style="italic">0 params · differentiable</text>
     <line x1="125" y1="173" x2="125" y2="190" stroke="#64748b" stroke-width="1.2" marker-end="url(#at3)"/>
     <rect x="25" y="191" width="200" height="48" rx="5" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.2"/>
-    <text x="125" y="208" text-anchor="middle" font-size="11" font-weight="600" fill="#4c1d95">Noter (intact)</text>
-    <text x="125" y="224" text-anchor="middle" font-size="9.5" fill="#4c1d95">SourceEmbed→Encoder→Decoder→MLP</text>
-    <text x="125" y="235" text-anchor="middle" font-size="9" fill="#4c1d95" font-family="monospace">(N, 128, 8, V)</text>
+    <text x="125" y="208" text-anchor="middle" font-size="11" font-weight="600" fill="#4c1d95">Noter (intact, cross-stave)</text>
+    <text x="125" y="224" text-anchor="middle" font-size="9.5" fill="#4c1d95">SourceEmbed→Encoder→CrossStaveDecoder→MLP</text>
+    <text x="125" y="235" text-anchor="middle" font-size="9" fill="#4c1d95" font-family="monospace">grouped by system · lockstep</text>
     <line x1="125" y1="239" x2="125" y2="256" stroke="#64748b" stroke-width="1.2" marker-end="url(#at3)"/>
     <rect x="25" y="257" width="200" height="40" rx="5" fill="#fef3c7" stroke="#d97706" stroke-width="1.2" stroke-dasharray="5,3"/>
     <text x="125" y="274" text-anchor="middle" font-size="11" font-weight="600" fill="#92400e">Joint Loss</text>
@@ -675,7 +681,7 @@
 <h3>Parameter summary</h3>
 <table>
   <thead>
-    <tr><th>Component</th><th>Params</th><th>bf16 weights</th><th>Stage 1</th><th>Stage 2</th><th>Stage 3</th></tr>
+    <tr><th>Component</th><th>Params</th><th>bf16 weights</th><th>Staffer</th><th>Noter</th><th>Merge</th></tr>
   </thead>
   <tbody>
     <tr><td>Staffer PatchEmbed k=16 + pos_embed + norm</td><td>0.73 M</td><td>1.5 MB</td><td>✓</td><td>—</td><td>✓ fine-tuned</td></tr>
@@ -683,18 +689,20 @@
     <tr><td>StafferDecoder + PredictionHeads</td><td>9.63 M</td><td>19.3 MB</td><td>✓</td><td>—</td><td>✓</td></tr>
     <tr><td>noter SourceEmbedding + Encoder</td><td>3.28 M</td><td>6.6 MB</td><td>—</td><td>✓</td><td>✓ fine-tuned</td></tr>
     <tr><td>TargetEmbedder (Embedding + chord_proj + pos)</td><td>1.78 M</td><td>3.6 MB</td><td>—</td><td>✓</td><td>✓ fine-tuned</td></tr>
-    <tr><td>Transformer Decoder (4 blocks)</td><td>4.21 M</td><td>8.4 MB</td><td>—</td><td>✓</td><td>✓ fine-tuned</td></tr>
-    <tr><td>MLP Head Linear(256 → 8 × 4 784)</td><td>9.84 M</td><td>19.7 MB</td><td>—</td><td>✓</td><td>✓ fine-tuned</td></tr>
+    <tr><td>CrossStaveDecoder — 4 blocks (self + image-cross + cross-stave + FFN)</td><td>5.26 M</td><td>10.5 MB</td><td>—</td><td>✓</td><td>✓ fine-tuned</td></tr>
+    <tr><td>MLP Head Linear(256 → 8 × V)</td><td>9.8–11.2 M</td><td>20–22 MB</td><td>—</td><td>✓</td><td>✓ fine-tuned</td></tr>
     <tr><td>Differentiable crop bridge (grid_sample)</td><td>0</td><td>—</td><td>—</td><td>—</td><td>✓ inserted</td></tr>
     <tr style="font-weight:600;background:#f8fafc;">
-      <td>Scorer total (Stage 3)</td><td>32.6 M</td><td>65 MB bf16 · 130 MB fp32</td><td></td><td></td><td>det + CE joint loss</td>
+      <td>Scorer total (merge)</td><td>≈ 34–36 M</td><td>≈ 68 MB bf16 · 136 MB fp32</td><td></td><td></td><td>det + CE joint loss</td>
     </tr>
   </tbody>
 </table>
 <p style="margin-top:0.75rem;font-size:0.88rem;color:#64748b;">
-  The total is just the sum of the two standalone models (staffer 13.5 M + noter 19.1 M) — the
-  decoupled bridge adds no parameters. Keeping both patch embeddings costs ~2.5 M params over the
-  shared-embedding draft, a deliberate trade for clean checkpoint transfer.
+  The total is just the sum of the two standalone models (staffer 13.5 M + noter ≈ 21 M) — the
+  decoupled bridge adds no parameters. The head and target-embedding scale with the vocabulary
+  <code>V</code> (PDMX base 4 785 → KS-combined 5 492), and the cross-stave sublayer adds ≈1 M to the
+  decoder. Keeping both patch embeddings costs ~2.5 M params over the shared-embedding draft, a
+  deliberate trade for clean checkpoint transfer.
 </p>
 <p style="margin-top:0.5rem;font-size:0.88rem;color:#64748b;">
   <strong>Training VRAM (B=16, Scorer fine-tuning, bf16-mixed):</strong>
@@ -706,194 +714,6 @@
 </p>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<section id="impl">
-<h2>6 — Implementation Guide</h2>
-<p>
-  Everything needed to go from the two standalone checkpoints to a working Scorer model.
-  No decisions are left open — only write code.
-</p>
-<div class="callout">
-  <strong>Non-destructive principle:</strong> the existing <code>staffer</code> and
-  <code>noter</code> CLIs and models are unchanged. <code>ScorerModel</code> composes them
-  by <em>importing</em> their sub-modules (e.g. <code>StafferModel.backbone.blocks</code>,
-  <code>NoterModel.target_embedder</code>) — not by modifying those classes. Both
-  standalone training pipelines continue to work exactly as before. Where helpful,
-  expose a <code>build_encoder()</code> or similar factory on the existing model classes
-  so <code>ScorerModel</code> can construct the right sub-graph without duplicating code.
-</div>
-
-<h3>6.1 Pre-trained checkpoints</h3>
-<table>
-  <thead><tr><th>Model</th><th>Path</th><th>Val metric</th></tr></thead>
-  <tbody>
-    <tr><td>staffer</td><td><code>checkpoints/staffer/stave-primary-grid-full/last.ckpt</code></td><td>D=256 · sys IoU 0.985, stave err 0.41 px</td></tr>
-    <tr><td>noter</td><td><code>checkpoints/noter/enhanced3/last.ckpt</code></td><td>val token accuracy 99.58 %</td></tr>
-  </tbody>
-</table>
-<p style="font-size:.875rem;color:var(--muted);">
-  Both checkpoints are Lightning checkpoints. Load with
-  <code>torch.load(path, map_location="cpu")["state_dict"]</code> and strip the
-  <code>model.</code> prefix (Lightning adds it automatically).
-</p>
-
-<h3>6.2 New files to create</h3>
-<p style="font-size:.875rem;color:var(--muted);">
-  All Scorer code lives in a new top-level package <code>src/scorer/</code>, mirroring the
-  <code>src/noter/</code> and <code>src/models/</code> layout. No existing source files are
-  modified.
-</p>
-<table>
-  <thead><tr><th>File</th><th>Contents</th></tr></thead>
-  <tbody>
-    <tr><td><code>src/scorer/__init__.py</code></td><td>empty (package marker)</td></tr>
-    <tr><td><code>src/scorer/scorer_model.py</code></td><td><code>ScorerConfig</code>, <code>ScorerModel</code> (imports the intact staffer + noter sub-modules, grid_sample crop bridge), <code>build_stave_boxes()</code></td></tr>
-    <tr><td><code>src/scorer/scorer_module.py</code></td><td><code>ScorerModule</code> (Lightning): joint loss, <code>load_from_checkpoints()</code></td></tr>
-    <tr><td><code>src/scorer/scorer_dataset.py</code></td><td><code>ScorerDataset</code>: yields full-page image + layout GT + token sequences per stave</td></tr>
-    <tr><td><code>src/scorer/scorer_datamodule.py</code></td><td><code>ScorerDataModule</code>: Lightning DataModule wrapping <code>ScorerDataset</code></td></tr>
-  </tbody>
-</table>
-
-<h3>6.3 Weight loading map</h3>
-<p>
-  After stripping the Lightning <code>model.</code> prefix, the state-dict keys map as follows.
-  Keys marked <em>new</em> must be randomly initialised; all others transfer directly.
-</p>
-<table>
-  <thead><tr><th>Source checkpoint</th><th>Source key prefix</th><th>Scorer module attribute</th><th>Action</th></tr></thead>
-  <tbody>
-    <tr><td>staffer</td><td><code>backbone.patch_embed.*</code></td><td><code>staffer.backbone.patch_embed</code></td><td>transfer ✓</td></tr>
-    <tr><td>staffer</td><td><code>backbone.blocks.*</code></td><td><code>staffer.backbone.blocks</code></td><td>transfer ✓</td></tr>
-    <tr><td>staffer</td><td><code>decoder.*</code></td><td><code>staffer.decoder</code></td><td>transfer ✓</td></tr>
-    <tr><td>staffer</td><td><code>heads.*</code></td><td><code>staffer.heads</code></td><td>transfer ✓</td></tr>
-    <tr><td>noter</td><td><code>source_embedder.*</code></td><td><code>noter.source_embedder</code></td><td>transfer ✓</td></tr>
-    <tr><td>noter</td><td><code>transformer.encoder.*</code></td><td><code>noter.transformer.encoder</code></td><td>transfer ✓</td></tr>
-    <tr><td>noter</td><td><code>target_embedder.*</code></td><td><code>noter.target_embedder</code></td><td>transfer ✓</td></tr>
-    <tr><td>noter</td><td><code>transformer.decoder.*</code></td><td><code>noter.transformer.decoder</code></td><td>transfer ✓</td></tr>
-    <tr><td>noter</td><td><code>mlp.*</code></td><td><code>noter.mlp</code></td><td>transfer ✓</td></tr>
-    <tr><td><em>new</em></td><td>—</td><td>grid_sample crop bridge</td><td>0 params — nothing to init</td></tr>
-  </tbody>
-</table>
-<p style="font-size:.875rem;color:var(--muted);">
-  Every weight transfers — both checkpoints load whole. The cleanest implementation simply
-  instantiates a <code>StafferModel</code> and a <code>NoterModel</code> as sub-modules of
-  <code>ScorerModel</code> and calls each one's existing load path, rather than hand-mapping
-  keys. The noter checkpoint stores <code>state_dict</code> under the Lightning
-  <code>model.*</code> prefix, so strip one level of <code>model.</code> first.
-  The Staffer ViT uses a <strong>custom</strong> <code>TransformerBlock</code>
-  (not <code>nn.TransformerEncoderLayer</code>) with keys
-  <code>qkv.weight</code>, <code>proj.weight</code>, <code>mlp.0.weight</code>, etc.
-  The noter decoder uses <code>nn.TransformerDecoderLayer</code> with keys
-  <code>self_attn.in_proj_weight</code>, <code>multihead_attn.in_proj_weight</code>, etc.
-  These two architectures are not interchangeable.
-</p>
-
-<h3>6.4 Differentiable stave crop</h3>
-<p>
-  Given Staffer outputs, build the <code>(N_staves_total, 5)</code> box tensor
-  <code>[batch_idx, left, top, right, bot]</code> and crop directly from the
-  <strong>page image</strong> with <code>affine_grid</code> + <code>grid_sample</code>.
-  <strong>Not <code>torchvision.ops.roi_align</code></strong> — verified to not backprop to
-  the box coordinates, so it would carry no gradient to the detector. The window is a
-  <strong>1:1 (un-stretched)</strong> <code>(64, 768)</code>-pixel slice anchored at
-  <code>(top − h, left)</code>, left-aligned, with the real stave width as
-  <code>source_widths</code> so the right is padded and masked — exactly the standalone
-  noter crop. Only the window's <em>position</em> depends on the box, so the gradient
-  reaches the stave top/bottom and system left (not a spurious scale).
-</p>
-<pre style="background:#f1f5f9;padding:1rem;border-radius:6px;font-size:.8rem;overflow-x:auto;"><code># Inputs (N = 16 sys queries, M = 16 stave queries; shown for one page):
-#   image:           (1, H, W) = (1, 960, 688)  — the page fed to staffer
-#   stave_tb:        (M, 2)  — [top, bottom] normalised [0,1]
-#   sys_lr:          (N, 2)  — [left, right] normalised [0,1]
-#   stave_logits:    (M,)    — stave objectness
-#   boundary_logits: (M,)    — >0 ⇒ this stave starts a new system
-
-H, W = 960, 688
-OUT_H, OUT_W = 64, 768                     # noter input_shape
-
-# Group active staves into systems, then inherit (left,right) from the owner.
-# Active queries are non-contiguous, so the boundary cumsum runs over the
-# active staves sorted top-to-bottom (identical to `staffer predict`).
-active = (stave_logits > 0).nonzero(as_tuple=True)[0]
-active = active[stave_tb[active, 0].argsort()]              # top-to-bottom
-group  = (boundary_logits[active] > 0).long().cumsum(0) - 1 # → system id
-lr     = sys_lr[group.clamp(0, N - 1)]                      # (n_active, 2)
-
-# Raw stave box (pixels): (top,bottom) from the stave, (left,right) from its system.
-top  = stave_tb[active, 0] * H;  bot = stave_tb[active, 1] * H
-left = lr[:, 0] * W;             right = lr[:, 1] * W
-h    = bot - top
-
-# 1:1 window of (OUT_H, OUT_W) source px, anchored top-left at (top - h, left).
-# Per-box affine theta in grid_sample's normalised [-1,1] coords (align_corners=False).
-cy = (top - h) + OUT_H / 2                 # window centre (px)
-cx = left + OUT_W / 2
-theta = boxes.new_zeros((active.numel(), 2, 3))
-theta[:, 0, 0] = OUT_W / W                 # 1:1 horizontal (no stretch)
-theta[:, 0, 2] = cx / W * 2 - 1
-theta[:, 1, 1] = OUT_H / H                 # 1:1 vertical
-theta[:, 1, 2] = cy / H * 2 - 1
-grid  = F.affine_grid(theta, [active.numel(), 1, OUT_H, OUT_W], align_corners=False)
-src   = image.expand(active.numel(), -1, -1, -1)
-crops = F.grid_sample(src, grid, align_corners=False, padding_mode="border")
-crops = crops * renorm_scale + renorm_shift            # → noter normalisation space
-widths = (right - left).clamp(1, OUT_W).long()         # real width → src padding mask
-
-memory = noter.encode(crops, widths)       # noter SourceEmbedding + Encoder, unchanged
-                                           # → (n_active, 192, 256)  ← noter memory</code></pre>
-<p style="font-size:.875rem;color:var(--muted);">
-  During training the active staves are routed by the frozen-anchor GT→query assignment
-  and passed through the noter decoder; loss is masked to those staves. During inference,
-  filter by <code>stave_logits.sigmoid() &gt; threshold</code> before passing to the decoder.
-  Exact for staves where <code>3·h ≥ 64px</code> (the System2 norm); very short staves get
-  page context instead of white vertical pad — a minor deviation to revisit if it bites.
-</p>
-
-<h3>6.5 Image dimensions</h3>
-<p>
-  The Staffer resizes pages to <code>(960, 688)</code> px via
-  <code>StafferConfig.scale_to_patch()</code>: <code>max_height=1449 / divider=1.5 → 966 → round to 16 → 960</code>;
-  <code>max_width=1024 / 1.5 → 682.7 → round to 16 → 688</code>.
-  The Scorer model must use the same size. Staffer's own <code>Conv2d(k=16)</code> embedding
-  turns it into <code>(60, 43)</code> = 2 580 patches — identical to its standalone training —
-  and the same <code>(960, 688)</code> page is the crop source for the bridge, so the box
-  coordinates (normalised [0,1]) scale by exactly <code>H, W</code>.
-</p>
-
-<h3>6.6 Scorer dataset</h3>
-<p>
-  <code>ScorerDataset</code> must provide per-sample:
-</p>
-<ul style="font-size:.875rem;">
-  <li><strong>image</strong> <code>(1, 960, 688)</code> — resized page, grayscale, float32</li>
-  <li><strong>gt_sys_boxes</strong> <code>(N, 4)</code> — padded system boxes, ltrb normalised (same as <code>StafferDataset</code>)</li>
-  <li><strong>gt_stave_boxes</strong> <code>(M, 4)</code> — padded stave boxes (M=16); ltrb, only top/bottom used in loss</li>
-  <li><strong>gt_assign</strong> <code>(M,)</code> — stave→system index, -1 for padding (same as <code>StafferDataset</code>)</li>
-  <li><strong>stave_tokens</strong> <code>(M, T, max_chords)</code> — token sequences per stave slot, PAD-filled for inactive slots</li>
-</ul>
-<p style="font-size:.875rem;color:var(--muted);">
-  <code>StafferDataset</code> already provides the first four fields.
-  <code>NoterDataset</code> provides staff crops + token sequences for a subset (≤2 staves).
-  <code>ScorerDataset</code> should inherit or wrap <code>StafferDataset</code> and add token
-  sequences by matching stave positions to the Kern token files from PDMX.
-  Use only scores present in <code>System2.csv</code> initially (guarantees token coverage).
-</p>
-
-<h3>6.7 Joint loss and training recipe</h3>
-<table>
-  <thead><tr><th>Setting</th><th>Value</th><th>Notes</th></tr></thead>
-  <tbody>
-    <tr><td>Detection loss</td><td><code>StafferLoss</code> unchanged</td><td>sys L1 + GIoU + obj; stave cy/h L1 + obj; assign CE; box_loss_multiplier=2</td></tr>
-    <tr><td>Transcription loss</td><td>CE over <code>(B*M*T*H, V)</code>, ignore PAD</td><td>same as <code>NoterModule._step</code>; mask inactive stave slots</td></tr>
-    <tr><td>Joint loss</td><td><code>λ_det · det_loss + λ_tr · tr_loss</code></td><td>start with λ_det=1, λ_tr=1; tune if one dominates</td></tr>
-    <tr><td>Optimiser</td><td>AdamW, lr=1e-4, weight_decay=1e-2</td><td>PyTorch default eps (1e-8)</td></tr>
-    <tr><td>Schedule</td><td>linear warmup 500 steps → cosine decay</td><td>same pattern as standalone modules</td></tr>
-    <tr><td>Precision</td><td>bf16-mixed</td><td>Lightning <code>Trainer(precision="bf16-mixed")</code></td></tr>
-    <tr><td>Backbone freeze</td><td>Freeze ViT + Staffer decoder for first N steps</td><td>Recommended: N = warmup_steps; unfreeze with a lower lr group</td></tr>
-    <tr><td>Batch size</td><td>8–16</td><td>start at 8; VRAM ≈ 2.6 GB at B=16 bf16</td></tr>
-  </tbody>
-</table>
-</section>
 
 </main>
 </body>
