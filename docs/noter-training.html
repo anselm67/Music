@@ -208,7 +208,7 @@
         <td><a class="run-link" href="#run-mahler"><span class="tag">mahler-mixed</span></a></td><td>2026-06-14</td><td>12</td>
         <td>97.50%*</td><td>0.1064*</td>
         <td>Rehearsal mix (0.67 KS / 0.33 PDMX) on the <span class="tag">mahler</span> base — the <code>=||</code> rebuild of <span class="tag">debussy-mixed</span>; reproduces it (PDMX 95.7% / KS 89.4% free-running on the new vocab). *val is the blended stream</td>
-        <td><span class="badge badge-green">both domains</span></td>
+        <td><span class="badge badge-slate">superseded by bruckner-mixed</span></td>
       </tr>
       <tr>
         <td><a class="run-link" href="#run-mahler-augment"><span class="tag">mahler-augment</span></a></td><td>2026-06-15</td><td>12</td>
@@ -221,6 +221,18 @@
         <td>97.53%*</td><td>0.1048*</td>
         <td>Rehearsal mix on the <span class="tag">mahler-augment</span> base — free-running PDMX 95.8% / KS 90.2% (vs <span class="tag">mahler-mixed</span> 95.8% / 89.8% same-session), but no <a href="scorer-training.html#run-mahler-augment">end-to-end</a> gain. *val is the blended stream</td>
         <td><span class="badge badge-amber">marginal · not promoted</span></td>
+      </tr>
+      <tr>
+        <td><a class="run-link" href="#run-bruckner"><span class="tag">bruckner</span></a></td><td>2026-06-17</td><td>12</td>
+        <td>99.72%</td><td>0.0118</td>
+        <td><strong>Cross-stave lockstep</strong> noter PDMX base (a system's staves decode together via gated cross-stave attention), warm-started from <span class="tag">mahler</span>; same <code>=||</code> vocab. Free-running PDMX <strong>98.9%</strong> (vs <span class="tag">mahler</span> 97.3%)</td>
+        <td><span class="badge badge-slate">base · cross-stave</span></td>
+      </tr>
+      <tr>
+        <td><a class="run-link" href="#run-bruckner"><span class="tag">bruckner-mixed</span></a></td><td>2026-06-17</td><td>12</td>
+        <td>98.68%*</td><td>0.0551*</td>
+        <td>Rehearsal mix (0.67 KS / 0.33 PDMX) on the cross-stave <span class="tag">bruckner</span> base — free-running <strong>PDMX 97.5% / KS 95.5%</strong>, beating <span class="tag">mahler-mixed</span> (95.7% / 89.4%) on both domains (+1.8 / +6.1 pp). Noter half of <a href="scorer-training.html#run-bruckner"><span class="tag">scorer</span>/bruckner</a>. *val is the blended stream</td>
+        <td><span class="badge badge-green">both domains · keeper</span></td>
       </tr>
     </tbody>
   </table>
@@ -754,6 +766,25 @@
     </table>
     <p style="font-size:0.78rem;color:var(--muted)">Free-running = <code>noter [--kern-home … | --pdmx-home …] eval &lt;name&gt; --size 1024</code> (greedy edit-distance similarity), both re-eval'd 2026-06-15. The eval is unseeded, so run-to-run wobble is ≈±0.3–0.5 pp — the +0.4 pp KernSheet gain is inside that band. Teacher-forced val is dead-even: <span class="tag">mahler-augment</span> base 99.53% / 0.0184 (vs <span class="tag">mahler</span> 99.54% / 0.0175), <span class="tag">mahler-augment-mixed</span> 97.53% / 0.1048 on the blended stream (vs <span class="tag">mahler-mixed</span> 97.50% / 0.1064).</p>
     <div class="result-box neutral"><strong>Augment is harmless-to-marginally-positive for the noter in isolation — and still doesn't move the end-to-end needle.</strong> Standalone the augmented noter is a clean tie on PDMX (95.8%) and a <strong>+0.4 pp</strong> KernSheet tick (89.8 → 90.2%), inside the unseeded wobble — so at worst it costs nothing, at best a marginal real-scan gain. But the gain does not survive the merge: the <a href="scorer-training.html#run-mahler-augment">end-to-end scorer</a> KernSheet similarity is flat-to-slightly-worse (90.7 vs 91.0%), and on the detector side augment's softer PDMX objectness costs miscounts. The standalone halves both look fine; the lever simply doesn't pay where it ships. <span class="tag">mahler-mixed</span> stays as the production noter — see the <a href="scorer-training.html#run-mahler-augment">scorer card</a> for the full <code>augment no good</code> verdict.</div>
+  </div>
+
+  <!-- ════════════════════════════════════ bruckner -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-bruckner"><span class="tag">bruckner</span> / <span id="run-bruckner-mixed" class="tag">bruckner-mixed</span> — cross-stave lockstep decode</h2>
+      <span class="session-meta">2026-06-17 · tags <code>train/bruckner</code> · <code>train/bruckner-mixed</code> · 12 ep each · the <span class="tag">mahler</span> noter recipe + cross-stave attention</span>
+      <span class="badge badge-green">both domains · keeper</span>
+    </div>
+    <p><strong>The transcriber re-architected to decode a system's staves together.</strong> The decoder gains a <strong>gated additive cross-stave attention branch</strong> in each layer: a stave query may attend across the other staves of the same system at the same (and earlier) time step, behind a zero-initialised gate — so at warm-start the model is bit-identical to the single-stave <span class="tag">mahler</span> noter and the new branch is learned from there. The motivation is structural: a system's staves share one barline grid, and decoding them in <strong>lockstep</strong> lets that grid be enforced <em>during</em> decode rather than recovered afterward by a reranker. <span class="tag">bruckner</span> warm-starts from <span class="tag">mahler</span> on the same <code>=||</code> vocab, so the numbers below are a <strong>clean head-to-head</strong> with the <span class="tag">mahler</span> lineage (single-stave, same recipe, same alphabet).</p>
+    <table class="summary-table">
+      <thead><tr><th>Free-running similarity, by domain (<code>eval --size 1024</code>)</th><th><span class="tag">mahler-mixed</span> (single-stave)</th><th><span class="tag">bruckner-mixed</span> (cross-stave)</th></tr></thead>
+      <tbody>
+        <tr><td>PDMX</td><td>95.7%</td><td><strong>97.5%</strong> <span style="color:var(--muted)">(+1.8)</span></td></tr>
+        <tr><td>KernSheet</td><td>89.4%</td><td><strong>95.5%</strong> <span style="color:var(--muted)">(+6.1)</span></td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">Free-running = <code>noter [--kern-home … | --pdmx-home …] eval &lt;name&gt; --size 1024</code> (greedy edit-distance similarity, now lockstep over a system's staves), eval'd 2026-06-17. PDMX bases free-running: <span class="tag">bruckner</span> 98.9% vs <span class="tag">mahler</span> 97.3%. Teacher-forced val: <span class="tag">bruckner</span> base 99.72% acc / 0.0118 loss (epoch 11, PDMX split); <span class="tag">bruckner-mixed</span> 98.68% / 0.0551 on the blended 0.67/0.33 stream. At matched epoch the mixed run leads <span class="tag">mahler-mixed</span> at every checkpoint — by epoch 9 it is 0.9867 vs 0.9746 acc with roughly half the loss (0.056 vs 0.108), with identical LR schedule / mix / vocab, so cross-stave attention is the only variable.</p>
+    <div class="result-box positive"><strong>Cross-stave lockstep is a real, clean transcription win on both domains — largest on real scans.</strong> The mixed noter beats <span class="tag">mahler-mixed</span> by <strong>+1.8 pp PDMX (95.7 → 97.5)</strong> and <strong>+6.1 pp KernSheet (89.4 → 95.5)</strong> free-running, the gain concentrated exactly where the shared-barline prior matters most — the harder real-scan domain, where single-stave decode kept drifting out of grid alignment. This is the controlled comparison: same recipe, same <code>=||</code> vocab, same rehearsal mix, warm-started from the same <span class="tag">mahler</span> checkpoint, with the cross-stave branch the only difference. The gain carries through the merge: <span class="tag">bruckner-mixed</span> is the noter half of <a href="scorer-training.html#run-bruckner"><span class="tag">scorer</span>/bruckner</a>, which beats <span class="tag">scorer</span>/<a href="scorer-training.html#run-mahler">mahler</a> end-to-end with plain greedy lockstep (no beam, no rerank — the post-hoc barline reranker was retired because agreement is now structural). <span class="tag">bruckner-mixed</span> supersedes <span class="tag">mahler-mixed</span> as the production noter.</div>
   </div>
 
 </main>

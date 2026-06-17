@@ -97,9 +97,9 @@
 <article class="entry">
   <h2>Cross-stave transcription: decode a system's staves in lockstep with a gated cross-stave attention sublayer</h2>
   <div class="entry-meta">
-    <span>2026-06-16</span>
-    <span class="badge deferred">Planned</span>
-    <span class="ref">noter (<code>NoterModel</code>, <code>NoterDataset</code>) + scorer decode · supersedes the agreement reranker (<code>_generate_rerank</code>) · cf. the ceiling-decomposition entry below</span>
+    <span>2026-06-16 · landed 2026-06-17</span>
+    <span class="badge accepted">Accepted — production</span>
+    <span class="ref">noter (<code>NoterModel</code>, <code>NoterDataset</code>) + scorer decode · supersedes the agreement reranker (<code>_generate_rerank</code>, now removed) · cf. the ceiling-decomposition entry below</span>
   </div>
 
   <h3>Context</h3>
@@ -169,14 +169,36 @@
     leaves only the ~4.6% shared-wrong-timeline floor it structurally cannot beat.
   </p>
 
-  <h3>Status / next</h3>
+  <h3>Status / outcome</h3>
   <p>
-    Planned. Build order: dataset restructure + system-collate, then the
-    <code>CrossStaveDecoderLayer</code> (noter can no longer use <code>nn.Transformer</code> wholesale),
-    train standalone noter warm-started from <span class="tag">mahler</span>'s noter, then re-merge into
-    a scorer run. Eval cards land in <code>noter-training.html</code> / <code>scorer-training.html</code>
-    afterward; success criterion is closing the ~2.4pp <code>.</code>-grid gap and lifting the 78%
-    desync population's joint-correctness past the reranker's 33.8%.
+    <strong>Landed and promoted to production</strong> (lineage <span class="tag">bruckner</span>, 2026-06-17),
+    built exactly in the planned order: dataset restructure + system-collate → <code>CrossStaveDecoderLayer</code>
+    (noter dropped <code>nn.Transformer</code> for split named <code>encoder</code>/<code>decoder</code>) →
+    standalone noter warm-started from <span class="tag">mahler</span>'s noter → rehearsal-mix fine-tune
+    (<span class="tag">bruckner-mixed</span>) → scorer re-merge. The <code>--rerank</code> reranker and the
+    beam apparatus it rode on were <strong>removed</strong>, not kept as belt-and-suspenders: agreement is
+    structural in the lockstep decode and greedy already wins.
+  </p>
+  <p>
+    Every controlled comparison (same recipe / <code>=||</code> vocab / rehearsal mix, warm-started from the
+    same <span class="tag">mahler</span> checkpoint — cross-stave attention the only variable) is a win:
+  </p>
+  <ul>
+    <li><strong>Standalone noter</strong> (<a href="noter-training.html#run-bruckner"><span class="tag">bruckner-mixed</span></a>),
+      free-running: PDMX <strong>95.7 → 97.5%</strong> (+1.8), KernSheet <strong>89.4 → 95.5%</strong> (+6.1) vs
+      <span class="tag">mahler-mixed</span> — the gain concentrated on real scans, as predicted.</li>
+    <li><strong>End-to-end scorer</strong> (<a href="scorer-training.html#run-bruckner"><span class="tag">bruckner</span></a>),
+      <code>eval --size 500 --seed 0</code>: KernSheet <strong>91.0 → 95.0%</strong> (+4.0), PDMX
+      <strong>96.1 → 97.7%</strong> (+1.6) — and <span class="tag">bruckner</span>'s figures are <em>greedy
+      lockstep</em>, beating <span class="tag">mahler</span>'s <em>beam-8 + rerank</em> best with a simpler,
+      cheaper decode.</li>
+  </ul>
+  <p>
+    The one regression is PDMX stave-counting (scorer miscount 5 → 9 / 500), small and on the
+    already-saturated clean domain; KernSheet counting improved (9 → 7 / 500). Net: the success criterion
+    is met — the <code>.</code>-grid gap closes and the desync population's joint-correctness is recovered
+    <em>in-decode</em> rather than by a post-hoc vote. <span class="tag">bruckner</span> supersedes
+    <span class="tag">mahler</span> as the production end-to-end model.
   </p>
 </article>
 
