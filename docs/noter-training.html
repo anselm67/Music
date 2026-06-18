@@ -234,6 +234,18 @@
         <td>Rehearsal mix (0.67 KS / 0.33 PDMX) on the cross-stave <span class="tag">bruckner</span> base — free-running <strong>PDMX 97.5% / KS 95.5%</strong>, beating <span class="tag">mahler-mixed</span> (95.7% / 89.4%) on both domains (+1.8 / +6.1 pp). Noter half of <a href="scorer-training.html#run-bruckner"><span class="tag">scorer</span>/bruckner</a>. *val is the blended stream</td>
         <td><span class="badge badge-green">both domains · keeper</span></td>
       </tr>
+      <tr>
+        <td><a class="run-link" href="#run-bartok"><span class="tag">bartok</span></a></td><td>2026-06-18</td><td>12</td>
+        <td>99.73%</td><td>0.0123</td>
+        <td><strong>From-scratch reproduction</strong> of the cross-stave <span class="tag">bruckner</span> base, on the post-kern-fix corpus; leads <span class="tag">mahler</span> at every matched epoch (0.995 acc by epoch 5 vs mahler's epoch ~9)</td>
+        <td><span class="badge badge-slate">base · reproduction</span></td>
+      </tr>
+      <tr>
+        <td><a class="run-link" href="#run-bartok"><span class="tag">bartok-mixed</span></a></td><td>2026-06-18</td><td>12</td>
+        <td>98.85%*</td><td>0.0482*</td>
+        <td>Rehearsal mix on the <span class="tag">bartok</span> base — free-running <strong>PDMX 97.8% / KS 95.9%</strong>, a touch ahead of <span class="tag">bruckner-mixed</span> (97.5% / 95.5%) from the kern label fixes. Noter half of <a href="scorer-training.html#run-bartok"><span class="tag">scorer</span>/bartok</a>. *val is the blended stream</td>
+        <td><span class="badge badge-slate">reproduction · parity</span></td>
+      </tr>
     </tbody>
   </table>
 
@@ -785,6 +797,25 @@
     </table>
     <p style="font-size:0.78rem;color:var(--muted)">Free-running = <code>noter [--kern-home … | --pdmx-home …] eval &lt;name&gt; --size 1024</code> (greedy edit-distance similarity, now lockstep over a system's staves), eval'd 2026-06-17. PDMX bases free-running: <span class="tag">bruckner</span> 98.9% vs <span class="tag">mahler</span> 97.3%. Teacher-forced val: <span class="tag">bruckner</span> base 99.72% acc / 0.0118 loss (epoch 11, PDMX split); <span class="tag">bruckner-mixed</span> 98.68% / 0.0551 on the blended 0.67/0.33 stream. At matched epoch the mixed run leads <span class="tag">mahler-mixed</span> at every checkpoint — by epoch 9 it is 0.9867 vs 0.9746 acc with roughly half the loss (0.056 vs 0.108), with identical LR schedule / mix / vocab, so cross-stave attention is the only variable.</p>
     <div class="result-box positive"><strong>Cross-stave lockstep is a real, clean transcription win on both domains — largest on real scans.</strong> The mixed noter beats <span class="tag">mahler-mixed</span> by <strong>+1.8 pp PDMX (95.7 → 97.5)</strong> and <strong>+6.1 pp KernSheet (89.4 → 95.5)</strong> free-running, the gain concentrated exactly where the shared-barline prior matters most — the harder real-scan domain, where single-stave decode kept drifting out of grid alignment. This is the controlled comparison: same recipe, same <code>=||</code> vocab, same rehearsal mix, warm-started from the same <span class="tag">mahler</span> checkpoint, with the cross-stave branch the only difference. The gain carries through the merge: <span class="tag">bruckner-mixed</span> is the noter half of <a href="scorer-training.html#run-bruckner"><span class="tag">scorer</span>/bruckner</a>, which beats <span class="tag">scorer</span>/<a href="scorer-training.html#run-mahler">mahler</a> end-to-end with plain greedy lockstep (no beam, no rerank — the post-hoc barline reranker was retired because agreement is now structural). <span class="tag">bruckner-mixed</span> supersedes <span class="tag">mahler-mixed</span> as the production noter.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ bartok -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-bartok"><span class="tag">bartok</span> / <span id="run-bartok-mixed" class="tag">bartok-mixed</span> — from-scratch reproduction</h2>
+      <span class="session-meta">2026-06-18 · tags <code>train/bartok</code> · <code>train/bartok-mixed</code> · 12 ep each · the cross-stave <span class="tag">bruckner</span> recipe, rebuilt cold</span>
+      <span class="badge badge-slate">reproduction · parity</span>
+    </div>
+    <p><strong>The transcriber stage of the <a href="scorer-training.html#run-bartok"><span class="tag">scorer</span>/bartok</a> from-scratch reproduction.</strong> Identical cross-stave architecture, recipe, and <code>=||</code> vocab as <span class="tag">bruckner</span> — trained cold (no warm-start surgery beyond the standard staffer→noter pipeline) to confirm the cross-stave noter rebuilds from <code>scripts/train_scorer_pipeline.sh bartok</code> alone. The one incidental difference is the corpus: <span class="tag">bartok</span> trains <em>after</em> the kern label fixes (non-consecutive-bar <code>get_text</code>, barline-number parsing, closing-barline), which give it cleaner token targets than <span class="tag">bruckner</span> saw.</p>
+    <table class="summary-table">
+      <thead><tr><th>Free-running similarity, by domain (<code>eval --size 1024</code>)</th><th><span class="tag">bruckner-mixed</span> (production)</th><th><span class="tag">bartok-mixed</span> (repro)</th></tr></thead>
+      <tbody>
+        <tr><td>PDMX</td><td>97.5%</td><td><strong>97.8%</strong> <span style="color:var(--muted)">(+0.3)</span></td></tr>
+        <tr><td>KernSheet</td><td>95.5%</td><td><strong>95.9%</strong> <span style="color:var(--muted)">(+0.4)</span></td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">Free-running = <code>noter [--kern-home … | --pdmx-home …] eval bartok-mixed --size 1024</code> (greedy edit-distance similarity, lockstep over a system's staves), eval'd 2026-06-18. Teacher-forced val: <span class="tag">bartok</span> base 99.73% acc / 0.0123 loss (epoch 11, PDMX split); <span class="tag">bartok-mixed</span> 98.85% / 0.0482 on the blended 0.67/0.33 stream. At matched epoch the base leads <span class="tag">mahler</span> at every checkpoint (0.995 acc by epoch 5 vs mahler's ~epoch 9), a head-start that traces to the corrected token labels.</p>
+    <div class="result-box neutral"><strong>Reproduces the cross-stave noter — and edges it free-running, thanks to the cleaner labels.</strong> <span class="tag">bartok-mixed</span> matches and slightly beats <span class="tag">bruckner-mixed</span> free-running on both domains (PDMX 97.5 → 97.8, KS 95.5 → 95.9), the small gain attributable to the post-fix corpus rather than any architecture change. That standalone edge <em>washes out</em> at the joint scorer — end-to-end <a href="scorer-training.html#run-bartok"><span class="tag">scorer</span>/bartok</a> ties <span class="tag">bruckner</span> (KS 95.0% both, PDMX 97.8 vs 97.7), the scorer already being saturated on what the label fixes corrected. The reproduction is faithful; <span class="tag">bruckner-mixed</span> remains the production noter.</div>
   </div>
 
 </main>
