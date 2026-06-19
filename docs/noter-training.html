@@ -246,6 +246,12 @@
         <td>Rehearsal mix on the <span class="tag">bartok</span> base — free-running <strong>PDMX 97.8% / KS 95.9%</strong>, a touch ahead of <span class="tag">bruckner-mixed</span> (97.5% / 95.5%) from the kern label fixes. Noter half of <a href="scorer-training.html#run-bartok"><span class="tag">scorer</span>/bartok</a>. *val is the blended stream</td>
         <td><span class="badge badge-slate">reproduction · parity</span></td>
       </tr>
+      <tr>
+        <td><a class="run-link" href="#run-bartok-duration"><span class="tag">bartok-duration</span></a></td><td>2026-06-19</td><td>12</td>
+        <td>99.77%&dagger;</td><td>0.0049&dagger;</td>
+        <td><strong>Duration-head pilot</strong> — duration pulled out of the flat token into a separate regression head over <code>log2(length)</code>; <strong>pitch-only vocab</strong> (489 / KS-combined 552, ~10&times; smaller). Free-running <strong>PDMX 98.3%</strong> full pitch/dur (98.7% pitch-only; dur snap-acc 0.94) &mdash; splitting duration out doesn't degrade transcription. &dagger;val acc/loss are pitch-only + duration-regression, NOT comparable to the pitch&times;dur rows above</td>
+        <td><span class="badge badge-slate">base · duration-head pilot</span></td>
+      </tr>
     </tbody>
   </table>
 
@@ -816,6 +822,26 @@
     </table>
     <p style="font-size:0.78rem;color:var(--muted)">Free-running = <code>noter [--kern-home … | --pdmx-home …] eval bartok-mixed --size 1024</code> (greedy edit-distance similarity, lockstep over a system's staves), eval'd 2026-06-18. Teacher-forced val: <span class="tag">bartok</span> base 99.73% acc / 0.0123 loss (epoch 11, PDMX split); <span class="tag">bartok-mixed</span> 98.85% / 0.0482 on the blended 0.67/0.33 stream. At matched epoch the base leads <span class="tag">mahler</span> at every checkpoint (0.995 acc by epoch 5 vs mahler's ~epoch 9), a head-start that traces to the corrected token labels.</p>
     <div class="result-box neutral"><strong>Reproduces the cross-stave noter — and edges it free-running, thanks to the cleaner labels.</strong> <span class="tag">bartok-mixed</span> matches and slightly beats <span class="tag">bruckner-mixed</span> free-running on both domains (PDMX 97.5 → 97.8, KS 95.5 → 95.9), the small gain attributable to the post-fix corpus rather than any architecture change. That standalone edge <em>washes out</em> at the joint scorer — end-to-end <a href="scorer-training.html#run-bartok"><span class="tag">scorer</span>/bartok</a> ties <span class="tag">bruckner</span> (KS 95.0% both, PDMX 97.8 vs 97.7), the scorer already being saturated on what the label fixes corrected. The reproduction is faithful; <span class="tag">bruckner-mixed</span> remains the production noter.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ bartok-duration -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-bartok-duration"><span class="tag">bartok-duration</span> — duration-head pilot</h2>
+      <span class="session-meta">2026-06-19 · tag <code>train/bartok-duration</code> · 12 ep · the <span class="tag">bartok</span> recipe with duration split out of the token</span>
+      <span class="badge badge-slate">base · duration-head pilot</span>
+    </div>
+    <p><strong>First model with duration predicted as a separate head rather than baked into the token.</strong> The flat vocab drops duration (<code>C/4</code> → pitch token <code>C</code> + a parallel <code>log2(length)</code> scalar), collapsing the pitch&times;duration vocab ~10&times; (KS-combined 5,492 → <strong>552</strong>); a zero-init duration-<em>regression</em> head on the decoder predicts each note's length, snapped back onto an analytic duration table at decode (<code>noter.duration</code>). Same cross-stave architecture and <span class="tag">bartok</span> recipe otherwise (<code>--vocab</code> KS-combined, <code>--jitter 0.5</code>, 12 ep, PDMX base). A regression head (vs classification) was chosen so the model can resolve durations rare or unseen in training rather than being capped to a fixed class set.</p>
+    <table class="summary-table">
+      <thead><tr><th>Free-running <code>eval --size 1024</code>, PDMX in-domain</th><th><span class="tag">bartok-duration</span></th></tr></thead>
+      <tbody>
+        <tr><td>pitch/dur (full, recombined — comparable to prior models)</td><td><strong>98.3%</strong></td></tr>
+        <tr><td>pitch-only (isolating duration error)</td><td>98.7%</td></tr>
+        <tr><td>duration snap-accuracy (val, ±0.085 log2 proxy)</td><td>0.94</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">Free-running = <code>noter eval --vocab &lt;KS&gt;/build/vocab.json --size 1024 bartok-duration</code> (greedy, lockstep), eval'd 2026-06-19. The full pitch/dur sequence is rebuilt by snapping the head's <code>log2(length)</code> onto the duration table and re-joining (<code>C</code> + <code>-2.0</code> → <code>C/4</code>); both prediction and GT canonicalise through the same table, so the dotted-triplet <code>6:1</code> == plain <code>4</code> collision can't score as an error. Teacher-forced val 99.77% pitch acc / 0.0049 combined loss (epoch 11) — pitch-only, NOT comparable to the pitch&times;dur val of the rows above.</p>
+    <div class="result-box neutral"><strong>Splitting duration into a regression head doesn't hurt transcription.</strong> Full pitch/dur similarity (98.3%) sits only ~0.4 pp below pitch-only (98.7%) — the head recovers note values almost perfectly — and pitch is at parity with the <span class="tag">bartok</span> lineage. Not a clean head-to-head win: this is a PDMX-only base, so on PDMX it should lead the rehearsal-mixed <span class="tag">bartok-mixed</span> (97.8%) regardless of the duration change. Next: a rehearsal-mixed <span class="tag">bartok-duration-mixed</span> for the KS-domain number and a like-for-like comparison.</div>
   </div>
 
 </main>
