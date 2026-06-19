@@ -21,8 +21,8 @@ from .noter_model import NoterConfig
 from .noter_vocab import Vocab
 
 # Per-edge box-jitter spec (sigma_px, clip_px), train-only augmentation modelling
-# the staffer detector's box error measured on KernSheet (scripts/
-# eval_predicted_boxes.py): horizontal error >> vertical, right edge the worst.
+# the staffer detector's box error measured on KernSheet: horizontal error >>
+# vertical, right edge the worst.
 JITTER = {
     "top": (3.0, 15.0),
     "bot": (3.0, 15.0),
