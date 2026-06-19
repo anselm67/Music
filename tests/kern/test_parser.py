@@ -339,6 +339,22 @@ class TestHumdrumParser(unittest.TestCase):
             ),
         )
 
+    def test_numbered_double_bar_is_not_final(self) -> None:
+        # A `==N` that carries a measure number is a mid-piece heavy/section
+        # double bar (e.g. `==20` at a Trio start), not the piece's terminal
+        # barline: it still opens measure N. Only a numberless `==` is final.
+        self.parse_one_token(
+            "==20\n",
+            Bar(
+                "==20",
+                barno=20,
+                is_final=False,
+                is_repeat_start=False,
+                is_repeat_end=False,
+                is_invisible=False,
+            ),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

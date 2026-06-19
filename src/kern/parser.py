@@ -138,7 +138,10 @@ class KernSpineHolder[T](SpineHolder):
             return Bar(
                 text,
                 barno=barno,
-                is_final=(is_final == "="),
+                # `==` is the terminal barline only when it carries no measure
+                # number. A numbered `==N` is a mid-piece heavy/section double
+                # bar (e.g. `==20` at a Trio start) that still opens measure N.
+                is_final=(is_final == "=" and barno < 0),
                 is_repeat_start=(additional.endswith(":")),
                 is_repeat_end=(additional.startswith(":")),
                 is_invisible=(additional == "-" and barno < 0),
