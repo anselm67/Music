@@ -25,6 +25,12 @@ from fractions import Fraction
 # clefs, keys, bars and specials carry no numeric duration and are left intact.
 _DUR_TOKEN_RE = re.compile(r"^(rest|[A-Ga-g]+(?::x)?(?:#+|-+)?)/(\d+(?::\d+)?)$")
 
+# A *base* token (duration already stripped) that a numeric duration attaches
+# to — i.e. one the duration head must predict a length for. Same left side as
+# _DUR_TOKEN_RE but with no `/duration`. Used at inference to tell which
+# predicted tokens carry a duration to feed back / emit.
+_BASE_TOKEN_RE = re.compile(r"^(rest|[A-Ga-g]+(?::x)?(?:#+|-+)?)$")
+
 # Every (denominator, dots) duration we are willing to emit. Analytic, not
 # data-derived, so the snap target covers tuplets (/12, /24, ...) and rare
 # durations regardless of what training happened to contain.
@@ -62,6 +68,11 @@ def _build_table() -> tuple[list[float], list[str]]:
 
 _TABLE_LOG2, _TABLE_SUFFIX = _build_table()
 
+# Half the tightest adjacent gap in the table (in log2 units): a predicted
+# log2(length) within this of the target snaps to the same duration token. Used
+# as a cheap "would snap correctly" proxy metric during training.
+SNAP_TOLERANCE = 0.5 * min(hi - lo for lo, hi in zip(_TABLE_LOG2, _TABLE_LOG2[1:]))
+
 
 def split_duration(token: str) -> tuple[str, float | None]:
     """Split a token into ``(base_token, log2_length)``.
@@ -78,6 +89,12 @@ def split_duration(token: str) -> tuple[str, float | None]:
         if int(suffix.split(":")[0]) != 0:
             return m.group(1), math.log2(float(_suffix_length(suffix)))
     return token, None
+
+
+def is_duration_bearing(base_token: str) -> bool:
+    """Whether a (duration-stripped) vocab token is a note/rest that carries a
+    numeric duration — i.e. the duration head predicts a length for it."""
+    return _BASE_TOKEN_RE.match(base_token) is not None
 
 
 def snap_suffix(log2_length: float) -> str:

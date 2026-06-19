@@ -185,7 +185,7 @@ def check(ctx: ClickContext) -> None:
     T = config.noter.max_seqlen - 1
     target = torch.full((boxes.shape[0], T, config.noter.max_chords), Vocab.SOS)
     tgt_pad = (target == Vocab.PAD).all(dim=-1)
-    logits = model.noter.decode(
+    logits, _ = model.noter.decode(
         target, memory, module._causal_mask(T), tgt_pad, src_pad
     )
     print(f"noter:  memory {tuple(memory.shape)}, logits {tuple(logits.shape)}")

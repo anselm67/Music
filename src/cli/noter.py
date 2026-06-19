@@ -34,6 +34,7 @@ from noter import (
     Vocab,
     grow_state_dict,
 )
+from noter.duration import is_duration_bearing
 from kernsheet import KernSheet, KernSheetSource
 from pdmx import PDMX, PdmxSource
 from sheetmusic import Source, to_display
@@ -210,7 +211,7 @@ def show(ctx: ClickContext) -> None:
     while True:
         index = random.randint(0, len(dataset) - 1)
         score_id, page_number = dataset.items[index][:2]
-        images, _, sequences, mask = dataset[index]
+        images, _, sequences, _, _, mask = dataset[index]
         staves = mask.nonzero(as_tuple=True)[0].tolist()
         print(ctx.source.image_path(score_id, page_number))
         print(_format_spines([dataset.vocab.i2tok(sequences[g]) for g in staves]))
@@ -314,6 +315,18 @@ def config_from_checkpoint(checkpoint_path: Path) -> NoterConfig:
     hyper_params = checkpoint["hyper_parameters"]
     hyper_params.pop("max_steps", None)
     return NoterConfig(**hyper_params)
+
+
+def _duration_bearing(vocab: Vocab, device: torch.device) -> Tensor:
+    """``(vocab_size,)`` bool: which token ids carry a duration the head emits.
+
+    Fed to ``NoterModule.predict`` so a generated note/rest's regressed length is
+    fed back as input, while clefs/bars/breves/specials get no duration.
+    """
+    return torch.tensor(
+        [is_duration_bearing(vocab.decode(i)) for i in range(len(vocab))],
+        device=device,
+    )
 
 
 @click.command()
@@ -791,22 +804,26 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
         ckpt_path, config=config, weights_only=False
     )
     module.eval()
+    duration_bearing = _duration_bearing(vocab, module.device)
 
     n = min(size, len(dataset))
     indices = random.sample(range(len(dataset)), n)
 
     similarities: list[float] = []
     for idx in tqdm(indices, desc="Evaluating"):
-        images, widths, gt_sequences, mask = dataset[idx]
+        images, widths, gt_sequences, _, _, mask = dataset[idx]
         valid = mask.nonzero(as_tuple=True)[0]
 
         device = module.device
         # Lockstep-decode the whole system at once (one batch item, S staves).
+        # NB: similarity here scores pitch-only tokens; recombining the predicted
+        # duration into the compared sequence is a follow-up.
         predicted = module.predict(
             images.unsqueeze(0).to(device),
             widths.unsqueeze(0).to(device),
             mask.unsqueeze(0).to(device),
-        )[0]  # (S, T, max_chords)
+            duration_bearing,
+        )[0][0]  # (tokens, durs) -> tokens, batch item 0 -> (S, T, max_chords)
 
         for g in valid.tolist():
             gt_content = strip_eos(gt_sequences[g][1:], Vocab.EOS)
@@ -841,6 +858,7 @@ def predict(ctx: ClickContext, name: str) -> None:
         ckpt_path, config=config, weights_only=False
     )
     module.eval()
+    duration_bearing = _duration_bearing(vocab, module.device)
 
     shuffled_indices = list(range(len(dataset)))
     random.shuffle(shuffled_indices)
@@ -854,7 +872,7 @@ def predict(ctx: ClickContext, name: str) -> None:
         if quit_:
             break
         score_id, page_number = dataset.items[idx][:2]
-        images, widths, gt_sequences, mask = dataset[idx]
+        images, widths, gt_sequences, _, _, mask = dataset[idx]
         valid = mask.nonzero(as_tuple=True)[0]
 
         device = module.device
@@ -862,7 +880,8 @@ def predict(ctx: ClickContext, name: str) -> None:
             images.unsqueeze(0).to(device),
             widths.unsqueeze(0).to(device),
             mask.unsqueeze(0).to(device),
-        )[0]  # (S, T, max_chords)
+            duration_bearing,
+        )[0][0]  # (tokens, durs) -> tokens, batch item 0 -> (S, T, max_chords)
 
         for rank, g in enumerate(valid.tolist()):
             gt_sequence, image = gt_sequences[g], images[g]

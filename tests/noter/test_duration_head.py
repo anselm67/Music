@@ -1,0 +1,65 @@
+import torch
+
+from noter import NoterConfig, NoterModule, Vocab
+
+
+def _tiny_module() -> tuple[NoterModule, NoterConfig, Vocab]:
+    vocab = Vocab(
+        {"PAD": 0, "UNK": 1, "SOS": 2, "EOS": 3, "SIL": 4, "C": 5, "rest": 6, "=": 7}
+    )
+    config = NoterConfig(
+        embed_dim=16,
+        num_head=2,
+        mlp_dim=32,
+        num_encoder_layers=1,
+        num_decoder_layers=1,
+        max_seqlen=8,
+        max_chords=2,
+        max_staves=2,
+    )
+    config.use_vocab(vocab)
+    return NoterModule(config), config, vocab
+
+
+def _batch(config: NoterConfig, b: int = 2) -> tuple[torch.Tensor, ...]:
+    s, t, mc = config.max_staves, config.max_seqlen, config.max_chords
+    h, w = config.input_shape
+    source = torch.randn(b, s, 1, h, w)
+    widths = torch.full((b, s), w)
+    target = torch.randint(0, config.vocab_size, (b, s, t, mc))
+    target_dur = torch.randn(b, s, t, mc)
+    target_dur_mask = torch.rand(b, s, t, mc) > 0.5
+    stave_mask = torch.ones(b, s, dtype=torch.bool)
+    return source, widths, target, target_dur, target_dur_mask, stave_mask
+
+
+def test_training_step_runs_and_backprops() -> None:
+    module, config, _ = _tiny_module()
+    # _step (not training_step) so the train/lr log doesn't need a Trainer.
+    loss = module._step(_batch(config), "val")
+    assert loss.requires_grad and torch.isfinite(loss)
+    loss.backward()
+    # The duration head received gradient.
+    assert module.model.dur_head.weight.grad is not None
+    assert module.model.dur_head.weight.grad.abs().sum() > 0
+
+
+def test_forward_returns_token_and_duration_heads() -> None:
+    module, config, _ = _tiny_module()
+    source, widths, target, dur, dmask, smask = _batch(config)
+    logits, dur_pred = module.forward(source, widths, target, smask, dur, dmask)
+    b, s, t, mc = target.shape
+    assert logits.shape == (b, s, t, mc, config.vocab_size)
+    assert dur_pred.shape == (b, s, t, mc)
+
+
+def test_predict_returns_tokens_and_durations() -> None:
+    module, config, vocab = _tiny_module()
+    module.eval()
+    source, widths, *_, smask = _batch(config, b=1)
+    bearing = torch.tensor(
+        [vocab.decode(i) in {"C", "rest"} for i in range(len(vocab))]
+    )
+    tokens, durs = module.predict(source, widths, smask, bearing)
+    assert tokens.shape[:2] == (1, config.max_staves)
+    assert durs.shape == tokens.shape

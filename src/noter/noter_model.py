@@ -57,6 +57,8 @@ class NoterConfig:
     valid_len: int = -1
     lr: float = 3e-4
     weight_decay: float = 1e-2
+    # Weight on the duration-head regression loss, added to the token CE.
+    dur_loss_weight: float = 1.0
     warmup_steps: int = 500
     # Train-only box-jitter augmentation: probability a train sample's box is
     # jittered (0 = disabled). Applied to the train split only.
@@ -129,12 +131,29 @@ class TargetEmbedder(nn.Module):
         self.pos_embed = nn.Parameter(
             0.02 * torch.randn(config.max_seqlen, config.embed_dim)
         )
+        # Per-slot duration injected on the input side: [log2(length)·has, has].
+        # The duration left the token (pitch-only vocab), so this is how a slot's
+        # note value reaches the decoder. Zero-init so it contributes nothing at
+        # the start of training and the token path is unperturbed.
+        self.dur_proj = nn.Linear(2, config.embed_dim)
+        nn.init.zeros_(self.dur_proj.weight)
+        nn.init.zeros_(self.dur_proj.bias)
         self.norm = nn.LayerNorm(config.embed_dim)
         self.dropout = nn.Dropout(config.dropout)
 
-    def forward(self, target: Tensor) -> Tensor:
+    def forward(
+        self,
+        target: Tensor,  # (B, T, H) token ids
+        dur: Tensor | None = None,  # (B, T, H) log2 length
+        dur_mask: Tensor | None = None,  # (B, T, H) True where dur is present
+    ) -> Tensor:
         embeds = self.embedding(target)  # (B, T, H, D)
         embeds = embeds + self.chord_pos_embed  # per-slot position signal
+        if dur is not None:
+            assert dur_mask is not None
+            has = dur_mask.to(embeds.dtype)
+            dur_in = torch.stack([dur * has, has], dim=-1)  # (B, T, H, 2)
+            embeds = embeds + self.dur_proj(dur_in)
         B, T, H, D = embeds.shape
         assert T <= self.pos_embed.shape[0], (
             f"T={T} exceeds max_seqlen={self.pos_embed.shape[0]}"
@@ -246,6 +265,10 @@ class NoterModel(nn.Module):
         )
         self.decoder = CrossStaveDecoder(config)
         self.mlp = nn.Linear(config.embed_dim, config.max_chords * config.vocab_size)
+        # Duration regression head: one log2(length) scalar per chord slot,
+        # parallel to the token head. Decoded by snapping onto the analytic
+        # duration table (noter.duration).
+        self.dur_head = nn.Linear(config.embed_dim, config.max_chords)
 
     def make_src_padding_mask(self, widths: Tensor) -> Tensor:
         """
@@ -293,11 +316,22 @@ class NoterModel(nn.Module):
         memory_pad_mask: Tensor,  # (B*S, P)
         stave_mask: Tensor,  # (B, S) — True on real staves
         target_mask: Tensor,  # (T, T) causal
-    ) -> Tensor:
-        """Decode a batch of systems → logits ``(B, S, T, max_chords, vocab_size)``."""
+        target_dur: Tensor | None = None,  # (B, S, T, max_chords) log2 length
+        target_dur_mask: Tensor | None = None,  # (B, S, T, max_chords) dur present
+    ) -> tuple[Tensor, Tensor]:
+        """Decode a batch of systems → ``(logits, dur_pred)`` of shapes
+        ``(B, S, T, max_chords, vocab_size)`` and ``(B, S, T, max_chords)``."""
         bsz, staves, t, mc = target.shape
         tgt_flat = target.reshape(bsz * staves, t, mc)
-        tgt_embeds = self.target_embedder(tgt_flat)  # (B*S, T, D)
+        dur_flat = (
+            target_dur.reshape(bsz * staves, t, mc) if target_dur is not None else None
+        )
+        dmask_flat = (
+            target_dur_mask.reshape(bsz * staves, t, mc)
+            if target_dur_mask is not None
+            else None
+        )
+        tgt_embeds = self.target_embedder(tgt_flat, dur_flat, dmask_flat)  # (B*S, T, D)
         tgt_kpm = (tgt_flat == self.config.pad_idx).all(dim=-1)  # (B*S, T)
         xs_mask = self._cross_stave_mask(staves, t, target.device)
         xs_kpm = (~stave_mask).unsqueeze(-1).expand(bsz, staves, t).reshape(bsz, -1)
@@ -312,7 +346,9 @@ class NoterModel(nn.Module):
             bsz,
             staves,
         )
-        return self.mlp(outs).view(bsz, staves, t, mc, -1)
+        logits = self.mlp(outs).view(bsz, staves, t, mc, -1)
+        dur_pred = self.dur_head(outs).view(bsz, staves, t, mc)
+        return logits, dur_pred
 
     def forward(
         self,
@@ -321,11 +357,21 @@ class NoterModel(nn.Module):
         target: Tensor,  # (B, S, T, max_chords)
         stave_mask: Tensor,  # (B, S)
         target_mask: Tensor,  # (T, T) causal
-    ) -> Tensor:
+        target_dur: Tensor | None = None,  # (B, S, T, max_chords)
+        target_dur_mask: Tensor | None = None,  # (B, S, T, max_chords)
+    ) -> tuple[Tensor, Tensor]:
         bsz, staves = source.shape[:2]
         flat_src = source.reshape(bsz * staves, *source.shape[2:])
         memory, mem_pad = self.encode(flat_src, source_widths.reshape(bsz * staves))
-        return self.decode(target, memory, mem_pad, stave_mask, target_mask)
+        return self.decode(
+            target,
+            memory,
+            mem_pad,
+            stave_mask,
+            target_mask,
+            target_dur,
+            target_dur_mask,
+        )
 
     @staticmethod
     def remap_legacy_state_dict(state: dict[str, Tensor]) -> dict[str, Tensor]:

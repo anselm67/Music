@@ -20,9 +20,17 @@ def test_load_sequence_skips_record_with_too_few_spines() -> None:
 
 
 def test_load_sequence_reads_requested_spine() -> None:
+    import math
+
     load_sequence, vocab, source = _loader()
     source.records.return_value = ["C/4\tD/4"]
-    seq = load_sequence("x", spine_number=1, first_bar=1, last_bar=2)
-    assert seq is not None
+    result = load_sequence("x", spine_number=1, first_bar=1, last_bar=2)
+    assert result is not None
+    tokens, durs, dmask = result
     # spine 1 is "D/4" -> duration stripped, first non-SOS chord slot decodes to D
-    assert vocab.decode(int(seq[1, 0].item())) == "D"
+    assert vocab.decode(int(tokens[1, 0].item())) == "D"
+    # and its duration is captured separately as log2(1/4)
+    assert dmask[1, 0].item() is True
+    assert abs(durs[1, 0].item() - math.log2(1 / 4)) < 1e-6
+    # the SOS row carries no duration
+    assert dmask[0, 0].item() is False
