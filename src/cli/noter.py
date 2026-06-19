@@ -657,6 +657,8 @@ LOG_VARIABLES = [
     "loss",
     "lr",
     "accuracy",
+    "dur_acc",
+    "dur_loss",
 ]
 
 
@@ -725,7 +727,7 @@ def logs(
 
     \b
     The following METRIC are available:
-    - loss, lr (training only), accuracy
+    - loss, lr (training only), accuracy, dur_acc, dur_loss
     """
     train_columns = tuple(i for c in train_columns for i in c.split(","))
     valid_columns = tuple(i for c in valid_columns for i in c.split(","))
