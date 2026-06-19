@@ -88,7 +88,9 @@ def main() -> None:
     )
     args = ap.parse_args()
 
-    sources = [(name, root, None) for name, root in DATASETS.items()]
+    sources: list[tuple[str, Path, ScanAugment | None]] = [
+        (name, root, None) for name, root in DATASETS.items()
+    ]
     if args.augment > 0:
         sources.append(("PDMX+aug", DATASETS["PDMX"], ScanAugment(args.augment)))
 
