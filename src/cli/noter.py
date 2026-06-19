@@ -34,7 +34,7 @@ from noter import (
     Vocab,
     grow_state_dict,
 )
-from noter.duration import is_duration_bearing
+from noter.duration import is_duration_bearing, join_duration
 from kernsheet import KernSheet, KernSheetSource
 from pdmx import PDMX, PdmxSource
 from sheetmusic import Source, to_display
@@ -327,6 +327,31 @@ def _duration_bearing(vocab: Vocab, device: torch.device) -> Tensor:
         [is_duration_bearing(vocab.decode(i)) for i in range(len(vocab))],
         device=device,
     )
+
+
+def _recombine(
+    tokens: Tensor, durs: Tensor, vocab: Vocab, s2i: dict[str, int]
+) -> Tensor:
+    """Fuse a stave's ``(T, max_chords)`` pitch ids + ``log2`` durations back into
+    full ``pitch/dur`` tokens, returned as a ``(T, max_chords)`` id tensor over a
+    shared string->id map ``s2i`` (so identical strings compare equal).
+
+    A duration-bearing base (note/rest) is snapped and joined (``C`` + ``-2.0`` ->
+    ``C/4``); everything else (clefs, bars, breves, SIL) is its bare string. The
+    snap canonicalises both sides identically, so the ``6:1`` == ``4`` collision
+    can't register as a difference. Id 0 is reserved as the (unused) pad slot.
+    """
+    out = torch.zeros_like(tokens)
+    for t in range(tokens.size(0)):
+        for c in range(tokens.size(1)):
+            base = vocab.decode(int(tokens[t, c]))
+            s = (
+                join_duration(base, float(durs[t, c]))
+                if is_duration_bearing(base)
+                else base
+            )
+            out[t, c] = s2i.setdefault(s, len(s2i) + 1)
+    return out
 
 
 @click.command()
@@ -811,37 +836,53 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
     n = min(size, len(dataset))
     indices = random.sample(range(len(dataset)), n)
 
-    similarities: list[float] = []
+    # Full = recombined pitch/dur similarity (comparable to non-duration models);
+    # pitch = pitch-token-only similarity, isolating how much error is duration.
+    full_sims: list[float] = []
+    pitch_sims: list[float] = []
     for idx in tqdm(indices, desc="Evaluating"):
-        images, widths, gt_sequences, _, _, mask = dataset[idx]
+        images, widths, gt_sequences, gt_durs, _, mask = dataset[idx]
         valid = mask.nonzero(as_tuple=True)[0]
 
         device = module.device
         # Lockstep-decode the whole system at once (one batch item, S staves).
-        # NB: similarity here scores pitch-only tokens; recombining the predicted
-        # duration into the compared sequence is a follow-up.
-        predicted = module.predict(
+        pred_tokens, pred_durs = module.predict(
             images.unsqueeze(0).to(device),
             widths.unsqueeze(0).to(device),
             mask.unsqueeze(0).to(device),
             duration_bearing,
-        )[0][0]  # (tokens, durs) -> tokens, batch item 0 -> (S, T, max_chords)
+        )
+        pred_tokens, pred_durs = pred_tokens[0].cpu(), pred_durs[0].cpu()
 
         for g in valid.tolist():
-            gt_content = strip_eos(gt_sequences[g][1:], Vocab.EOS)
-            pred_content = strip_eos(predicted[g].cpu(), Vocab.EOS)
-            edit_dist = sequence_edit_distance(gt_content, pred_content, Vocab.PAD)
-            max_cost = max(len(gt_content), len(pred_content)) * config.max_chords
-            similarity = 1.0 - edit_dist / max_cost if max_cost > 0 else 1.0
-            similarities.append(similarity)
+            # Pitch-only: drop SOS, cut at EOS.
+            gt_tok = strip_eos(gt_sequences[g][1:], Vocab.EOS)
+            pred_tok = strip_eos(pred_tokens[g], Vocab.EOS)
+            mc = config.max_chords
+            pitch_dist = sequence_edit_distance(gt_tok, pred_tok, Vocab.PAD)
+            max_cost = max(len(gt_tok), len(pred_tok)) * mc
+            pitch_sims.append(1.0 - pitch_dist / max_cost if max_cost > 0 else 1.0)
 
-    if not similarities:
+            # Full: recombine pitch + duration into pitch/dur tokens (durations
+            # are row-aligned with the tokens; slice to the same EOS-cut length).
+            s2i: dict[str, int] = {}
+            gt_full = _recombine(gt_tok, gt_durs[g][1 : 1 + len(gt_tok)], vocab, s2i)
+            pred_full = _recombine(pred_tok, pred_durs[g][: len(pred_tok)], vocab, s2i)
+            full_dist = sequence_edit_distance(gt_full, pred_full, 0)
+            full_sims.append(1.0 - full_dist / max_cost if max_cost > 0 else 1.0)
+
+    if not full_sims:
         print("No samples to evaluate.")
         return
     print(f"\nEvaluated {n} samples from '{name}':")
-    print(f"  min: {min(similarities):.1%}")
-    print(f"  avg: {sum(similarities) / len(similarities):.1%}")
-    print(f"  max: {max(similarities):.1%}")
+    print(
+        f"  pitch/dur (full): avg {sum(full_sims) / len(full_sims):.1%}  "
+        f"min {min(full_sims):.1%}  max {max(full_sims):.1%}"
+    )
+    print(
+        f"  pitch-only:       avg {sum(pitch_sims) / len(pitch_sims):.1%}  "
+        f"min {min(pitch_sims):.1%}  max {max(pitch_sims):.1%}"
+    )
 
 
 @click.command()
