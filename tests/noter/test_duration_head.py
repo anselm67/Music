@@ -1,6 +1,7 @@
 import torch
 
 from noter import NoterConfig, NoterModule, Vocab
+from noter.duration import NUM_DUR_BINS
 
 
 def _tiny_module() -> tuple[NoterModule, NoterConfig, Vocab]:
@@ -47,10 +48,10 @@ def test_training_step_runs_and_backprops() -> None:
 def test_forward_returns_token_and_duration_heads() -> None:
     module, config, _ = _tiny_module()
     source, widths, target, dur, dmask, smask = _batch(config)
-    logits, dur_pred = module.forward(source, widths, target, smask, dur, dmask)
+    logits, dur_logits = module.forward(source, widths, target, smask, dur, dmask)
     b, s, t, mc = target.shape
     assert logits.shape == (b, s, t, mc, config.vocab_size)
-    assert dur_pred.shape == (b, s, t, mc)
+    assert dur_logits.shape == (b, s, t, mc, NUM_DUR_BINS)
 
 
 def test_predict_returns_tokens_and_durations() -> None:

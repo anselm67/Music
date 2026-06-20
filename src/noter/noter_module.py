@@ -8,13 +8,15 @@ from torch import Tensor
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
 
-from .duration import SNAP_TOLERANCE
+from .duration import bin_boundaries, bin_log2_lengths
 from .noter_model import NoterConfig, NoterModel
 from .noter_vocab import Vocab
 
 
 class NoterModule(L.LightningModule):
     _causal_mask_buf: Tensor
+    _dur_boundaries: Tensor
+    _dur_bin_log2: Tensor
 
     def __init__(self, config: NoterConfig) -> None:
         super().__init__()
@@ -27,6 +29,11 @@ class NoterModule(L.LightningModule):
                 diagonal=1
             ),
         )
+        # Duration-table bin boundaries (for bucketizing GT log2 lengths to bin
+        # labels) and each bin's canonical log2 length (for decoding an argmax
+        # bin back to a length to feed forward).
+        self.register_buffer("_dur_boundaries", torch.tensor(bin_boundaries()))
+        self.register_buffer("_dur_bin_log2", torch.tensor(bin_log2_lengths()))
 
     def _causal_mask(self, size: int) -> Tensor:
         return self._causal_mask_buf[:size, :size]
@@ -58,14 +65,14 @@ class NoterModule(L.LightningModule):
         # target: (B, S, T, max_chords) — teacher-forced input is target[:, :, :-1],
         # labels shifted by one. Padded staves are excluded from the loss. The
         # duration channels are teacher-forced and shifted in lockstep.
-        logits, dur_pred = self.forward(
+        logits, dur_logits = self.forward(
             source,
             source_widths,
             target[:, :, :-1],
             stave_mask,
             target_dur[:, :, :-1],
             target_dur_mask[:, :, :-1],
-        )  # (B, S, T-1, max_chords, vocab_size), (B, S, T-1, max_chords)
+        )  # (B, S, T-1, max_chords, vocab_size), (..., NUM_DUR_BINS)
         labels = target[:, :, 1:].clone()  # (B, S, T-1, max_chords)
         labels[~stave_mask] = Vocab.PAD
 
@@ -76,19 +83,22 @@ class NoterModule(L.LightningModule):
             ignore_index=Vocab.PAD,
         )
 
-        # Duration regression (Huber on log2 length), only on slots that carry a
-        # duration and belong to a real staff.
-        dur_labels = target_dur[:, :, 1:]
+        # Duration classification (CE over the analytic table's bins), only on
+        # slots that carry a duration and belong to a real staff. GT log2 lengths
+        # are bucketized to bin labels against the table midpoints.
+        dur_bins = torch.bucketize(
+            target_dur[:, :, 1:].contiguous(), self._dur_boundaries
+        )
         dur_loss_mask = target_dur_mask[:, :, 1:].clone()
         dur_loss_mask[~stave_mask] = False
         if dur_loss_mask.any():
-            dur_loss = F.smooth_l1_loss(
-                dur_pred[dur_loss_mask], dur_labels[dur_loss_mask]
+            dur_loss = F.cross_entropy(
+                dur_logits[dur_loss_mask], dur_bins[dur_loss_mask]
             )
         else:
             # No duration-bearing slot this batch (e.g. all-pad staves): a
             # constant with no autograd edge, so the head simply isn't updated.
-            dur_loss = dur_pred.new_zeros(())
+            dur_loss = dur_logits.new_zeros(())
         loss = token_loss + self.config.dur_loss_weight * dur_loss
 
         with torch.no_grad():
@@ -96,11 +106,12 @@ class NoterModule(L.LightningModule):
             accuracy = ((logits.argmax(-1) == labels) & mask).sum() / mask.sum().clamp(
                 min=1
             )
-            # Duration "would snap correctly" proxy: predicted log2 within half a
-            # table step of the target (see noter.duration.SNAP_TOLERANCE).
+            # Exact snap-match: the predicted bin equals the GT bin.
             if dur_loss_mask.any():
-                err = (dur_pred[dur_loss_mask] - dur_labels[dur_loss_mask]).abs()
-                dur_acc = (err < SNAP_TOLERANCE).float().mean()
+                pred_bins = dur_logits.argmax(-1)
+                dur_acc = (
+                    (pred_bins[dur_loss_mask] == dur_bins[dur_loss_mask]).float().mean()
+                )
             else:
                 dur_acc = torch.ones((), device=loss.device)
 
@@ -128,7 +139,8 @@ class NoterModule(L.LightningModule):
         siblings' rows ``< t`` through the cross-stave attention. A staff finishes at
         its own EOS; padded staves start finished. ``duration_bearing`` is a
         ``(vocab_size,)`` bool flagging which token ids carry a duration; the
-        regressed log2 length of those slots is fed back as the next step's input.
+        predicted bin's log2 length for those slots is fed back as the next step's
+        input, and ``durations`` is returned as log2 lengths (snap-canonical).
         """
         B, S, c = source.shape[0], source.shape[1], self.config
         flat_src = source.reshape(B * S, *source.shape[2:])
@@ -143,7 +155,7 @@ class NoterModule(L.LightningModule):
         done = ~stave_mask.clone()  # padded staves emit EOS immediately
         for _ in range(c.max_seqlen - 1):
             T = generated.shape[2]
-            logits, dur_pred = self.model.decode(
+            logits, dur_logits = self.model.decode(
                 generated,
                 memory,
                 mem_pad,
@@ -153,7 +165,8 @@ class NoterModule(L.LightningModule):
                 gen_dmask,
             )
             next_tokens = logits[:, :, -1, :, :].argmax(dim=-1)  # (B, S, max_chords)
-            next_dur = dur_pred[:, :, -1, :]  # (B, S, max_chords)
+            next_bin = dur_logits[:, :, -1, :, :].argmax(dim=-1)  # (B, S, max_chords)
+            next_dur = self._dur_bin_log2[next_bin]  # bin -> log2 length
             next_tokens[done] = Vocab.EOS  # keep finished staves at EOS
             next_dmask = duration_bearing[next_tokens]  # (B, S, max_chords)
             next_dur = torch.where(next_dmask, next_dur, torch.zeros_like(next_dur))

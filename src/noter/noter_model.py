@@ -10,6 +10,7 @@ from torchvision.transforms import InterpolationMode
 from staffer import StafferConfig
 from utils import current_commit
 
+from .duration import NUM_DUR_BINS
 from .noter_vocab import Vocab
 
 
@@ -57,8 +58,8 @@ class NoterConfig:
     valid_len: int = -1
     lr: float = 3e-4
     weight_decay: float = 1e-2
-    # Weight on the duration-head regression loss, added to the token CE.
-    dur_loss_weight: float = 1.0
+    # Weight on the duration-head classification loss, added to the token CE.
+    dur_loss_weight: float = 2.0
     warmup_steps: int = 500
     # Train-only box-jitter augmentation: probability a train sample's box is
     # jittered (0 = disabled). Applied to the train split only.
@@ -265,10 +266,10 @@ class NoterModel(nn.Module):
         )
         self.decoder = CrossStaveDecoder(config)
         self.mlp = nn.Linear(config.embed_dim, config.max_chords * config.vocab_size)
-        # Duration regression head: one log2(length) scalar per chord slot,
-        # parallel to the token head. Decoded by snapping onto the analytic
-        # duration table (noter.duration).
-        self.dur_head = nn.Linear(config.embed_dim, config.max_chords)
+        # Duration classification head: a softmax over the analytic duration
+        # table's NUM_DUR_BINS bins per chord slot, parallel to the token head.
+        # Decoded by argmax → bin suffix (noter.duration).
+        self.dur_head = nn.Linear(config.embed_dim, config.max_chords * NUM_DUR_BINS)
 
     def make_src_padding_mask(self, widths: Tensor) -> Tensor:
         """
@@ -319,8 +320,9 @@ class NoterModel(nn.Module):
         target_dur: Tensor | None = None,  # (B, S, T, max_chords) log2 length
         target_dur_mask: Tensor | None = None,  # (B, S, T, max_chords) dur present
     ) -> tuple[Tensor, Tensor]:
-        """Decode a batch of systems → ``(logits, dur_pred)`` of shapes
-        ``(B, S, T, max_chords, vocab_size)`` and ``(B, S, T, max_chords)``."""
+        """Decode a batch of systems → ``(logits, dur_logits)`` of shapes
+        ``(B, S, T, max_chords, vocab_size)`` and
+        ``(B, S, T, max_chords, NUM_DUR_BINS)``."""
         bsz, staves, t, mc = target.shape
         tgt_flat = target.reshape(bsz * staves, t, mc)
         dur_flat = (
@@ -347,8 +349,8 @@ class NoterModel(nn.Module):
             staves,
         )
         logits = self.mlp(outs).view(bsz, staves, t, mc, -1)
-        dur_pred = self.dur_head(outs).view(bsz, staves, t, mc)
-        return logits, dur_pred
+        dur_logits = self.dur_head(outs).view(bsz, staves, t, mc, NUM_DUR_BINS)
+        return logits, dur_logits
 
     def forward(
         self,

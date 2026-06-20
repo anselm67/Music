@@ -93,6 +93,109 @@
      following the format of the entries that follow. Keep newest-first order.
      ════════════════════════════════════════════════════════════════════════ -->
 
+<!-- ── Duration as a separate decoder head ── -->
+<article class="entry">
+  <h2>Split duration out of the flat token into a separate decoder head — and switch that head from regression to classification</h2>
+  <div class="entry-meta">
+    <span>2026-06-18 · pivot 2026-06-20</span>
+    <span class="badge superseded">Regression pilot superseded — classification head next</span>
+    <span class="ref">noter (<code>duration.py</code> codec, <code>NoterModel</code> head, <code>NoterModule</code> loss) · pilot lineage <code>bartok-duration</code> / <code>bartok-duration-mixed</code></span>
+  </div>
+
+  <h3>Context</h3>
+  <p>
+    The flat token vocab bakes pitch <em>and</em> duration into one symbol (<code>C/4</code>,
+    <code>C/8:1</code>), so it is the full combinatorial product of the two — ~4.8k tokens on PDMX.
+    That is wasteful (every pitch re-learns every duration from scratch) and it is the wrong shape for
+    the longer-term goal: pulling the ~12 per-note Humdrum kern <em>flags</em> (ties, slurs, beams,
+    trills, gracenote, …) out of the token and onto their own outputs. <strong>Duration is the pilot
+    for that move</strong> — the first per-note attribute to leave the token and become a separate
+    head on the decoder MLP.
+  </p>
+
+  <h3>Decision</h3>
+  <p>
+    Two parts. First (landed), the <strong>split</strong>: the token carries pitch only (pitch +
+    accidental + drum <code>:x</code>; rests become bare <code>rest</code>), and duration is predicted
+    by a separate head. The codec (<code>src/noter/duration.py</code>) pulls the numeric suffix off a
+    token into <code>log2(note&nbsp;length)</code> and snaps a prediction back onto an
+    <strong>analytic</strong> duration table — denominators
+    <code>{1,2,3,4,6,8,12,16,24,32,48,64,96,128}</code> × dots <code>0–2</code>, deduped to 36 bins
+    (a dotted tuplet like <code>6:1</code> collides exactly with a plain <code>4</code>; we keep the
+    fewest-dots spelling). The table is enumerated, <em>not</em> data-derived. Vocab collapses ~10×
+    (PDMX 4785→489, KS 5492→552). The duration scalar is fed back into <code>TargetEmbedder</code> for
+    autoregressive consistency via a zero-initialised projection, so at init the model is bit-identical
+    to the production noter.
+  </p>
+  <p>
+    Second (the pivot): the head was piloted as a <strong>regression</strong> over
+    <code>log2(length)</code> (masked Huber / smooth-L1), on the theory that a continuous output
+    <em>degrades gracefully</em> toward rare or unseen durations where a fixed-class softmax cannot.
+    We are <strong>switching that head to classification</strong> — a softmax over the same 36 table
+    bins (cross-entropy on the snapped bin).
+  </p>
+
+  <h3>Rationale</h3>
+  <p>
+    The regression pilot trained cleanly and reached <strong>pitch parity</strong> (pitch-only
+    similarity matched/beat the baked-in token model), proving duration <em>can</em> be a separate head
+    without hurting pitch. But on <strong>full</strong> pitch/dur it <em>trailed</em> the baked-in
+    token, and the cost was entirely duration on real scans: the full-vs-pitch gap was only 0.6pp on
+    clean PDMX but 2.0pp on KernSheet (blended duration snap-accuracy 0.77 vs 0.94 on clean PDMX).
+    <span class="tag">bruckner-mixed</span> stays production.
+  </p>
+  <p>
+    The decisive argument against regression is that its one theoretical advantage <strong>does not
+    exist here</strong>. We measured the off-table fraction across the corpora (a 4000-file PDMX
+    sample + all 674 KernSheet files):
+  </p>
+  <table>
+    <thead><tr><th>corpus</th><th>duration tokens</th><th>in-table</th><th>off-table</th><th>breve <code>/0</code></th></tr></thead>
+    <tbody>
+      <tr><td>PDMX (4000-file sample)</td><td>1,329,788</td><td>99.58%</td><td><strong>0.17%</strong></td><td>0.25%</td></tr>
+      <tr><td>KernSheet (all)</td><td>1,185,564</td><td>99.45%</td><td><strong>0.55%</strong></td><td>0.003%</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Off-table durations (odd tuplets — <code>/11 /14 /9 /7</code> on PDMX, <code>/5 /20 /40 /36</code>
+    on KernSheet) are a fraction of a percent. Two OOV notions matter here, and both kill the
+    regression case:
+  </p>
+  <div class="rationale-grid">
+    <div class="rationale-card">
+      <h4>Table-OOV — a <em>shared</em> ceiling</h4>
+      <p>~0.2–0.5% of durations aren't representable by the 36-bin table at all. But the decode snaps
+      the regressed value onto that <em>same</em> table, so regression rounds <code>/11</code> to a
+      neighbour exactly as a classifier would. Neither head can emit it. No advantage.</p>
+    </div>
+    <div class="rationale-card">
+      <h4>Class-OOV — regression's claimed edge, ≈0</h4>
+      <p>"Land near a duration never seen as a class" requires data-derived classes. Our table is
+      <em>analytic</em>, so a 36-way softmax has identical reach by construction. There is no duration
+      regression can hit that the classifier can't, once both pass through the snap.</p>
+    </div>
+  </div>
+  <p>
+    So regression buys nothing on coverage, and it actively <em>misoptimises</em>: Huber minimises
+    log2-distance, which is blind to the snap-bin boundaries the metric actually cares about — you can
+    push error down in the wide-gap whole/half-note region with zero accuracy gain, while a near-miss
+    at a tight tuplet boundary flips the bin. Cross-entropy on the snapped bin optimises exactly the
+    decision being scored, which is where the real-scan duration deficit lives. (A hybrid — keep the
+    regressed scalar for the autoregressive feedback embedding, classify for the loss/decode — is the
+    fallback if pure CE loses the continuous feedback signal.)
+  </p>
+
+  <h3>Status / outcome</h3>
+  <p>
+    Split + regression-head pilot <strong>landed on main</strong> (codec, vocab collapse, head, loss,
+    eval recombine; <span class="tag">bartok-duration</span> / <span class="tag">bartok-duration-mixed</span>
+    trained, evaled, carded in <code>noter-training.html</code>). Verdict: pilot <em>validated</em> the
+    separate-head approach but is <em>not yet a win</em>. The classification-head switch is the next
+    step, targeting the real-scan duration gap directly; <span class="tag">bruckner-mixed</span> remains
+    the production transcriber until it beats it.
+  </p>
+</article>
+
 <!-- ── Cross-stave (system-level) transcription ── -->
 <article class="entry">
   <h2>Cross-stave transcription: decode a system's staves in lockstep with a gated cross-stave attention sublayer</h2>

@@ -1,9 +1,19 @@
 import math
 
 import pytest
+import torch
 
 from noter import Vocab
-from noter.duration import join_duration, snap_suffix, split_duration
+from noter.duration import (
+    NUM_DUR_BINS,
+    bin_boundaries,
+    bin_log2_lengths,
+    bin_to_suffix,
+    join_duration,
+    length_to_bin,
+    snap_suffix,
+    split_duration,
+)
 
 
 class TestSplitDuration:
@@ -56,6 +66,31 @@ class TestSnap:
     def test_clamps_beyond_table_ends(self) -> None:
         assert snap_suffix(-99.0) == "128"  # shortest in table
         assert snap_suffix(99.0) == "1:2"  # longest in table
+
+
+class TestBins:
+    def test_bin_count_matches_table(self) -> None:
+        assert NUM_DUR_BINS == len(bin_log2_lengths())
+        assert len(bin_boundaries()) == NUM_DUR_BINS - 1
+
+    @pytest.mark.parametrize("suffix", ["1", "2", "4", "8", "16", "4:1", "2:2", "12"])
+    def test_canonical_length_round_trips_through_bin(self, suffix: str) -> None:
+        _, log2_len = split_duration(f"C/{suffix}")
+        assert log2_len is not None
+        assert bin_to_suffix(length_to_bin(log2_len)) == suffix
+
+    def test_length_to_bin_agrees_with_snap_suffix(self) -> None:
+        for log2_len in (-9.0, -3.3, -2.0, -1.7, 0.0, 0.5, 9.0):
+            assert bin_to_suffix(length_to_bin(log2_len)) == snap_suffix(log2_len)
+
+    def test_bucketize_matches_length_to_bin(self) -> None:
+        # The loss bucketizes GT log2 lengths to bin labels with torch.bucketize
+        # against the same midpoints; it must match the scalar length_to_bin.
+        boundaries = torch.tensor(bin_boundaries())
+        values = torch.linspace(-10.0, 2.0, 200)
+        got = torch.bucketize(values, boundaries)
+        want = torch.tensor([length_to_bin(float(v)) for v in values])
+        assert torch.equal(got, want)
 
 
 class TestVocabPitchOnly:

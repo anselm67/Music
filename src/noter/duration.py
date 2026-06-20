@@ -1,14 +1,18 @@
 """Codec between a simplified token's `pitch/duration` text and a separate
 duration scalar.
 
-The noter/scorer decoder predicts duration as a regression head over
-``log2(note length)`` rather than baking it into the flat token vocab (so the
+The noter/scorer decoder predicts duration as a classification head over an
+analytic duration table (``NUM_DUR_BINS`` bins, derived from
+``log2(note length)``) rather than baking it into the flat token vocab (so the
 vocab carries pitch only). This module is the codec for that split:
 
 * :func:`split_duration` pulls the numeric duration off a note/rest token,
   returning ``(base_token, log2_length)``.
+* :func:`length_to_bin` / :func:`bin_to_suffix` map a ``log2_length`` to its
+  table bin index and back to a duration suffix; :func:`bin_boundaries` /
+  :func:`bin_log2_lengths` expose the table for the tensor-side loss/decode.
 * :func:`snap_suffix` / :func:`join_duration` quantise a predicted
-  ``log2_length`` back onto an analytic duration table and re-attach it.
+  ``log2_length`` back onto the table and re-attach it.
 
 The table is enumerated from ``(denominator, dots)`` combinations, NOT built
 from training counts, so a duration that is rare or unseen in training still
@@ -68,10 +72,13 @@ def _build_table() -> tuple[list[float], list[str]]:
 
 _TABLE_LOG2, _TABLE_SUFFIX = _build_table()
 
-# Half the tightest adjacent gap in the table (in log2 units): a predicted
-# log2(length) within this of the target snaps to the same duration token. Used
-# as a cheap "would snap correctly" proxy metric during training.
-SNAP_TOLERANCE = 0.5 * min(hi - lo for lo, hi in zip(_TABLE_LOG2, _TABLE_LOG2[1:]))
+# The duration head is a classifier over these bins (one per table entry).
+NUM_DUR_BINS = len(_TABLE_SUFFIX)
+
+# Midpoints between adjacent table entries (in log2 units): the decision
+# boundaries for snapping a length to its nearest bin. `length_to_bin` and the
+# loss-side `torch.bucketize` both round against these, so the two never drift.
+_BOUNDARIES = [0.5 * (lo + hi) for lo, hi in zip(_TABLE_LOG2, _TABLE_LOG2[1:])]
 
 
 def split_duration(token: str) -> tuple[str, float | None]:
@@ -97,15 +104,29 @@ def is_duration_bearing(base_token: str) -> bool:
     return _BASE_TOKEN_RE.match(base_token) is not None
 
 
+def length_to_bin(log2_length: float) -> int:
+    """Quantise a ``log2(length)`` to its nearest bin index (``0..NUM_DUR_BINS-1``)."""
+    return bisect.bisect_left(_BOUNDARIES, log2_length)
+
+
+def bin_to_suffix(bin_index: int) -> str:
+    """The duration suffix for a bin index."""
+    return _TABLE_SUFFIX[bin_index]
+
+
+def bin_boundaries() -> list[float]:
+    """The ``NUM_DUR_BINS-1`` log2 midpoints, for a tensor-side ``torch.bucketize``."""
+    return _BOUNDARIES
+
+
+def bin_log2_lengths() -> list[float]:
+    """Each bin's canonical ``log2(length)``, for the decode/feedback lookup."""
+    return _TABLE_LOG2
+
+
 def snap_suffix(log2_length: float) -> str:
     """Quantise a predicted ``log2(length)`` to the nearest table duration suffix."""
-    i = bisect.bisect_left(_TABLE_LOG2, log2_length)
-    if i == 0:
-        return _TABLE_SUFFIX[0]
-    if i >= len(_TABLE_LOG2):
-        return _TABLE_SUFFIX[-1]
-    below, above = _TABLE_LOG2[i - 1], _TABLE_LOG2[i]
-    return _TABLE_SUFFIX[i if (above - log2_length) < (log2_length - below) else i - 1]
+    return _TABLE_SUFFIX[length_to_bin(log2_length)]
 
 
 def join_duration(base_token: str, log2_length: float) -> str:
