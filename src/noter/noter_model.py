@@ -29,12 +29,12 @@ class NoterConfig:
     page_shape: list[int] = field(default_factory=lambda: StafferConfig().image_shape)
 
     input_shape: list[int] = field(default_factory=lambda: [64, 6 * 128])
-    max_chords: int = 8
+    max_chords: int = 8  # Also known as C
     max_seqlen: int = 128  # Also known as T
     # Staves per system — the cross-stave decode unit. A system's staves are
     # row-aligned (one shared barline grid), batched together and padded to this
     # width (a stave_mask marks the real ones). 2 covers the System2 corpus.
-    max_staves: int = 2
+    max_staves: int = 2  # Also known as S
     vocab_size: int = -1
     pad_idx: int = -1
 
@@ -53,7 +53,7 @@ class NoterConfig:
     dropout: float = 0.1
 
     # Training config.
-    batch_size: int = 16
+    batch_size: int = 16  # Also known as B
     train_len: int = -1
     valid_len: int = -1
     lr: float = 3e-4
@@ -144,22 +144,22 @@ class TargetEmbedder(nn.Module):
 
     def forward(
         self,
-        target: Tensor,  # (B, T, H) token ids
-        dur: Tensor | None = None,  # (B, T, H) log2 length
-        dur_mask: Tensor | None = None,  # (B, T, H) True where dur is present
+        target: Tensor,  # (B, T, C) token ids
+        dur: Tensor | None = None,  # (B, T, C) log2 length
+        dur_mask: Tensor | None = None,  # (B, T, C) True where dur is present
     ) -> Tensor:
-        embeds = self.embedding(target)  # (B, T, H, D)
+        embeds = self.embedding(target)  # (B, T, C, D)
         embeds = embeds + self.chord_pos_embed  # per-slot position signal
         if dur is not None:
             assert dur_mask is not None
             has = dur_mask.to(embeds.dtype)
-            dur_in = torch.stack([dur * has, has], dim=-1)  # (B, T, H, 2)
+            dur_in = torch.stack([dur * has, has], dim=-1)  # (B, T, C, 2)
             embeds = embeds + self.dur_proj(dur_in)
-        B, T, H, D = embeds.shape
+        B, T, C, D = embeds.shape
         assert T <= self.pos_embed.shape[0], (
             f"T={T} exceeds max_seqlen={self.pos_embed.shape[0]}"
         )
-        x = self.chord_proj(embeds.view(B, T, H * D))
+        x = self.chord_proj(embeds.view(B, T, C * D))
         return self.dropout(self.norm(x + self.pos_embed[:T]))
 
 
@@ -323,20 +323,20 @@ class NoterModel(nn.Module):
         """Decode a batch of systems → ``(logits, dur_logits)`` of shapes
         ``(B, S, T, max_chords, vocab_size)`` and
         ``(B, S, T, max_chords, NUM_DUR_BINS)``."""
-        bsz, staves, t, mc = target.shape
-        tgt_flat = target.reshape(bsz * staves, t, mc)
+        B, S, T, C = target.shape
+        tgt_flat = target.reshape(B * S, T, C)
         dur_flat = (
-            target_dur.reshape(bsz * staves, t, mc) if target_dur is not None else None
+            target_dur.reshape(B * S, T, C) if target_dur is not None else None
         )
         dmask_flat = (
-            target_dur_mask.reshape(bsz * staves, t, mc)
+            target_dur_mask.reshape(B * S, T, C)
             if target_dur_mask is not None
             else None
         )
         tgt_embeds = self.target_embedder(tgt_flat, dur_flat, dmask_flat)  # (B*S, T, D)
         tgt_kpm = (tgt_flat == self.config.pad_idx).all(dim=-1)  # (B*S, T)
-        xs_mask = self._cross_stave_mask(staves, t, target.device)
-        xs_kpm = (~stave_mask).unsqueeze(-1).expand(bsz, staves, t).reshape(bsz, -1)
+        xs_mask = self._cross_stave_mask(S, T, target.device)
+        xs_kpm = (~stave_mask).unsqueeze(-1).expand(B, S, T).reshape(B, -1)
         outs = self.decoder(
             tgt_embeds,
             memory,
@@ -345,11 +345,11 @@ class NoterModel(nn.Module):
             memory_pad_mask,
             xs_mask,
             xs_kpm,
-            bsz,
-            staves,
+            B,
+            S,
         )
-        logits = self.mlp(outs).view(bsz, staves, t, mc, -1)
-        dur_logits = self.dur_head(outs).view(bsz, staves, t, mc, NUM_DUR_BINS)
+        logits = self.mlp(outs).view(B, S, T, C, -1)
+        dur_logits = self.dur_head(outs).view(B, S, T, C, NUM_DUR_BINS)
         return logits, dur_logits
 
     def forward(
