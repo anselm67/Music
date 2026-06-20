@@ -86,3 +86,7 @@ class MixedSource:
     def records(self, id: str, first_bar: int, last_bar: int) -> list[str] | None:
         child, rest = self._route(id)
         return child.records(rest, first_bar, last_bar)
+
+    def spine_count(self, id: str) -> int:
+        child, rest = self._route(id)
+        return child.spine_count(rest)

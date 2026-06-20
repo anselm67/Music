@@ -49,3 +49,13 @@ class Source(Protocol):
     def records(self, id: str, first_bar: int, last_bar: int) -> list[str] | None:
         """Kern rows for the bar range, spines tab-separated; None if unavailable."""
         ...
+
+    def spine_count(self, id: str) -> int:
+        """Number of tab-separated token spines (columns) in the score's token file.
+
+        Well-formed data has one spine per staff; a score whose count exceeds a
+        system's staff count has a voiced staff (or more staves than the scan shows),
+        and the noter dataset would silently drop the extra spine — see the
+        ``spine_count`` guard in ``NoterDataset``.
+        """
+        ...

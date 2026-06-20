@@ -17,6 +17,12 @@ class KernReader:
     def bar_count(self) -> int:
         return len(self.bars)
 
+    @property
+    def spine_count(self) -> int:
+        """Number of token columns (the tokenizer drops **dynam etc., so this is the
+        count of musical spines = staves, unless a staff is voiced into >1 spine)."""
+        return self._get_spline_count()
+
     def __init__(self, path: Path):
         super().__init__()
         self.path = path

@@ -159,6 +159,34 @@ def _bar_count(score: Score, kern: KernReader | None) -> Iterator[Finding]:
         )
 
 
+# The noter dataset maps one token spine per staff, so a 2-staff scan needs exactly
+# two spines; more means a spine is silently dropped.
+SPINE_COUNT_MAX = 2
+
+
+@register("spine_count")
+def _spine_count(score: Score, kern: KernReader | None) -> Iterator[Finding]:
+    """The noter dataset routes one token spine per staff (``spine_numbers`` from the
+    system's staff count), so a token file with more spines than staves silently drops
+    the extra spine(s) — the staff then trains against a partial/wrong transcription.
+    It happens two ways: a voiced staff (two ``**kern`` spines sharing one printed
+    staff) or a krn that declares more staves than the 2-staff scan. Either way the
+    score isn't trainable as-is; flag it (reported on its first page) so it surfaces in
+    the review worklist instead of only at train time."""
+    if kern is None or not score.pages:
+        return
+    spines = kern.spine_count
+    if spines > SPINE_COUNT_MAX:
+        yield Finding(
+            "spine_count",
+            score.id,
+            score.pages[0].page_number,
+            f"token file has {spines} spines (> {SPINE_COUNT_MAX}); the noter dataset "
+            f"maps one spine per staff and drops the rest (voiced staff, or a krn with "
+            f"more staves than the 2-staff scan)",
+        )
+
+
 def _needs_attention(page: Page, review: str) -> bool:
     """A finding needs human attention unless the page is already rejected
     (excluded anyway) or a human has acknowledged this review on it."""

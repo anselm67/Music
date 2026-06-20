@@ -122,6 +122,16 @@ class NoterDataset(Dataset):
         self.items = []
         target_h, target_w = config.page_shape
         for score in tqdm(source.scores(), desc="Loading noter dataset"):
+            # One spine per staff is the contract. A token file with more spines than
+            # a system has staves (a voiced staff, or a krn declaring more staves than
+            # the scan shows) would have its extra spine(s) silently dropped by the
+            # spine_numbers routing below — training the staff against a partial
+            # transcription. Read the per-score count once and skip those systems.
+            try:
+                spine_count = source.spine_count(score.id)
+            except Exception as e:
+                logging.error(f"{score.id}: cannot read spine count ({e}), skipping")
+                continue
             for page in source.pages(score.id):
                 # Letterbox the boxes by the same single scale the image transform
                 # uses, so crop coords land on the (aspect-preserved) staff.
@@ -144,6 +154,13 @@ class NoterDataset(Dataset):
                                 f"({system.staff_count} vs {self.config.max_staves})"
                             )
                             continue
+                    if spine_count > system.staff_count:
+                        logging.error(
+                            f"{score.id}: token file has {spine_count} spines but "
+                            f"system has {system.staff_count} staves; skipping "
+                            f"(extra spine(s) dropped — see spine_count review)"
+                        )
+                        continue
                     if not system.bar_numbers:
                         logging.error(
                             f"{score.id}: system with no bar numbers, skipping"

@@ -38,6 +38,9 @@ class FakeSource:
     def records(self, id: str, first_bar: int, last_bar: int) -> list[str] | None:
         return [f"{self.tag}:{id}:{first_bar}:{last_bar}"]
 
+    def spine_count(self, id: str) -> int:
+        return len(id)
+
 
 def _heads(scores: list[Score]) -> Counter[str]:
     return Counter(s.id.split(MixedSource.SEP, 1)[0] for s in scores)
@@ -72,6 +75,13 @@ def test_records_route_and_strip_prefix() -> None:
     mixed = MixedSource(FakeSource("pdmx", 2), FakeSource("ks", 2), mix=0.5)
     assert mixed.records("0::pdmx-1", 3, 4) == ["pdmx:pdmx-1:3:4"]
     assert mixed.records("1::ks-0", 5, 6) == ["ks:ks-0:5:6"]
+
+
+def test_spine_count_routes_and_strips_prefix() -> None:
+    mixed = MixedSource(FakeSource("pdmx", 2), FakeSource("ks", 2), mix=0.5)
+    # FakeSource.spine_count returns len(stripped id), proving the prefix is removed.
+    assert mixed.spine_count("0::pdmx-1") == len("pdmx-1")
+    assert mixed.spine_count("1::ks-0") == len("ks-0")
 
 
 def test_image_path_routes_to_owning_child() -> None:
