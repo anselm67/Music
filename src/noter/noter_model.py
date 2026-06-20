@@ -153,8 +153,8 @@ class TargetEmbedder(nn.Module):
         if duration is not None:
             assert duration_mask is not None
             has = duration_mask.to(embeds.dtype)
-            dur_in = torch.stack([duration * has, has], dim=-1)  # (B, T, C, 2)
-            embeds = embeds + self.dur_proj(dur_in)
+            duration_in = torch.stack([duration * has, has], dim=-1)  # (B, T, C, 2)
+            embeds = embeds + self.dur_proj(duration_in)
         B, T, C, D = embeds.shape
         assert T <= self.pos_embed.shape[0], (
             f"T={T} exceeds max_seqlen={self.pos_embed.shape[0]}"
@@ -207,20 +207,25 @@ class CrossStaveDecoderLayer(nn.Module):
         self,
         x: Tensor,  # (B*S, T, D)
         memory: Tensor,  # (B*S, P, D)
-        tgt_mask: Tensor,  # (T, T) causal
-        tgt_kpm: Tensor,  # (B*S, T)
-        mem_kpm: Tensor,  # (B*S, P)
+        target_mask: Tensor,  # (T, T) causal
+        target_key_pad_mask: Tensor,  # (B*S, T)
+        memory_key_pad_mask: Tensor,  # (B*S, P)
         xs_mask: Tensor,  # (S*T, S*T) cross-stave time-causal
-        xs_kpm: Tensor,  # (B, S*T) — True on padded staves
+        xs_key_pad_mask: Tensor,  # (B, S*T) — True on padded staves
         B: int,
         S: int,
     ) -> Tensor:
         a = self.self_attn(
-            x, x, x, attn_mask=tgt_mask, key_padding_mask=tgt_kpm, need_weights=False
+            x,
+            x,
+            x,
+            attn_mask=target_mask,
+            key_padding_mask=target_key_pad_mask,
+            need_weights=False,
         )[0]
         x = self.norm1(x + self.dropout1(a))
         a = self.multihead_attn(
-            x, memory, memory, key_padding_mask=mem_kpm, need_weights=False
+            x, memory, memory, key_padding_mask=memory_key_pad_mask, need_weights=False
         )[0]
         x = self.norm2(x + self.dropout2(a))
         # Cross-stave: couple a system's staves along the (shared) row axis.
@@ -228,7 +233,12 @@ class CrossStaveDecoderLayer(nn.Module):
         xq = x.view(B, S, T, D).reshape(B, S * T, D)
         h = self.norm_xs(xq)
         a = self.cross_stave_attn(
-            h, h, h, attn_mask=xs_mask, key_padding_mask=xs_kpm, need_weights=False
+            h,
+            h,
+            h,
+            attn_mask=xs_mask,
+            key_padding_mask=xs_key_pad_mask,
+            need_weights=False,
         )[0]
         xq = xq + self.xs_gate * self.dropout_xs(a)
         x = xq.view(B, S, T, D).reshape(B * S, T, D)
@@ -328,25 +338,31 @@ class NoterModel(nn.Module):
         ``(B, S, T, max_chords, vocab_size)`` and
         ``(B, S, T, max_chords, NUM_DUR_BINS)``."""
         B, S, T, C = target.shape
-        tgt_flat = target.reshape(B * S, T, C)
-        dur_flat = target_dur.reshape(B * S, T, C) if target_dur is not None else None
-        dmask_flat = (
+        target_flat = target.reshape(B * S, T, C)
+        duration_flat = (
+            target_dur.reshape(B * S, T, C) if target_dur is not None else None
+        )
+        duration_mask_flat = (
             target_dur_mask.reshape(B * S, T, C)
             if target_dur_mask is not None
             else None
         )
-        tgt_embeds = self.target_embedder(tgt_flat, dur_flat, dmask_flat)  # (B*S, T, D)
-        tgt_kpm = (tgt_flat == self.config.pad_idx).all(dim=-1)  # (B*S, T)
+        target_embeds = self.target_embedder(
+            target_flat, duration_flat, duration_mask_flat
+        )  # (B*S, T, D)
+        target_key_pad_mask = (target_flat == self.config.pad_idx).all(
+            dim=-1
+        )  # (B*S, T)
         xs_mask = self._cross_stave_mask(S, T, target.device)
-        xs_kpm = (~stave_mask).unsqueeze(-1).expand(B, S, T).reshape(B, -1)
+        xs_key_pad_mask = (~stave_mask).unsqueeze(-1).expand(B, S, T).reshape(B, -1)
         outs = self.decoder(
-            tgt_embeds,
+            target_embeds,
             memory,
             target_mask,
-            tgt_kpm,
+            target_key_pad_mask,
             memory_pad_mask,
             xs_mask,
-            xs_kpm,
+            xs_key_pad_mask,
             B,
             S,
         )
@@ -366,11 +382,11 @@ class NoterModel(nn.Module):
     ) -> tuple[Tensor, Tensor]:
         B, S = source.shape[:2]
         flat_src = source.reshape(B * S, *source.shape[2:])
-        memory, mem_pad = self.encode(flat_src, source_widths.reshape(B * S))
+        memory, memory_pad_mask = self.encode(flat_src, source_widths.reshape(B * S))
         return self.decode(
             target,
             memory,
-            mem_pad,
+            memory_pad_mask,
             stave_mask,
             target_mask,
             target_dur,
