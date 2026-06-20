@@ -9,13 +9,13 @@ under ``layout/``, derived tokens/png under ``build/``).
 import logging
 import sys
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import click
 
 from kern import KernReader
-from kernsheet import KernSheet, review_names, score_findings
+from kernsheet import KernScore, KernSheet, review_names, score_findings
 from kernsheet.reviews import Finding
 from utils import log_uncaught_exceptions, print_histogram
 
@@ -218,44 +218,56 @@ def edit(
 def detect(ctx: ClickContext, prefix: str, write: bool, width: int) -> None:
     """Generate a layout via ClassicalStaffer for every catalog score that has none.
 
-    Runs the cv2 projection-profile detector on each PDF and writes an UN-validated
-    Score under layout/ for review in the editor. Only scores with no existing layout
-    (and a usable pdf + write target) are touched; pass PREFIX to restrict to entries
-    whose key starts with it. Dry-run by default; pass -w to write.
+    Runs the cv2 projection-profile detector once per source PDF (a PDF shared by
+    several entries — an all-in-one edition — is detected once and the layout cloned
+    to each score) and writes an UN-validated Score under layout/ for review in the
+    editor. Only scores with no existing layout (and a usable pdf + write target) are
+    touched; pass PREFIX to restrict to entries whose key starts with it. Dry-run by
+    default; pass -w to write.
     """
     from kernsheet import ClassicalStaffer
 
     ks = ctx.kern_sheet
     staffer = ClassicalStaffer(width=width)
-    todo = [
-        (key, score)
-        for key, entry in ks.catalog.entries.items()
-        for score in entry.scores
-        if (not prefix or key.startswith(prefix))
-        and not ks.layout_path(score).is_file()
-        and score.json_path
-        and score.pdf_path
-        and ks.pdf_path(score).is_file()
-    ]
+    # Group layout-less scores by source pdf: a pdf shared by many entries yields
+    # identical geometry for every score, so detect it once and clone the result
+    # (only the embedded id differs) instead of re-running detection per score.
+    todo: dict[Path, list[KernScore]] = {}
+    for key, entry in ks.catalog.entries.items():
+        for score in entry.scores:
+            if (
+                (not prefix or key.startswith(prefix))
+                and not ks.layout_path(score).is_file()
+                and score.json_path
+                and score.pdf_path
+                and ks.pdf_path(score).is_file()
+            ):
+                todo.setdefault(ks.pdf_path(score), []).append(score)
+    candidates = sum(len(scores) for scores in todo.values())
     ok = failed = 0
-    for _, score in todo:
+    for pdf_path, scores in todo.items():
         try:
-            result = staffer.detect(ks.pdf_path(score), score.id)
+            base = staffer.detect(pdf_path, scores[0].id)
+        except Exception as e:
+            failed += len(scores)
+            logging.error(f"detect {pdf_path}: {e}")
+            continue
+        for i, score in enumerate(scores):
+            result = base if i == 0 else replace(base, id=score.id)
             print(
                 f"  {score.id}: {result.page_count}p "
                 f"{result.system_count}sys {result.staff_count}staves"
+                + (" (shared pdf)" if i else "")
                 + ("" if write else " (dry-run)")
             )
             if write:
                 ks.save_score(score.id, result)
-                ks.rebuild_images(score, result)
-        except Exception as e:
-            failed += 1
-            logging.error(f"detect {score.id}: {e}")
-            continue
-        ok += 1
+            ok += 1
+        # png paths are keyed by pdf stem + page, so a shared pdf renders once.
+        if write:
+            ks.rebuild_images(scores[0], base)
     verb = "written" if write else "detected (dry-run; pass -w to write)"
-    print(f"\n{ok} score(s) {verb}, {failed} failed, of {len(todo)} candidate(s).")
+    print(f"\n{ok} score(s) {verb}, {failed} failed, of {candidates} candidate(s).")
 
 
 @click.command()
