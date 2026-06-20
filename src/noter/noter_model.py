@@ -145,15 +145,15 @@ class TargetEmbedder(nn.Module):
     def forward(
         self,
         target: Tensor,  # (B, T, C) token ids
-        dur: Tensor | None = None,  # (B, T, C) log2 length
-        dur_mask: Tensor | None = None,  # (B, T, C) True where dur is present
+        duration: Tensor | None = None,  # (B, T, C) log2 length
+        duration_mask: Tensor | None = None,  # (B, T, C) True where duration present
     ) -> Tensor:
         embeds = self.embedding(target)  # (B, T, C, D)
         embeds = embeds + self.chord_pos_embed  # per-slot position signal
-        if dur is not None:
-            assert dur_mask is not None
-            has = dur_mask.to(embeds.dtype)
-            dur_in = torch.stack([dur * has, has], dim=-1)  # (B, T, C, 2)
+        if duration is not None:
+            assert duration_mask is not None
+            has = duration_mask.to(embeds.dtype)
+            dur_in = torch.stack([duration * has, has], dim=-1)  # (B, T, C, 2)
             embeds = embeds + self.dur_proj(dur_in)
         B, T, C, D = embeds.shape
         assert T <= self.pos_embed.shape[0], (
@@ -178,23 +178,29 @@ class CrossStaveDecoderLayer(nn.Module):
 
     def __init__(self, config: NoterConfig) -> None:
         super().__init__()
-        d, h, p = config.embed_dim, config.num_head, config.dropout
+        D, num_head, dropout = config.embed_dim, config.num_head, config.dropout
         # --- standard decoder sublayers (names match nn.TransformerDecoderLayer) ---
-        self.self_attn = nn.MultiheadAttention(d, h, dropout=p, batch_first=True)
-        self.multihead_attn = nn.MultiheadAttention(d, h, dropout=p, batch_first=True)
-        self.linear1 = nn.Linear(d, config.mlp_dim)
-        self.linear2 = nn.Linear(config.mlp_dim, d)
-        self.norm1 = nn.LayerNorm(d)
-        self.norm2 = nn.LayerNorm(d)
-        self.norm3 = nn.LayerNorm(d)
-        self.dropout = nn.Dropout(p)
-        self.dropout1 = nn.Dropout(p)
-        self.dropout2 = nn.Dropout(p)
-        self.dropout3 = nn.Dropout(p)
+        self.self_attn = nn.MultiheadAttention(
+            D, num_head, dropout=dropout, batch_first=True
+        )
+        self.multihead_attn = nn.MultiheadAttention(
+            D, num_head, dropout=dropout, batch_first=True
+        )
+        self.linear1 = nn.Linear(D, config.mlp_dim)
+        self.linear2 = nn.Linear(config.mlp_dim, D)
+        self.norm1 = nn.LayerNorm(D)
+        self.norm2 = nn.LayerNorm(D)
+        self.norm3 = nn.LayerNorm(D)
+        self.dropout = nn.Dropout(dropout)
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+        self.dropout3 = nn.Dropout(dropout)
         # --- new: gated cross-stave attention branch (identity at init) ---
-        self.cross_stave_attn = nn.MultiheadAttention(d, h, dropout=p, batch_first=True)
-        self.norm_xs = nn.LayerNorm(d)
-        self.dropout_xs = nn.Dropout(p)
+        self.cross_stave_attn = nn.MultiheadAttention(
+            D, num_head, dropout=dropout, batch_first=True
+        )
+        self.norm_xs = nn.LayerNorm(D)
+        self.dropout_xs = nn.Dropout(dropout)
         self.xs_gate = nn.Parameter(torch.zeros(1))
 
     def forward(
@@ -206,8 +212,8 @@ class CrossStaveDecoderLayer(nn.Module):
         mem_kpm: Tensor,  # (B*S, P)
         xs_mask: Tensor,  # (S*T, S*T) cross-stave time-causal
         xs_kpm: Tensor,  # (B, S*T) — True on padded staves
-        bsz: int,
-        staves: int,
+        B: int,
+        S: int,
     ) -> Tensor:
         a = self.self_attn(
             x, x, x, attn_mask=tgt_mask, key_padding_mask=tgt_kpm, need_weights=False
@@ -218,14 +224,14 @@ class CrossStaveDecoderLayer(nn.Module):
         )[0]
         x = self.norm2(x + self.dropout2(a))
         # Cross-stave: couple a system's staves along the (shared) row axis.
-        t, d = x.shape[1], x.shape[2]
-        xq = x.view(bsz, staves, t, d).reshape(bsz, staves * t, d)
+        T, D = x.shape[1], x.shape[2]
+        xq = x.view(B, S, T, D).reshape(B, S * T, D)
         h = self.norm_xs(xq)
         a = self.cross_stave_attn(
             h, h, h, attn_mask=xs_mask, key_padding_mask=xs_kpm, need_weights=False
         )[0]
         xq = xq + self.xs_gate * self.dropout_xs(a)
-        x = xq.view(bsz, staves, t, d).reshape(bsz * staves, t, d)
+        x = xq.view(B, S, T, D).reshape(B * S, T, D)
         a = self.linear2(self.dropout(F.relu(self.linear1(x))))
         return self.norm3(x + self.dropout3(a))
 
@@ -293,13 +299,11 @@ class NoterModel(nn.Module):
             col_mask.unsqueeze(1).expand(-1, num_patches_h, -1).reshape(len(widths), -1)
         )
 
-    def _cross_stave_mask(
-        self, staves: int, seqlen: int, device: torch.device
-    ) -> Tensor:
+    def _cross_stave_mask(self, S: int, T: int, device: torch.device) -> Tensor:
         """``(S*T, S*T)`` bool, True where disallowed: query ``(i, t)`` may attend
         key ``(j, s)`` for any staff pair iff ``s <= t`` — causal in the shared row
         clock, free across staves."""
-        times = torch.arange(seqlen, device=device).repeat(staves)  # (S*T,)
+        times = torch.arange(T, device=device).repeat(S)  # (S*T,)
         return times.unsqueeze(0) > times.unsqueeze(1)  # [query, key]: key_t > query_t
 
     def encode(self, source: Tensor, source_widths: Tensor) -> tuple[Tensor, Tensor]:
@@ -318,16 +322,14 @@ class NoterModel(nn.Module):
         stave_mask: Tensor,  # (B, S) — True on real staves
         target_mask: Tensor,  # (T, T) causal
         target_dur: Tensor | None = None,  # (B, S, T, max_chords) log2 length
-        target_dur_mask: Tensor | None = None,  # (B, S, T, max_chords) dur present
+        target_dur_mask: Tensor | None = None,  # (B, S, T, max_chords) duration present
     ) -> tuple[Tensor, Tensor]:
         """Decode a batch of systems → ``(logits, dur_logits)`` of shapes
         ``(B, S, T, max_chords, vocab_size)`` and
         ``(B, S, T, max_chords, NUM_DUR_BINS)``."""
         B, S, T, C = target.shape
         tgt_flat = target.reshape(B * S, T, C)
-        dur_flat = (
-            target_dur.reshape(B * S, T, C) if target_dur is not None else None
-        )
+        dur_flat = target_dur.reshape(B * S, T, C) if target_dur is not None else None
         dmask_flat = (
             target_dur_mask.reshape(B * S, T, C)
             if target_dur_mask is not None
@@ -362,9 +364,9 @@ class NoterModel(nn.Module):
         target_dur: Tensor | None = None,  # (B, S, T, max_chords)
         target_dur_mask: Tensor | None = None,  # (B, S, T, max_chords)
     ) -> tuple[Tensor, Tensor]:
-        bsz, staves = source.shape[:2]
-        flat_src = source.reshape(bsz * staves, *source.shape[2:])
-        memory, mem_pad = self.encode(flat_src, source_widths.reshape(bsz * staves))
+        B, S = source.shape[:2]
+        flat_src = source.reshape(B * S, *source.shape[2:])
+        memory, mem_pad = self.encode(flat_src, source_widths.reshape(B * S))
         return self.decode(
             target,
             memory,
