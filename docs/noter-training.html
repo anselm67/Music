@@ -252,6 +252,12 @@
         <td><strong>Duration-head pilot</strong> — duration pulled out of the flat token into a separate regression head over <code>log2(length)</code>; <strong>pitch-only vocab</strong> (489 / KS-combined 552, ~10&times; smaller). Free-running <strong>PDMX 98.3%</strong> full pitch/dur (98.7% pitch-only; dur snap-acc 0.94) &mdash; splitting duration out doesn't degrade transcription. &dagger;val acc/loss are pitch-only + duration-regression, NOT comparable to the pitch&times;dur rows above</td>
         <td><span class="badge badge-slate">base · duration-head pilot</span></td>
       </tr>
+      <tr>
+        <td><a class="run-link" href="#run-bartok-duration-mixed"><span class="tag">bartok-duration-mixed</span></a></td><td>2026-06-20</td><td>12</td>
+        <td>98.89%*&dagger;</td><td>0.0607*&dagger;</td>
+        <td>Rehearsal mix on the <span class="tag">bartok-duration</span> base — like-for-like vs <span class="tag">bartok-mixed</span>. Free-running <strong>PDMX 97.2% / KS 94.3%</strong> full pitch/dur (pitch-only 97.8% / 96.3%): <strong>pitch at parity</strong>, but the duration head trails the baked-in token by &minus;0.6/&minus;1.6 pp, the cost concentrated in real-scan KS duration (full vs pitch-only 2.0 pp on KS). *blended stream &dagger;pitch-only acc</td>
+        <td><span class="badge badge-slate">pilot · not yet a win</span></td>
+      </tr>
     </tbody>
   </table>
 
@@ -827,9 +833,9 @@
   <!-- ════════════════════════════════════════════ bartok-duration -->
   <div class="session">
     <div class="session-header">
-      <h2 id="run-bartok-duration"><span class="tag">bartok-duration</span> — duration-head pilot</h2>
-      <span class="session-meta">2026-06-19 · tag <code>train/bartok-duration</code> · 12 ep · the <span class="tag">bartok</span> recipe with duration split out of the token</span>
-      <span class="badge badge-slate">base · duration-head pilot</span>
+      <h2 id="run-bartok-duration"><span class="tag">bartok-duration</span> / <span id="run-bartok-duration-mixed" class="tag">bartok-duration-mixed</span> — duration-head pilot</h2>
+      <span class="session-meta">2026-06-19/20 · tags <code>train/bartok-duration</code> · <code>train/bartok-duration-mixed</code> · 12 ep each · the <span class="tag">bartok</span>/<span class="tag">bartok-mixed</span> recipe with duration split out of the token</span>
+      <span class="badge badge-slate">pilot · validated, not yet a win</span>
     </div>
     <p><strong>First model with duration predicted as a separate head rather than baked into the token.</strong> The flat vocab drops duration (<code>C/4</code> → pitch token <code>C</code> + a parallel <code>log2(length)</code> scalar), collapsing the pitch&times;duration vocab ~10&times; (KS-combined 5,492 → <strong>552</strong>); a zero-init duration-<em>regression</em> head on the decoder predicts each note's length, snapped back onto an analytic duration table at decode (<code>noter.duration</code>). Same cross-stave architecture and <span class="tag">bartok</span> recipe otherwise (<code>--vocab</code> KS-combined, <code>--jitter 0.5</code>, 12 ep, PDMX base). A regression head (vs classification) was chosen so the model can resolve durations rare or unseen in training rather than being capped to a fixed class set.</p>
     <table class="summary-table">
@@ -841,7 +847,16 @@
       </tbody>
     </table>
     <p style="font-size:0.78rem;color:var(--muted)">Free-running = <code>noter eval --vocab &lt;KS&gt;/build/vocab.json --size 1024 bartok-duration</code> (greedy, lockstep), eval'd 2026-06-19. The full pitch/dur sequence is rebuilt by snapping the head's <code>log2(length)</code> onto the duration table and re-joining (<code>C</code> + <code>-2.0</code> → <code>C/4</code>); both prediction and GT canonicalise through the same table, so the dotted-triplet <code>6:1</code> == plain <code>4</code> collision can't score as an error. Teacher-forced val 99.77% pitch acc / 0.0049 combined loss (epoch 11) — pitch-only, NOT comparable to the pitch&times;dur val of the rows above.</p>
-    <div class="result-box neutral"><strong>Splitting duration into a regression head doesn't hurt transcription.</strong> Full pitch/dur similarity (98.3%) sits only ~0.4 pp below pitch-only (98.7%) — the head recovers note values almost perfectly — and pitch is at parity with the <span class="tag">bartok</span> lineage. Not a clean head-to-head win: this is a PDMX-only base, so on PDMX it should lead the rehearsal-mixed <span class="tag">bartok-mixed</span> (97.8%) regardless of the duration change. Next: a rehearsal-mixed <span class="tag">bartok-duration-mixed</span> for the KS-domain number and a like-for-like comparison.</div>
+    <p style="font-size:0.78rem;color:var(--muted)">The PDMX base above isn't a clean head-to-head (PDMX-only, so it should lead the rehearsal-mixed <span class="tag">bartok-mixed</span> on PDMX regardless). The like-for-like is the rehearsal-mixed FT below.</p>
+    <table class="summary-table">
+      <thead><tr><th>Free-running <code>eval --size 1024</code>, by domain</th><th><span class="tag">bartok-mixed</span> (pitch&times;dur token)</th><th><span class="tag">bartok-duration-mixed</span> full</th><th>pitch-only</th></tr></thead>
+      <tbody>
+        <tr><td>PDMX</td><td>97.8%</td><td><strong>97.2%</strong> <span style="color:var(--muted)">(−0.6)</span></td><td>97.8%</td></tr>
+        <tr><td>KernSheet</td><td>95.9%</td><td><strong>94.3%</strong> <span style="color:var(--muted)">(−1.6)</span></td><td>96.3%</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)"><span class="tag">bartok-duration-mixed</span> = rehearsal FT (<code>--init-from bartok-duration --kern-sheet … 0.67 --lr 1e-4 -e 12</code>), eval'd 2026-06-20. Full = recombined pitch/dur (comparable to <span class="tag">bartok-mixed</span>'s pitch&times;dur token); pitch-only isolates duration error. Blended-stream teacher-forced val 98.89% pitch / dur_acc 0.766.</p>
+    <div class="result-box neutral"><strong>The regression head reaches pitch parity but trails the baked-in token on full pitch/dur — and the gap is real-scan duration.</strong> Pitch-only matches <span class="tag">bartok-mixed</span> on PDMX (97.8) and beats it on KS (96.3 vs 95.9), so the split doesn't cost pitch. But full pitch/dur lands behind (PDMX 97.2 vs 97.8, KS 94.3 vs 95.9): the duration cost is near-free on clean PDMX (full vs pitch-only −0.6 pp) yet <strong>2.0 pp on KernSheet</strong>, where noisy scan geometry makes <code>log2(length)</code> regression hard (blended val dur_acc 0.77 vs the clean-PDMX base's 0.94). The pilot is validated — duration <em>can</em> be a separate continuous head without hurting pitch — but to beat the combinatorial token it needs a stronger duration signal on real scans (parked: exact-snap <code>dur_acc</code>, <code>dur_loss_weight</code> tuning). <span class="tag">bruckner-mixed</span> remains the production noter.</div>
   </div>
 
 </main>
