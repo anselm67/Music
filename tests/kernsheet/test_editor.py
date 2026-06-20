@@ -57,11 +57,13 @@ class _FakeKern:
         first_bar: int = 1,
         bar_zero: bool = False,
         text: list[str] | None = None,
+        spine_count: int = 2,
     ) -> None:
         self.bar_count = bar_count
         self.first_bar = first_bar
         self._bar_zero = bar_zero
         self._text = text
+        self.spine_count = spine_count
 
     def has_bar_zero(self) -> bool:
         return self._bar_zero
