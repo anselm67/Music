@@ -88,3 +88,16 @@ def test_records_reads_tokens(tmp_path: Path) -> None:
     reader_cls.assert_called_once_with(tokens)
     reader_cls.return_value.get_text.assert_called_once_with(1, 2)
     assert out == ["=1", "C/4\tC/4"]
+
+
+def test_spine_count_reads_tokens(tmp_path: Path) -> None:
+    pdmx = _make_pdmx(tmp_path)
+    src = PdmxSource(pdmx)
+
+    with patch("pdmx.pdmx_source.KernReader") as reader_cls:
+        reader_cls.return_value = MagicMock(spine_count=3)
+        out = src.spine_count("mxl/a/b/x.mxl")
+
+    tokens = pdmx.get_path(pdmx.home / "mxl/a/b/x.mxl", "tokens")
+    reader_cls.assert_called_once_with(tokens)
+    assert out == 3

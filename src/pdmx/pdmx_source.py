@@ -60,3 +60,7 @@ class PdmxSource:
     def records(self, id: str, first_bar: int, last_bar: int) -> list[str] | None:
         tokens_file = self.pdmx.get_path(self.pdmx.home / id, "tokens")
         return KernReader(tokens_file).get_text(first_bar, last_bar)
+
+    def spine_count(self, id: str) -> int:
+        tokens_file = self.pdmx.get_path(self.pdmx.home / id, "tokens")
+        return KernReader(tokens_file).spine_count

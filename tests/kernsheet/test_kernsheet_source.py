@@ -137,6 +137,22 @@ def test_records_keyed_by_entry_not_edition(tmp_path: Path) -> None:
     assert out == ["=1", "C/4\tC/4"]
 
 
+def test_spine_count_keyed_by_entry_not_edition(tmp_path: Path) -> None:
+    _catalog(
+        tmp_path,
+        {"a/b/work": _entry(_score("a/b/work-1.json", "a/b/work-1.pdf"))},
+    )
+    src = KernSheetSource(KernSheet(tmp_path))
+
+    with patch("kernsheet.kernsheet.KernReader") as reader_cls:
+        reader_cls.return_value = MagicMock(spine_count=3)
+        out = src.spine_count("a/b/work-1")
+
+    tokens = tmp_path / "build" / "tokens" / "a/b/work.tokens"
+    reader_cls.assert_called_once_with(tokens)
+    assert out == 3
+
+
 def test_make_renders_pages_into_annotation_space(tmp_path: Path) -> None:
     _catalog(
         tmp_path,

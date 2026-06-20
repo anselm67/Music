@@ -44,3 +44,6 @@ class KernSheetSource:
 
     def records(self, id: str, first_bar: int, last_bar: int) -> list[str] | None:
         return self.kern_sheet.load_tokens(id).get_text(first_bar, last_bar)
+
+    def spine_count(self, id: str) -> int:
+        return self.kern_sheet.load_tokens(id).spine_count

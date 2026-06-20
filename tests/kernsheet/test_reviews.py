@@ -134,15 +134,22 @@ class TestBarDrift:
 
 
 class _Kern(KernReader):
-    """A KernReader with a fixed bar total, bypassing the token-file load."""
+    """A KernReader with a fixed bar/spine total, bypassing the token-file load."""
 
-    def __init__(self, bar_count: int, *, bar_zero: bool = False) -> None:
+    def __init__(
+        self, bar_count: int, *, bar_zero: bool = False, spine_count: int = 2
+    ) -> None:
         self._bar_count = bar_count
         self._bar_zero = bar_zero
+        self._spine_count = spine_count
 
     @property
     def bar_count(self) -> int:
         return self._bar_count
+
+    @property
+    def spine_count(self) -> int:
+        return self._spine_count
 
     def has_bar_zero(self) -> bool:
         return self._bar_zero
@@ -180,6 +187,25 @@ class TestBarCount:
     def test_empty_kern_skips(self) -> None:
         score = _score(_page([50, 50]))
         assert score_findings(score, names=["bar_count"], kern=_Kern(0)) == []
+
+
+class TestSpineCount:
+    def test_two_spines_no_finding(self) -> None:
+        score = _score(_page([50, 50]))
+        assert score_findings(score, names=["spine_count"], kern=_Kern(1)) == []
+
+    def test_extra_spine_flags_first_page(self) -> None:
+        score = _score(_page([50, 50]))
+        findings = score_findings(
+            score, names=["spine_count"], kern=_Kern(1, spine_count=3)
+        )
+        assert [f.review for f in findings] == ["spine_count"]
+        assert findings[0].page_number == 1
+        assert findings[0].score_id == "x"
+        assert "3 spines" in findings[0].message
+
+    def test_no_kern_skips(self) -> None:
+        assert score_findings(_score(_page([50, 50])), names=["spine_count"]) == []
 
 
 class TestSuppression:
