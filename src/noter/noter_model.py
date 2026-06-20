@@ -10,7 +10,7 @@ from torchvision.transforms import InterpolationMode
 from staffer import StafferConfig
 from utils import current_commit
 
-from .duration import NUM_DUR_BINS
+from .duration import NUM_DUR_BINS, bin_boundaries
 from .noter_vocab import Vocab
 
 
@@ -116,6 +116,8 @@ class SourceEmbedding(nn.Module):
 
 
 class TargetEmbedder(nn.Module):
+    _duration_boundaries: Tensor
+
     def __init__(self, config: NoterConfig) -> None:
         super().__init__()
         self.embedding = nn.Embedding(
@@ -132,13 +134,18 @@ class TargetEmbedder(nn.Module):
         self.pos_embed = nn.Parameter(
             0.02 * torch.randn(config.max_seqlen, config.embed_dim)
         )
-        # Per-slot duration injected on the input side: [log2(length)·has, has].
-        # The duration left the token (pitch-only vocab), so this is how a slot's
-        # note value reaches the decoder. Zero-init so it contributes nothing at
-        # the start of training and the token path is unperturbed.
-        self.dur_proj = nn.Linear(2, config.embed_dim)
-        nn.init.zeros_(self.dur_proj.weight)
-        nn.init.zeros_(self.dur_proj.bias)
+        # Per-slot duration injected on the input side as a learned bin embedding,
+        # mirroring the now-discrete (classification) duration head. The duration
+        # left the token (pitch-only vocab), so this is how a slot's note value
+        # reaches the decoder. The incoming log2 length is bucketized to its table
+        # bin; slots that carry no duration use the extra `NUM_DUR_BINS` padding row
+        # (also the zero-init that keeps the token path unperturbed at the start of
+        # training). The whole table is zero-init for that same identity-at-init.
+        self.dur_embedding = nn.Embedding(
+            NUM_DUR_BINS + 1, config.embed_dim, padding_idx=NUM_DUR_BINS
+        )
+        nn.init.zeros_(self.dur_embedding.weight)
+        self.register_buffer("_duration_boundaries", torch.tensor(bin_boundaries()))
         self.norm = nn.LayerNorm(config.embed_dim)
         self.dropout = nn.Dropout(config.dropout)
 
@@ -152,9 +159,9 @@ class TargetEmbedder(nn.Module):
         embeds = embeds + self.chord_pos_embed  # per-slot position signal
         if duration is not None:
             assert duration_mask is not None
-            has = duration_mask.to(embeds.dtype)
-            duration_in = torch.stack([duration * has, has], dim=-1)  # (B, T, C, 2)
-            embeds = embeds + self.dur_proj(duration_in)
+            bins = torch.bucketize(duration.contiguous(), self._duration_boundaries)
+            bins = bins.masked_fill(~duration_mask, NUM_DUR_BINS)  # (B, T, C)
+            embeds = embeds + self.dur_embedding(bins)
         B, T, C, D = embeds.shape
         assert T <= self.pos_embed.shape[0], (
             f"T={T} exceeds max_seqlen={self.pos_embed.shape[0]}"

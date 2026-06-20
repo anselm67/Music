@@ -13,7 +13,7 @@ from cv2.typing import MatLike
 from pdf2image import convert_from_path
 
 from kern import KernReader, tokenize
-from sheetmusic import Score
+from sheetmusic import Score, Status
 from utils import from_json
 
 
@@ -100,10 +100,10 @@ class KernSheet:
         """Yield ``(key, score)`` pairs for migrated scores in the catalog.
 
         prefix: if given, restrict to entries whose key starts with it.
-        valid: when False, skip scores whose layout is already fully validated,
-            yielding only those still needing review. Scores without a usable
-            layout on disk (unmigrated, or a recorded path whose file is gone)
-            are always skipped.
+        valid: when False, skip scores whose pages are all already decided
+            (validated or rejected), yielding only those with a page still
+            pending review. Scores without a usable layout on disk (unmigrated,
+            or a recorded path whose file is gone) are always skipped.
         """
         for key, entry in self.catalog.entries.items():
             if prefix and not key.startswith(prefix):
@@ -112,7 +112,8 @@ class KernSheet:
                 if not self.layout_path(score).is_file():
                     continue
                 if not valid and all(
-                    page.validated for page in self.load_score(score.id).pages
+                    page.status != Status.PENDING
+                    for page in self.load_score(score.id).pages
                 ):
                     continue
                 yield key, score

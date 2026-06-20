@@ -258,6 +258,12 @@
         <td>Rehearsal mix on the <span class="tag">bartok-duration</span> base — like-for-like vs <span class="tag">bartok-mixed</span>. Free-running <strong>PDMX 97.2% / KS 94.3%</strong> full pitch/dur (pitch-only 97.8% / 96.3%): <strong>pitch at parity</strong>, but the duration head trails the baked-in token by &minus;0.6/&minus;1.6 pp, the cost concentrated in real-scan KS duration (full vs pitch-only 2.0 pp on KS). *blended stream &dagger;pitch-only acc</td>
         <td><span class="badge badge-slate">pilot · not yet a win</span></td>
       </tr>
+      <tr>
+        <td><a class="run-link" href="#run-bartok-duration-cls"><span class="tag">bartok-duration-cls</span></a></td><td>2026-06-20</td><td>12</td>
+        <td>99.00%&dagger;</td><td>0.1012&dagger;</td>
+        <td><strong>Duration head: regression &rarr; classification.</strong> Same split as <span class="tag">bartok-duration</span>, but the head now <strong>classifies</strong> over the analytic duration table (<code>NUM_DUR_BINS</code> bins, cross-entropy) instead of regressing <code>log2(length)</code>; <code>dur_loss_weight</code> 1.0&rarr;2.0. Teacher-forced val <strong>dur_acc 0.991</strong> (vs the regressor's 0.939, <strong>+5.2 pp</strong>) at −0.8 pp pitch acc (99.00 vs 99.77, partly the heavier dur weight). Free-running / scorer eval pending. &dagger;pitch-only + dur-classification, NOT comparable to the pitch&times;dur rows above</td>
+        <td><span class="badge badge-slate">pilot · classification head</span></td>
+      </tr>
     </tbody>
   </table>
 
@@ -857,6 +863,26 @@
     </table>
     <p style="font-size:0.78rem;color:var(--muted)"><span class="tag">bartok-duration-mixed</span> = rehearsal FT (<code>--init-from bartok-duration --kern-sheet … 0.67 --lr 1e-4 -e 12</code>), eval'd 2026-06-20. Full = recombined pitch/dur (comparable to <span class="tag">bartok-mixed</span>'s pitch&times;dur token); pitch-only isolates duration error. Blended-stream teacher-forced val 98.89% pitch / dur_acc 0.766.</p>
     <div class="result-box neutral"><strong>The regression head reaches pitch parity but trails the baked-in token on full pitch/dur — and the gap is real-scan duration.</strong> Pitch-only matches <span class="tag">bartok-mixed</span> on PDMX (97.8) and beats it on KS (96.3 vs 95.9), so the split doesn't cost pitch. But full pitch/dur lands behind (PDMX 97.2 vs 97.8, KS 94.3 vs 95.9): the duration cost is near-free on clean PDMX (full vs pitch-only −0.6 pp) yet <strong>2.0 pp on KernSheet</strong>, where noisy scan geometry makes <code>log2(length)</code> regression hard (blended val dur_acc 0.77 vs the clean-PDMX base's 0.94). The pilot is validated — duration <em>can</em> be a separate continuous head without hurting pitch — but to beat the combinatorial token it needs a stronger duration signal on real scans (parked: exact-snap <code>dur_acc</code>, <code>dur_loss_weight</code> tuning). <span class="tag">bruckner-mixed</span> remains the production noter.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ bartok-duration-cls -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-bartok-duration-cls"><span class="tag">bartok-duration-cls</span> — duration head, regression &rarr; classification</h2>
+      <span class="session-meta">2026-06-20 · tag <code>train/bartok-duration-cls</code> · 12 ep · the <span class="tag">bartok-duration</span> recipe, duration head swapped to a classifier</span>
+      <span class="badge badge-slate">pilot · classification head</span>
+    </div>
+    <p><strong>The duration head goes from regression to classification.</strong> <span class="tag">bartok-duration</span> regressed a continuous <code>log2(length)</code> and snapped it onto the analytic duration table at decode; <span class="tag">bartok-duration-cls</span> instead <strong>classifies directly over that table</strong> — the head emits <code>NUM_DUR_BINS</code> logits per chord slot, trained with cross-entropy against the bucketized GT bin and decoded by argmax (<code>noter.duration</code>, <code>NoterModel.dur_head</code>). The regression head was chosen originally so rare/unseen durations could still resolve; the decision to flip was that the table is <em>analytic</em> (not data-derived) and the measured off-table OOV is tiny (0.2–0.5%), so classification gives up no reach while removing the regressor's bin-miss. Everything else matches the <span class="tag">bartok-duration</span> base (pitch-only vocab 552, cross-stave architecture, <code>--vocab</code> KS-combined, <code>--jitter 0.5</code>, 12 ep, PDMX base); the one other change is <code>dur_loss_weight</code> 1.0&nbsp;&rarr;&nbsp;2.0.</p>
+    <table class="summary-table">
+      <thead><tr><th>Teacher-forced val (epoch 11, PDMX split)</th><th><span class="tag">bartok-duration</span> (regression)</th><th><span class="tag">bartok-duration-cls</span> (classification)</th></tr></thead>
+      <tbody>
+        <tr><td>pitch (token) acc</td><td><strong>99.77%</strong></td><td>99.00% <span style="color:var(--muted)">(−0.77)</span></td></tr>
+        <tr><td>duration acc</td><td>0.939</td><td><strong>0.991</strong> <span style="color:var(--muted)">(+5.2 pp)</span></td></tr>
+        <tr><td>dur loss</td><td>0.0049 (L1)</td><td>0.0325 (CE — not comparable)</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">Both runs share the split, vocab (552), jitter and 12-ep PDMX recipe; the moving parts are the head (regression vs classification) and <code>dur_loss_weight</code> (1.0 vs 2.0). Per-epoch the cls run plateaus by epoch&nbsp;9 (pitch 0.9894&rarr;0.9899&rarr;0.9900, dur 0.9902&rarr;0.9910&rarr;0.9912), so the gaps are converged, not under-training. dur_loss values are different objectives (L1 vs CE) and not directly comparable; dur_acc is the like-for-like (predicted bin == GT bin).</p>
+    <div class="result-box neutral"><strong>Classification nails the duration the regressor was missing — +5.2 pp dur_acc (0.939 &rarr; 0.991) — at a small pitch-acc cost.</strong> The regressor's residual bin-misses are essentially gone, exactly the failure mode the switch targeted. Pitch acc dips −0.77 pp; that gap is muddied by the heavier <code>dur_loss_weight</code> (2.0 vs 1.0) pulling gradient toward the dur head, so it isn't a clean attribution to the head change alone. These are teacher-forced val only — the decisive read is the free-running / scorer eval on KS &amp; PDMX similarity (pending), since duration fidelity feeds the end-to-end metric, not val token acc. Next pilot step: move the input-side duration feedback from the continuous <code>dur_proj</code> to an <code>nn.Embedding(NUM_DUR_BINS+1, D)</code> bin lookup, mirroring the now-discrete output head.</div>
   </div>
 
 </main>

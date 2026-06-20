@@ -15,7 +15,7 @@ from .noter_vocab import Vocab
 
 class NoterModule(L.LightningModule):
     _causal_mask_buf: Tensor
-    _dur_boundaries: Tensor
+    _duration_boundaries: Tensor
     _dur_bin_log2: Tensor
 
     def __init__(self, config: NoterConfig) -> None:
@@ -32,7 +32,7 @@ class NoterModule(L.LightningModule):
         # Duration-table bin boundaries (for bucketizing GT log2 lengths to bin
         # labels) and each bin's canonical log2 length (for decoding an argmax
         # bin back to a length to feed forward).
-        self.register_buffer("_dur_boundaries", torch.tensor(bin_boundaries()))
+        self.register_buffer("_duration_boundaries", torch.tensor(bin_boundaries()))
         self.register_buffer("_dur_bin_log2", torch.tensor(bin_log2_lengths()))
 
     def _causal_mask(self, size: int) -> Tensor:
@@ -87,7 +87,7 @@ class NoterModule(L.LightningModule):
         # slots that carry a duration and belong to a real staff. GT log2 lengths
         # are bucketized to bin labels against the table midpoints.
         dur_bins = torch.bucketize(
-            target_dur[:, :, 1:].contiguous(), self._dur_boundaries
+            target_dur[:, :, 1:].contiguous(), self._duration_boundaries
         )
         dur_loss_mask = target_dur_mask[:, :, 1:].clone()
         dur_loss_mask[~stave_mask] = False
