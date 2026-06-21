@@ -196,6 +196,52 @@
 <pre>uv run python scripts/smoke_kernsheet.py</pre>
   </div>
 
+  <!-- ──────────────────────────────────────────── staff_height_probe -->
+  <div class="script">
+    <div class="script-header">
+      <span class="script-name">staff_height_probe.py</span>
+      <span class="badge badge-blue">diagnostic</span>
+      <span class="badge badge-amber">kernsheet</span>
+    </div>
+    <p class="script-desc">
+      Quantifies the legacy thirds-split staff-height artifact (read-only). The
+      legacy&rarr;native layout migration only had the grand-staff <em>envelope</em>
+      (<code>rh_top</code>/<code>lh_bot</code>) and split it into exact thirds, so each
+      staff box's <em>inner</em> (gap-facing) edge overshoots the real outermost staff
+      line by ~(gap&minus;staff_height)/3; the outer edge is the true envelope and is
+      correct. For every staff box it re-measures the 5 staff lines from the cached page
+      image (full-width dark-row peaks inside the box) and reports, per edge, how far the
+      box sits outside the outermost measured line — median/p95/max and the count over
+      2px. Writes nothing; it exists to sanity-check the fixer before it mutates GT.
+    </p>
+    <div class="label">Usage</div>
+<pre>uv run python scripts/staff_height_probe.py --home ~/datasets/kern-sheet-edit [--prefix bach] [--verbose]</pre>
+  </div>
+
+  <!-- ──────────────────────────────────────────── staff_height_fix -->
+  <div class="script">
+    <div class="script-header">
+      <span class="script-name">staff_height_fix.py</span>
+      <span class="badge badge-slate">data fix</span>
+      <span class="badge badge-amber">kernsheet</span>
+    </div>
+    <p class="script-desc">
+      One-shot corpus fix for the thirds-split artifact measured by
+      <code>staff_height_probe.py</code>. Re-measures the 5 staff lines inside each box
+      and snaps only the <em>inner</em> edge in to the measured outermost line.
+      Conservative by construction: the trusted outer edge is never touched, the inner
+      edge only ever moves <em>inward</em> (the box only shrinks), an unmeasurable staff
+      is left untouched, and a move beyond <code>MAX_MOVE_PX</code> (a likely mis-measure)
+      is skipped. Dry-run by default; <code>--write</code> saves layout JSON in the given
+      <code>--home</code> only (git there is the rollback). <code>--worklist</code> writes
+      the changed score ids one-per-line for <code>kernsheet edit --worklist &lt;file&gt;</code>
+      to review.
+    </p>
+    <div class="label">Usage</div>
+<pre>uv run python scripts/staff_height_fix.py --home ~/datasets/kern-sheet-edit \
+    --write --worklist staff_height_fixed.txt</pre>
+  </div>
+
   <!-- ──────────────────────────────────────────── staffer_box_deltas -->
   <div class="script">
     <div class="script-header">

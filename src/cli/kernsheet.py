@@ -166,6 +166,14 @@ def make(ctx: ClickContext) -> None:
     default=False,
     help="Walk the scores in random order (for spot-checking the corpus).",
 )
+@click.option(
+    "--worklist",
+    "worklist_file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Open exactly the score ids listed in this file (one per line), e.g. the "
+    "changed-scores list a batch fixer writes. Ignores PREFIX/--all/--review.",
+)
 @click.pass_obj
 def edit(
     ctx: ClickContext,
@@ -174,12 +182,14 @@ def edit(
     fast: bool,
     review: str | None,
     shuffle: bool,
+    worklist_file: Path | None,
 ) -> None:
     """Open the layout editor on every score whose catalog key starts with PREFIX
     (all scores when PREFIX is omitted). Validated scores are skipped unless --all
     is given. With --review, only scores a review flags are opened, on the flagged
-    page. With --random, the scores are walked in random order. Press '?' in the
-    editor for help."""
+    page. With --worklist, only the score ids listed in the file are opened. With
+    --random, the scores are walked in random order. Press '?' in the editor for
+    help."""
     from kernsheet.editor import StaffEditor
 
     ks = ctx.kern_sheet
@@ -187,7 +197,14 @@ def edit(
     # Materialise the worklist up front: editing a score can delete it (or its
     # whole entry) from the catalog, which would otherwise mutate the dict the
     # items() generator is walking. Re-check existence before opening each one.
-    if review:
+    worklist: list[tuple[str, str, int | None]]
+    if worklist_file:
+        ids = [
+            ln.strip() for ln in worklist_file.read_text().splitlines() if ln.strip()
+        ]
+        worklist = [(ks.id2key[i], i, None) for i in ids if ks.has_score(i)]
+        print(f"{len(worklist)} of {len(ids)} listed score(s) found.")
+    elif review:
         worklist = _review_worklist(ks, prefix, names)
         print(f"{len(worklist)} score(s) flagged by {review}.")
     else:
