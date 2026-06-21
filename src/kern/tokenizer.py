@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import re
 import tempfile
 from contextlib import suppress
 from dataclasses import replace
@@ -210,8 +211,12 @@ class NormHandler(BaseHandler):
     bar_number: int
     bar_seen: bool
     bar_zero: bool
+    # Number for the synthetic pickup bar an anacrusis triggers: one less than the
+    # piece's first numbered measure, so an excerpt opening at bar N gets a pickup of
+    # N-1 (0 for a normal piece opening at bar 1).
+    pickup_no: int
 
-    def __init__(self, output_path: Path | None):
+    def __init__(self, output_path: Path | None, pickup_no: int = 0):
         super(NormHandler, self).__init__()
         # Write to a temp sibling and only os.replace it onto the destination on a
         # clean done(), so a mid-parse failure can't truncate an existing file.
@@ -230,6 +235,7 @@ class NormHandler(BaseHandler):
         self.bar_number = 1
         self.bar_seen = False
         self.bar_zero = False
+        self.pickup_no = pickup_no
 
     last_metric: Meter | None = None
 
@@ -275,7 +281,7 @@ class NormHandler(BaseHandler):
         # keeping the bar-zero line's column count identical to every other row.
         if not self.bar_zero:
             if any(requires_bar(t) for _, t in tokens):
-                bar = Bar("*fake*", 0, False, False, False, False)
+                bar = Bar("*fake*", self.pickup_no, False, False, False, False)
                 if self.output:
                     zero = self.merge_tokens([(spine, bar) for spine, _ in tokens])
                     self.output.write("\t".join(tok for tok in zero if tok) + "\n")
@@ -379,13 +385,30 @@ class NormHandler(BaseHandler):
                 os.unlink(self.output_tmp)
 
 
+# A kern barline, with its measure number after any style marks (``=169``, ``=||:1``).
+_BAR_NUMBER_RE = re.compile(r"^=[^0-9]*([0-9]+)")
+
+
+def _first_bar_number(src_file: Path) -> int:
+    """The number on the *first* barline in ``src_file`` (1 if it carries none). The
+    pickup bar an anacrusis triggers is numbered one less, so an excerpt opening at
+    bar N gets a pickup of N-1 — 0 for a normal piece (first barline unnumbered/1)."""
+    with open(src_file) as fp:
+        for line in fp:
+            for tok in line.rstrip("\n").split("\t"):
+                if tok.startswith("="):
+                    m = _BAR_NUMBER_RE.match(tok)
+                    return int(m.group(1)) if m else 1
+    return 1
+
+
 def tokenize(
     src_file: Path,
     dst_file: Path | None,
     enable_warnings: bool = False,
 ) -> bool:
     """Tokenizes a krn file into a normalized form."""
-    handler = NormHandler(dst_file)
+    handler = NormHandler(dst_file, pickup_no=_first_bar_number(src_file) - 1)
     try:
         parser = Parser.from_file(src_file, handler)
         parser.enable_warnings = enable_warnings

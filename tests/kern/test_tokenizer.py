@@ -195,6 +195,28 @@ def test_repeat_barline_opening_after_pickup_keeps_bar_zero(tmp_path: Path) -> N
     assert reader.first_bar == 1
 
 
+def test_excerpt_pickup_numbered_one_below_first_bar(tmp_path: Path) -> None:
+    """An excerpt opening mid-piece (first numbered bar > 1) with anacrusis notes
+    before the first barline: the synthetic pickup bar must be numbered first_bar - 1
+    (e.g. 168 before =169), not a spurious 0, so the tokens align to the layout's
+    bar numbering (which already anchors on first_bar - 1)."""
+    kern = """
+**kern
+*clefG2
+*M2/4
+4r
+=169
+4r
+=170
+4r
+==
+""".strip()
+    reader = tokenize_input(tmp_path, kern)
+    assert not reader.has_bar_zero()
+    assert reader.first_bar == 168
+    assert sorted(reader.bars) == [168, 169, 170]
+
+
 def test_instrument_mixed_with_spine_path_skipped(tmp_path: Path) -> None:
     """Rows mixing instrument and spine-path tokens must not appear in output."""
     kern = """
