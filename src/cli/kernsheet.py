@@ -7,6 +7,7 @@ under ``layout/``, derived tokens/png under ``build/``).
 """
 
 import logging
+import random
 import sys
 from collections import Counter
 from dataclasses import dataclass, replace
@@ -158,14 +159,27 @@ def make(ctx: ClickContext) -> None:
     help="Only open scores that a review flags, landing on the flagged page. "
     f"One of: {', '.join(review_names())}.",
 )
+@click.option(
+    "--random",
+    "shuffle",
+    is_flag=True,
+    default=False,
+    help="Walk the scores in random order (for spot-checking the corpus).",
+)
 @click.pass_obj
 def edit(
-    ctx: ClickContext, prefix: str, edit_all: bool, fast: bool, review: str | None
+    ctx: ClickContext,
+    prefix: str,
+    edit_all: bool,
+    fast: bool,
+    review: str | None,
+    shuffle: bool,
 ) -> None:
     """Open the layout editor on every score whose catalog key starts with PREFIX
     (all scores when PREFIX is omitted). Validated scores are skipped unless --all
     is given. With --review, only scores a review flags are opened, on the flagged
-    page. Press '?' in the editor for help."""
+    page. With --random, the scores are walked in random order. Press '?' in the
+    editor for help."""
     from kernsheet.editor import StaffEditor
 
     ks = ctx.kern_sheet
@@ -180,6 +194,8 @@ def edit(
         worklist = [
             (key, score.id, None) for key, score in ks.items(prefix, valid=edit_all)
         ]
+    if shuffle:
+        random.shuffle(worklist)
     for i, (key, score_id, start_page) in enumerate(worklist, 1):
         if not ks.has_score(score_id):
             continue  # deleted earlier this session (the score or its whole entry)
