@@ -276,6 +276,12 @@
         <td><strong>Rehearsal-mix FT of <span class="tag">bartok-duration-logits</span>, at <code>dur_loss_weight</code> 1.0</strong> (the <code>--init-from</code> path rebuilds config from defaults, so the now-committed 1.0 default applies). Free-running <strong>PDMX 96.7% / KS 92.9%</strong> full (pitch-only 96.9% / 93.1%). <strong>Net negative vs <span class="tag">bartok-duration-mixed</span></strong> (PDMX 97.2 / KS 94.3): duration is now free on real scans (KS full−pitch gap 2.0→0.2 pp) but pitch regressed more than duration gained (KS pitch-only 96.3→93.1, −3.2 pp). The pitch tax is in the w=2.0-pretrained <strong>base</strong>, which a w=1.0 FT can't un-bake — next is a from-scratch w=1.0 pretrain. *blended stream &dagger;pitch-only + dur-classification</td>
         <td><span class="badge badge-rose">pilot · net negative (base-taxed)</span></td>
       </tr>
+      <tr>
+        <td><a class="run-link" href="#run-bartok-duration-logits-w1"><span class="tag">bartok-duration-logits-w1</span></a></td><td>2026-06-21</td><td>12</td>
+        <td>99.50%&dagger;</td><td>0.0754&dagger;</td>
+        <td><strong>From-scratch pretrain of the <span class="tag">logits</span> recipe at <code>dur_loss_weight</code> 1.0</strong> — the clean test the FT-at-1.0 confounded. Beats the w=2.0 <span class="tag">logits</span> base teacher-forced on BOTH (pitch 99.50 vs 99.13, dur_acc 0.9933 vs 0.9923). Free-running <strong>PDMX 98.2% full / 98.3% pitch-only</strong> — <strong>pitch tax fully recovered</strong> (w2 base 97.3, +0.9 pp), matching the regression base's 98.3 while keeping the classification duration head (full≈pitch-only). KS 79.8% is the expected PDMX-only domain gap (pre-FT, no real scans) — not comparable to the mixed rows; KS verdict awaits <span class="tag">…-w1-mixed</span>. &dagger;pitch-only + dur-classification, NOT comparable to the pitch&times;dur rows above</td>
+        <td><span class="badge badge-green">base · pitch tax recovered</span></td>
+      </tr>
     </tbody>
   </table>
 
@@ -945,6 +951,33 @@
     </table>
     <p style="font-size:0.78rem;color:var(--muted)">Eval'd 2026-06-21; baselines from the rows above (not re-run). Unseeded draws, so cross-run deltas under ~0.3 pp are noise — the KS −3.2 pp pitch-only gap is not.</p>
     <div class="result-box bad"><strong>Net negative — but it cleanly splits the two effects. Duration is solved on real scans; pitch regressed more than duration gained, and the tax is in the base, not the knob.</strong> The classification head delivers its promise: the KS full−pitch-only gap collapses 2.0&rarr;0.2 pp, the duration deficit that sank <span class="tag">bartok-duration-mixed</span> is gone. But combined accuracy is <em>worse</em> on both domains (KS full 94.3&rarr;92.9, pitch-only 96.3&rarr;<strong>93.1</strong>, −3.2 pp). This isn't the w=1.0 knob failing: the <span class="tag">bartok-duration-logits</span> base was pretrained at w=2.0 and already carried a ~1.3 pp PDMX pitch-only deficit standalone (97.4 vs the regression base's 98.7); a 12-ep w=1.0 FT at lr 1e-4 can't un-bake it, and on fragile KS pitch the gap widens. <strong>Next:</strong> pretrain logits <em>from scratch</em> at w=1.0 (<span class="tag">bartok-duration-logits-w1</span>) then mixed-FT — the only way to test whether classification + w=1.0 keeps the duration win without the pitch cost.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ bartok-duration-logits-w1 -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-bartok-duration-logits-w1"><span class="tag">bartok-duration-logits-w1</span> — from-scratch pretrain at <code>dur_loss_weight</code> 1.0</h2>
+      <span class="session-meta">2026-06-21 · tag <code>train/bartok-duration-logits-w1</code> · 12 ep · the <span class="tag">bartok-duration-logits</span> recipe, weight 2.0&rarr;1.0, trained from scratch</span>
+      <span class="badge badge-green">base · pitch tax recovered</span>
+    </div>
+    <p><strong>The clean test the FT-at-1.0 confounded: train the <span class="tag">logits</span> architecture from scratch at <code>dur_loss_weight</code> 1.0.</strong> Identical recipe to <span class="tag">bartok-duration-logits</span> (classification head + bin-embedding feedback, pitch-only vocab 552, cross-stave, <code>--vocab</code> KS-combined, <code>--jitter 0.5 --augment 0.0</code>, 12 ep, PDMX base) — the <em>only</em> change is the weight, now the committed default, so no <code>--init-from</code> and the pitch tax is never baked in.</p>
+    <table class="summary-table">
+      <thead><tr><th>Teacher-forced val (epoch 11, PDMX split)</th><th><span class="tag">bartok-duration-logits</span> (w2)</th><th><span class="tag">bartok-duration-logits-w1</span></th></tr></thead>
+      <tbody>
+        <tr><td>pitch (token) acc</td><td>99.13%</td><td><strong>99.50%</strong> <span style="color:var(--muted)">(+0.37)</span></td></tr>
+        <tr><td>duration acc</td><td>0.9923</td><td><strong>0.9933</strong> <span style="color:var(--muted)">(+0.10 pp)</span></td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">w1 led at every matched epoch (e.g. ep5 pitch 0.9905 vs 0.9850), and its ep5 pitch already matched the w2 run's ep11. Lowering the dur weight wins duration <em>too</em> (0.9933 vs 0.9923) — freeing the shared decoder helps both heads rather than trading off. <code>val/loss</code> is NOT cross-comparable (total = token + w·dur, different objective).</p>
+    <table class="summary-table">
+      <thead><tr><th>Free-running <code>eval --size 1024</code> (full / pitch-only)</th><th><span class="tag">bartok-duration</span> (regr base)</th><th><span class="tag">bartok-duration-logits</span> (w2)</th><th><span class="tag">bartok-duration-logits-w1</span></th></tr></thead>
+      <tbody>
+        <tr><td>PDMX</td><td>98.3 / 98.7</td><td>97.3 / 97.4</td><td><strong>98.2 / 98.3</strong></td></tr>
+        <tr><td>KernSheet (pre-FT, PDMX-only base)</td><td>—</td><td>—</td><td>79.8 / 80.5</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">Eval'd 2026-06-21; PDMX baselines from the rows above (not re-run). KS 79.8 is the expected catastrophic-forgetting gap of a PDMX-only base (no real scans seen) — meaningful only after the rehearsal FT, NOT comparable to the mixed rows.</p>
+    <div class="result-box positive"><strong>Training w=1.0 in from scratch recovers the pitch tax the FT shortcut couldn't — best base yet, with the duration head still solved.</strong> Free-running PDMX jumps 97.3&rarr;<strong>98.2</strong> full vs the w2 base (+0.9 pp), matching the regression base's 98.3 while keeping classification-grade duration (full≈pitch-only, 0.1 pp gap vs the regression base's 0.4). So the −1.3 pp pitch deficit really was the <code>dur_loss_weight</code>=2.0 weight, not the head/embedding design, and it's reachable from a cold start though not by fine-tuning a taxed base. <strong>Next:</strong> rehearsal-mix FT (<span class="tag">bartok-duration-logits-w1-mixed</span>) for the decisive KS test vs <span class="tag">bartok-duration-mixed</span> (94.3) and the failed <span class="tag">bartok-duration-logits-mixed</span> (92.9).</div>
   </div>
 
 </main>
