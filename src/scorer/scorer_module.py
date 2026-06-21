@@ -14,6 +14,7 @@ from torch.optim.lr_scheduler import LambdaLR
 from torchvision.transforms.functional import InterpolationMode
 
 from noter import NoterModel, Vocab
+from noter.duration import bin_boundaries, bin_log2_lengths
 from staffer import StafferLoss, assign_staves
 from staffer.staffer_loss import generalized_iou
 
@@ -124,6 +125,8 @@ def group_systems(
 
 class ScorerModule(L.LightningModule):
     _causal_mask_buf: Tensor
+    _duration_boundaries: Tensor
+    _dur_bin_log2: Tensor
 
     def __init__(self, config: ScorerConfig) -> None:
         super().__init__()
@@ -137,6 +140,11 @@ class ScorerModule(L.LightningModule):
                 config.noter.max_seqlen, config.noter.max_seqlen, dtype=torch.bool
             ).triu(diagonal=1),
         )
+        # Duration-table bin boundaries (to bucketize GT log2 lengths to bin labels)
+        # and each bin's canonical log2 length (to decode an argmax bin back to a
+        # length fed forward during generation) — mirrors NoterModule.
+        self.register_buffer("_duration_boundaries", torch.tensor(bin_boundaries()))
+        self.register_buffer("_dur_bin_log2", torch.tensor(bin_log2_lengths()))
         # Staffer starts frozen so the noter adapts to predicted crops first;
         # unfrozen at freeze_staffer_steps (see on_train_batch_start).
         self._staffer_frozen = config.freeze_staffer_steps > 0
@@ -147,7 +155,9 @@ class ScorerModule(L.LightningModule):
         return self._causal_mask_buf[:size, :size]
 
     def _step(self, batch: tuple, stage: str) -> Tensor:
-        image, gt_sys, gt_stave, gt_assign, stave_tokens = batch
+        image, gt_sys, gt_stave, gt_assign, stave_tokens, stave_durs, stave_dmask = (
+            batch
+        )
         B = image.shape[0]
 
         # --- Detection (staffer) ---
@@ -178,13 +188,22 @@ class ScorerModule(L.LightningModule):
         sys_ids = [gt_assign[i][: assign_q[i].shape[0]] for i in range(B)]
         hw = (int(image.shape[-2]), int(image.shape[-1]))
         boxes = build_stave_boxes(stave_tb, sys_lr, assign_q, sys_ids, hw)
-        # Targets, flattened in the same (page, GT-stave) order as the boxes.
+        # Targets, flattened in the same (page, GT-stave) order as the boxes — tokens
+        # plus the parallel duration (log2 length) and duration-mask channels.
         targets = torch.cat(
             [stave_tokens[i, : assign_q[i].shape[0]] for i in range(B)], dim=0
         )  # (K, T, max_chords)
+        dur_targets = torch.cat(
+            [stave_durs[i, : assign_q[i].shape[0]] for i in range(B)], dim=0
+        )
+        dmask_targets = torch.cat(
+            [stave_dmask[i, : assign_q[i].shape[0]] for i in range(B)], dim=0
+        )
 
         tr = torch.zeros((), device=image.device)
+        dur_loss = torch.zeros((), device=image.device)
         accuracy = torch.zeros((), device=image.device)
+        dur_acc = torch.zeros((), device=image.device)
         if targets.shape[0] > 0:
             crops, widths = self.model.crop(image, boxes)
             memory, mem_pad = self.model.noter.encode(crops, widths)  # (K,P,D),(K,P)
@@ -198,26 +217,60 @@ class ScorerModule(L.LightningModule):
             mem_g = memory[grouped_idx].reshape(ng * max_staves, *memory.shape[1:])
             pad_g = mem_pad[grouped_idx].reshape(ng * max_staves, -1)
             tgt = targets[grouped_idx]  # (ng, max_staves, T, max_chords)
+            tgt_dur = dur_targets[grouped_idx]
+            tgt_dmask = dmask_targets[grouped_idx]
             tgt_in = tgt[:, :, :-1]
             labels = tgt[:, :, 1:].clone()
             labels[~stave_mask] = Vocab.PAD  # exclude padded staves from the loss
-            # Duration head ignored here — the scorer's duration path is a
-            # follow-up; for now its noter sub-model is supervised on tokens only.
-            logits, _ = self.model.noter.decode(
-                tgt_in, mem_g, pad_g, stave_mask, self._causal_mask(tgt_in.shape[2])
-            )  # (ng, max_staves, T-1, max_chords, V)
+            # Teacher-force the duration channels in lockstep with the tokens; the
+            # duration head is supervised by classification over the analytic table.
+            logits, dur_logits = self.model.noter.decode(
+                tgt_in,
+                mem_g,
+                pad_g,
+                stave_mask,
+                self._causal_mask(tgt_in.shape[2]),
+                tgt_dur[:, :, :-1],
+                tgt_dmask[:, :, :-1],
+            )  # (ng, max_staves, T-1, max_chords, V), (..., NUM_DUR_BINS)
             V = logits.shape[-1]
             tr = F.cross_entropy(
                 logits.reshape(-1, V), labels.reshape(-1), ignore_index=Vocab.PAD
             )
+
+            # Duration classification (CE over the table's bins), only on slots that
+            # carry a duration and belong to a real staff — mirrors NoterModule.
+            dur_bins = torch.bucketize(
+                tgt_dur[:, :, 1:].contiguous(), self._duration_boundaries
+            )
+            dur_loss_mask = tgt_dmask[:, :, 1:].clone()
+            dur_loss_mask[~stave_mask] = False
+            if dur_loss_mask.any():
+                dur_loss = F.cross_entropy(
+                    dur_logits[dur_loss_mask], dur_bins[dur_loss_mask]
+                )
             with torch.no_grad():
                 mask = labels != Vocab.PAD
                 accuracy = (
                     (logits.argmax(-1) == labels) & mask
                 ).sum() / mask.sum().clamp(min=1)
+                if dur_loss_mask.any():
+                    pred_bins = dur_logits.argmax(-1)
+                    dur_acc = (
+                        (pred_bins[dur_loss_mask] == dur_bins[dur_loss_mask])
+                        .float()
+                        .mean()
+                    )
+                else:
+                    # No duration-bearing slot this batch: vacuously perfect, so the
+                    # logged metric matches NoterModule (not a spurious 0.0).
+                    dur_acc = torch.ones((), device=image.device)
 
         det_loss = det.total()
-        total = self.config.lambda_det * det_loss + self.config.lambda_tr * tr
+        dur_w = self.config.noter.dur_loss_weight
+        total = self.config.lambda_det * det_loss + self.config.lambda_tr * (
+            tr + dur_w * dur_loss
+        )
 
         # Detection-quality metrics — watch these for drift while the
         # transcription loss tugs on the boxes during joint fine-tuning.
@@ -231,7 +284,9 @@ class ScorerModule(L.LightningModule):
         self.log(f"{stage}/loss", total, prog_bar=True)
         self.log(f"{stage}/det_loss", det_loss, prog_bar=True)
         self.log(f"{stage}/tr_loss", tr, prog_bar=True)
+        self.log(f"{stage}/dur_loss", dur_loss, prog_bar=True)
         self.log(f"{stage}/accuracy", accuracy, prog_bar=True)
+        self.log(f"{stage}/dur_acc", dur_acc, prog_bar=True)
         self.log(f"{stage}/sys_iou", sys_iou)
         self.log(f"{stage}/stave_err_px", stave_err_px)
         for f in fields(det):
@@ -257,14 +312,19 @@ class ScorerModule(L.LightningModule):
         self._step(batch, "val")
 
     @torch.no_grad()
-    def predict(self, image: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+    def predict(
+        self, image: Tensor, duration_bearing: Tensor
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         """End-to-end inference for a single page: detect → crop → transcribe.
 
-        ``image``: ``(1, 1, H, W)``. Returns ``(boxes, tokens, owners)``:
+        ``image``: ``(1, 1, H, W)``. ``duration_bearing``: ``(vocab_size,)`` bool —
+        which token ids carry a duration the head emits (so their predicted length is
+        fed back). Returns ``(boxes, tokens, durations, owners)``:
           ``boxes`` ``(K, 5)`` — ``[batch_idx, left, top, right, bot]`` px, active
           staves top-to-bottom; ``tokens`` ``(K, T, max_chords)`` — generated ids,
-          SOS stripped; ``owners`` ``(K,)`` — system index per stave.
-          ``K`` is the detected stave count (0 if none fired).
+          SOS stripped; ``durations`` ``(K, T, max_chords)`` — per-slot log2 length
+          (snap-canonical), 0 on non-duration slots; ``owners`` ``(K,)`` — system
+          index per stave. ``K`` is the detected stave count (0 if none fired).
 
         Each detected system's staves are decoded together in lockstep (the cross-stave
         noter), so cross-staff barline agreement is structural — superseding the former
@@ -277,25 +337,34 @@ class ScorerModule(L.LightningModule):
         hw = (int(image.shape[-2]), int(image.shape[-1]))
         boxes = build_stave_boxes(stave_tb, sys_lr, [sel], [owners], hw)
         if boxes.shape[0] == 0:
-            tokens = image.new_zeros(
+            empty = image.new_zeros(
                 (0, self.config.noter.max_seqlen - 1, self.config.noter.max_chords),
                 dtype=torch.long,
             )
-            return boxes, tokens, torch.empty(0, dtype=torch.long, device=image.device)
+            return (
+                boxes,
+                empty,
+                empty.float(),
+                torch.empty(0, dtype=torch.long, device=image.device),
+            )
         crops, widths = self.model.crop(image, boxes)
-        tokens = self._generate_grouped(crops, widths, owners)
-        return boxes, tokens, owners
+        tokens, durations = self._generate_grouped(
+            crops, widths, owners, duration_bearing
+        )
+        return boxes, tokens, durations, owners
 
     @torch.no_grad()
     def _generate_grouped(
-        self, crops: Tensor, widths: Tensor, owners: Tensor
-    ) -> Tensor:
-        """Lockstep-decode each system's staves together → ``(K, T-1, max_chords)``.
+        self, crops: Tensor, widths: Tensor, owners: Tensor, duration_bearing: Tensor
+    ) -> tuple[Tensor, Tensor]:
+        """Lockstep-decode each system's staves together → ``(tokens, durations)``,
+        each ``(K, T-1, max_chords)``.
 
         Staves sharing an ``owners`` index are decoded as one system: row ``t`` is
         generated for all its staves at once, each seeing its siblings' rows ``< t``
-        through the cross-stave attention. Returns the tokens in the original (K) stave
-        order, SOS stripped.
+        through the cross-stave attention. A duration-bearing token's predicted bin
+        length is fed back as the next step's input. Returns tokens and log2 durations
+        in the original (K) stave order, SOS stripped.
         """
         c = self.config.noter
         K, device = crops.shape[0], crops.device
@@ -320,25 +389,44 @@ class ScorerModule(L.LightningModule):
         generated = torch.full(
             (ng, smax, 1, c.max_chords), Vocab.SOS, dtype=torch.long, device=device
         )
+        gen_dur = torch.zeros((ng, smax, 1, c.max_chords), device=device)
+        gen_dmask = torch.zeros(
+            (ng, smax, 1, c.max_chords), dtype=torch.bool, device=device
+        )
         done = ~stave_mask.clone()  # padded staves emit EOS immediately
         for _ in range(c.max_seqlen - 1):
             T = generated.shape[2]
-            logits, _ = self.model.noter.decode(
-                generated, mem_g, pad_g, stave_mask, self._causal_mask(T)
+            logits, dur_logits = self.model.noter.decode(
+                generated,
+                mem_g,
+                pad_g,
+                stave_mask,
+                self._causal_mask(T),
+                gen_dur,
+                gen_dmask,
             )
             next_tokens = logits[:, :, -1, :, :].argmax(dim=-1)  # (ng, smax, mc)
+            next_bin = dur_logits[:, :, -1, :, :].argmax(dim=-1)  # (ng, smax, mc)
+            next_dur = self._dur_bin_log2[next_bin]  # bin -> log2 length
             next_tokens[done] = Vocab.EOS
+            next_dmask = duration_bearing[next_tokens]
+            next_dur = torch.where(next_dmask, next_dur, torch.zeros_like(next_dur))
             done = done | (next_tokens[..., 0] == Vocab.EOS)
             generated = torch.cat([generated, next_tokens.unsqueeze(2)], dim=2)
+            gen_dur = torch.cat([gen_dur, next_dur.unsqueeze(2)], dim=2)
+            gen_dmask = torch.cat([gen_dmask, next_dmask.unsqueeze(2)], dim=2)
             if bool(done.all()):
                 break
 
         gen = generated[:, :, 1:]  # (ng, smax, T-1, mc); strip SOS
+        gen_d = gen_dur[:, :, 1:]
         out = gen.new_full((K, gen.shape[2], c.max_chords), Vocab.PAD)
+        out_dur = gen_d.new_zeros((K, gen.shape[2], c.max_chords))
         for g, members in enumerate(groups):
             for slot, k in enumerate(members):
                 out[k] = gen[g, slot]
-        return out
+                out_dur[k] = gen_d[g, slot]
+        return out, out_dur
 
     @classmethod
     def load_from_checkpoints(

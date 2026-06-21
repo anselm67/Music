@@ -24,6 +24,7 @@ from tqdm import tqdm
 
 from kernsheet import KernSheet, KernSheetSource
 from noter import NoterConfig, Vocab
+from noter.duration import is_duration_bearing, join_duration
 from pdmx import PDMX, PdmxSource
 from scorer import (
     ScorerConfig,
@@ -631,6 +632,57 @@ def _similarity(gt_seq: torch.Tensor, pred_seq: torch.Tensor, max_chords: int) -
     return 1.0 - edit / max_cost if max_cost > 0 else 1.0
 
 
+def _duration_bearing(vocab: Vocab, device: torch.device) -> torch.Tensor:
+    """``(vocab_size,)`` bool: which token ids carry a duration the head emits — fed to
+    ``ScorerModule.predict`` so a note/rest's predicted length is fed back as input."""
+    return torch.tensor(
+        [is_duration_bearing(vocab.decode(i)) for i in range(len(vocab))],
+        device=device,
+    )
+
+
+def _recombine(
+    tokens: torch.Tensor, durs: torch.Tensor, vocab: Vocab, s2i: dict[str, int]
+) -> torch.Tensor:
+    """Fuse a stave's ``(T, max_chords)`` pitch ids + ``log2`` durations back into full
+    ``pitch/dur`` tokens, returned as a ``(T, max_chords)`` id tensor over a shared
+    string->id map ``s2i`` (so identical strings compare equal). The snap inside
+    ``join_duration`` canonicalises both sides identically. Mirrors the noter eval."""
+    out = torch.zeros_like(tokens)
+    for t in range(tokens.size(0)):
+        for c in range(tokens.size(1)):
+            base = vocab.decode(int(tokens[t, c]))
+            s = (
+                join_duration(base, float(durs[t, c]))
+                if is_duration_bearing(base)
+                else base
+            )
+            out[t, c] = s2i.setdefault(s, len(s2i) + 1)
+    return out
+
+
+def _full_tokens(tokens: torch.Tensor, durs: torch.Tensor, vocab: Vocab) -> list[str]:
+    """EOS-cut ``list[str]`` of space-joined ``pitch/dur`` tokens for one stave —
+    the display counterpart of ``Vocab.i2tok`` with the duration head folded in."""
+    out: list[str] = []
+    for t in range(tokens.shape[0]):
+        if tokens[t, 0] == Vocab.EOS:
+            break
+        parts = []
+        for c in range(tokens.shape[1]):
+            tid = int(tokens[t, c])
+            if tid == Vocab.SIL:
+                continue
+            base = vocab.decode(tid)
+            parts.append(
+                join_duration(base, float(durs[t, c]))
+                if is_duration_bearing(base)
+                else base
+            )
+        out.append(" ".join(parts))
+    return out
+
+
 def _match_staves(
     gt_cy: np.ndarray,  # type: ignore[type-arg]
     pred_cy: np.ndarray,  # type: ignore[type-arg]
@@ -688,10 +740,13 @@ def predict_from_images(
     module: ScorerModule,
     dataset: ScorerDataset,
     img_paths: tuple[Path, ...],
+    duration_bearing: torch.Tensor,
 ) -> None:
     for path in img_paths:
         image = dataset.transform(decode_image(path.as_posix())).to(module.device)
-        boxes, tokens, owners = module.predict(image.unsqueeze(0))
+        boxes, tokens, durations, owners = module.predict(
+            image.unsqueeze(0), duration_bearing
+        )
         img = to_display(image)
         _draw_boxes(img, boxes, owners)
         pred_by_sys = _group_by_system(owners, boxes.shape[0])
@@ -699,7 +754,7 @@ def predict_from_images(
         print(f"{path}: detected {boxes.shape[0]} staves")
         for sys_id in range(max(pred_by_sys.keys(), default=-1) + 1):
             pred_seqs = [
-                dataset.vocab.i2tok(tokens[k].cpu())
+                _full_tokens(tokens[k].cpu(), durations[k].cpu(), dataset.vocab)
                 for k in pred_by_sys.get(sys_id, [])
             ]
             print(f"\n── system[{sys_id}] ──")
@@ -712,12 +767,17 @@ def predict_from_images(
 def predict_from_dataset(
     module: ScorerModule,
     dataset: ScorerDataset,
+    duration_bearing: torch.Tensor,
 ) -> None:
     indices = list(range(len(dataset)))
     random.shuffle(indices)
     for idx in indices:
-        image, _gt_sys, _gt_stave, gt_assign, stave_tokens = dataset[idx]
-        boxes, tokens, owners = module.predict(image.unsqueeze(0).to(module.device))
+        image, _gt_sys, _gt_stave, gt_assign, stave_tokens, stave_durs, _dmask = (
+            dataset[idx]
+        )
+        boxes, tokens, durations, owners = module.predict(
+            image.unsqueeze(0).to(module.device), duration_bearing
+        )
         num_gt = int((gt_assign != -1).sum())
         img = to_display(image)
         _draw_boxes(img, boxes, owners)
@@ -733,11 +793,11 @@ def predict_from_dataset(
         print(f"Item {idx}: detected {boxes.shape[0]} staves (GT {num_gt})")
         for sys_id in range(num_systems):
             gt_seqs = [
-                dataset.vocab.i2tok(stave_tokens[k][1:])
+                _full_tokens(stave_tokens[k][1:], stave_durs[k][1:], dataset.vocab)
                 for k in gt_by_sys.get(sys_id, [])
             ]
             pred_seqs = [
-                dataset.vocab.i2tok(tokens[k].cpu())
+                _full_tokens(tokens[k].cpu(), durations[k].cpu(), dataset.vocab)
                 for k in pred_by_sys.get(sys_id, [])
             ]
             print(f"\n── system[{sys_id}] ──")
@@ -765,11 +825,12 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
     config, module = _load_for_inference(name)
     vocab = Vocab.load(ctx.home / "build/vocab.json")
     dataset = ScorerDataset(config, ctx.source, vocab)
+    duration_bearing = _duration_bearing(vocab, module.device)
     cv2.namedWindow("Page")
     if img_paths:
-        predict_from_images(module, dataset, img_paths)
+        predict_from_images(module, dataset, img_paths, duration_bearing)
     else:
-        predict_from_dataset(module, dataset)
+        predict_from_dataset(module, dataset, duration_bearing)
     cv2.destroyAllWindows()
 
 
@@ -796,24 +857,34 @@ def run_eval(ctx: ClickContext, name: str, size: int, seed: int) -> None:
 
     Reports token similarity on predicted vs GT staves matched by center-y
     (Hungarian), plus detection counts so geometric slop and miss/extra are
-    visible separately. Each system's staves are decoded together (cross-stave
-    lockstep); the page sample is seeded (``--seed``, default 0) for comparable runs.
+    visible separately. Similarity is reported two ways: ``full`` recombines the
+    duration head into ``pitch/dur`` tokens (comparable to non-duration models),
+    ``pitch-only`` scores the bare pitch tokens (isolating how much error is
+    duration). Each system's staves are decoded together (cross-stave lockstep);
+    the page sample is seeded (``--seed``, default 0) for comparable runs.
 
     NAME: The model version to evaluate.
     """
     config, module = _load_for_inference(name)
     vocab = Vocab.load(ctx.home / "build/vocab.json")
     dataset = ScorerDataset(config, ctx.source, vocab)
+    duration_bearing = _duration_bearing(vocab, module.device)
+    mc = config.noter.max_chords
     n = min(size, len(dataset))
     rng = random.Random(seed)
     indices = rng.sample(range(len(dataset)), n)
 
-    similarities: list[float] = []
+    full_sims: list[float] = []
+    pitch_sims: list[float] = []
     total_gt, total_pred, pages_miscount = 0, 0, 0
     for idx in tqdm(indices, desc="Evaluating"):
-        image, _gt_sys, gt_stave, gt_assign, stave_tokens = dataset[idx]
+        image, _gt_sys, gt_stave, gt_assign, stave_tokens, stave_durs, _dmask = dataset[
+            idx
+        ]
         num_gt = int((gt_assign != -1).sum())
-        boxes, tokens, _owners = module.predict(image.unsqueeze(0).to(module.device))
+        boxes, tokens, durations, _owners = module.predict(
+            image.unsqueeze(0).to(module.device), duration_bearing
+        )
         num_pred = tokens.shape[0]
         total_gt += num_gt
         total_pred += num_pred
@@ -824,21 +895,34 @@ def run_eval(ctx: ClickContext, name: str, size: int, seed: int) -> None:
         gt_cy = ((gt_stave[:num_gt, 1] + gt_stave[:num_gt, 3]) / 2).numpy()
         pred_cy = (((boxes[:, 2] + boxes[:, 4]) / 2) / H).cpu().numpy()
         for g, p in _match_staves(gt_cy, pred_cy):
-            similarities.append(
-                _similarity(stave_tokens[g], tokens[p].cpu(), config.noter.max_chords)
+            pitch_sims.append(_similarity(stave_tokens[g], tokens[p].cpu(), mc))
+            # Full: recombine pitch + duration into pitch/dur tokens (durations are
+            # row-aligned with the tokens; slice to the same EOS-cut length).
+            gt_tok = strip_eos(stave_tokens[g][1:], Vocab.EOS)
+            pred_tok = strip_eos(tokens[p].cpu(), Vocab.EOS)
+            max_cost = max(len(gt_tok), len(pred_tok)) * mc
+            s2i: dict[str, int] = {}
+            gt_full = _recombine(gt_tok, stave_durs[g][1 : 1 + len(gt_tok)], vocab, s2i)
+            pred_full = _recombine(
+                pred_tok, durations[p].cpu()[: len(pred_tok)], vocab, s2i
             )
+            full_dist = sequence_edit_distance(gt_full, pred_full, 0)
+            full_sims.append(1.0 - full_dist / max_cost if max_cost > 0 else 1.0)
 
-    if not similarities:
+    if not full_sims:
         print("No matched staves to evaluate.")
         return
     print(f"\nEvaluated {n} pages from '{name}':")
     print(f"  staves: {total_pred} predicted / {total_gt} GT")
     print(f"  pages with miscount: {pages_miscount} / {n}")
-    print(f"  matched-stave similarity  min {min(similarities):.1%}")
     print(
-        f"                            avg {sum(similarities) / len(similarities):.1%}"
+        f"  pitch/dur (full): avg {sum(full_sims) / len(full_sims):.1%}  "
+        f"min {min(full_sims):.1%}  max {max(full_sims):.1%}"
     )
-    print(f"                            max {max(similarities):.1%}")
+    print(
+        f"  pitch-only:       avg {sum(pitch_sims) / len(pitch_sims):.1%}  "
+        f"min {min(pitch_sims):.1%}  max {max(pitch_sims):.1%}"
+    )
 
 
 cli.add_command(check)

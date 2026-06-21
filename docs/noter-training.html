@@ -282,6 +282,12 @@
         <td><strong>From-scratch pretrain of the <span class="tag">logits</span> recipe at <code>dur_loss_weight</code> 1.0</strong> — the clean test the FT-at-1.0 confounded. Beats the w=2.0 <span class="tag">logits</span> base teacher-forced on BOTH (pitch 99.50 vs 99.13, dur_acc 0.9933 vs 0.9923). Free-running <strong>PDMX 98.2% full / 98.3% pitch-only</strong> — <strong>pitch tax fully recovered</strong> (w2 base 97.3, +0.9 pp), matching the regression base's 98.3 while keeping the classification duration head (full≈pitch-only). KS 79.8% is the expected PDMX-only domain gap (pre-FT, no real scans) — not comparable to the mixed rows; KS verdict awaits <span class="tag">…-w1-mixed</span>. &dagger;pitch-only + dur-classification, NOT comparable to the pitch&times;dur rows above</td>
         <td><span class="badge badge-green">base · pitch tax recovered</span></td>
       </tr>
+      <tr>
+        <td><a class="run-link" href="#run-bartok-duration-logits-w1"><span class="tag">bartok-duration-logits-w1-mixed</span></a></td><td>2026-06-21</td><td>12</td>
+        <td>98.05%*&dagger;</td><td>0.1356*&dagger;</td>
+        <td><strong>Rehearsal-mix FT of the from-scratch <span class="tag">bartok-duration-logits-w1</span> base</strong> — the decisive real-scan test the <code>w=2.0</code>-tained <span class="tag">logits-mixed</span> failed. Free-running <strong>KS 94.2% full / 94.4% pitch-only</strong> (1024 samples). <strong>Recovers the failure</strong> (+1.3 pp over <span class="tag">logits-mixed</span>'s 92.9) and <strong>ties the regression base <span class="tag">bartok-duration-mixed</span></strong> (94.3, within noise) while keeping the classification duration head: <strong>duration solved on real scans</strong> (KS full−pitch gap just 0.2 pp). Confirms the deficit was the <code>dur_loss_weight</code>=2.0 pitch tax, not the head. Caveat: scorer is token-only, so this duration capability is gated on a scorer duration path before it reaches end-to-end. *blended stream &dagger;pitch-only + dur-classification</td>
+        <td><span class="badge badge-green">pilot · KS tie, duration solved</span></td>
+      </tr>
     </tbody>
   </table>
 

@@ -93,6 +93,60 @@
      following the format of the entries that follow. Keep newest-first order.
      ════════════════════════════════════════════════════════════════════════ -->
 
+<!-- ── Scorer duration path ── -->
+<article class="entry">
+  <h2>Wire the duration head through the end-to-end scorer (loss, generation, eval)</h2>
+  <div class="entry-meta">
+    <span>2026-06-21</span>
+    <span class="badge accepted">Accepted — path built, training pending</span>
+    <span class="ref">scorer (<code>ScorerDataset</code>, <code>ScorerModule</code>, <code>cli/scorer.py</code>) · unblocks the duration noter end-to-end · cf. the duration-head entry below</span>
+  </div>
+
+  <h3>Context</h3>
+  <p>
+    The duration work below landed and settled on the noter: <span class="tag">bartok-duration-logits-w1-mixed</span>
+    ties the regression base on real scans (KS full 94.2% / pitch-only 94.4%, full−pitch gap 0.2pp) with
+    duration as a clean separate classification head. But that capability stopped at the noter. The
+    <strong>scorer</strong> — staffer + noter fused in one forward pass — consumed only the token channel:
+    its dataset discarded the <code>(durations, dur_mask)</code> the <code>SequenceLoader</code> already
+    returns, its joint loss was token-only cross-entropy (<code>logits, _ = …decode(…)</code>), and its
+    generation never fed a duration back. A scorer merged on top of a duration-trained noter would
+    therefore emit <em>pitch with no durations</em> end-to-end — a capability regression versus the
+    production combined-token scorer. So shipping duration was gated on building the scorer duration path,
+    which is real wiring (a <code>dur_loss_weight</code> flag is a no-op for the scorer).
+  </p>
+
+  <h3>Decision</h3>
+  <p>
+    Mirror the noter at all three seams; the model and decoder already support duration (the bridge adds
+    no params), so this is plumbing, not new architecture.
+  </p>
+  <ul>
+    <li><strong>Dataset</strong>: <code>ScorerDataset</code> emits per-stave <code>durations</code> (log2
+      length) and <code>dur_mask</code> alongside <code>tokens</code> (a 7-tuple <code>Sample</code>),
+      filled from the same <code>SequenceLoader</code> output it previously dropped.</li>
+    <li><strong>Training loss</strong>: <code>ScorerModule._step</code> teacher-forces the duration
+      channels in lockstep with the tokens through the cross-stave decode, adds the masked duration
+      classification loss (CE over the analytic 36-bin table, weighted by
+      <code>noter.dur_loss_weight</code>, default 1.0 — the w=1.0 setting the noter work established), and
+      logs <code>dur_loss</code> / <code>dur_acc</code>.</li>
+    <li><strong>Generation + eval</strong>: <code>_generate_grouped</code> / <code>predict</code> feed the
+      predicted bin's length back autoregressively and return durations; <code>scorer eval</code>
+      recombines pred/GT <code>(token, log2-len)</code> → <code>pitch/dur</code> and reports
+      <strong>full</strong> and <strong>pitch-only</strong> similarity, matching the noter eval.</li>
+  </ul>
+
+  <h3>Status / outcome</h3>
+  <p>
+    Landed on main (391 tests green incl. a new scorer <code>_step</code>-backprops + generation test;
+    ruff + mypy clean). No asset rebuild — the duration channels were already produced on disk and only
+    discarded at load. Training is the next step: merge a duration noter
+    (<span class="tag">bartok-duration-logits-w1-mixed</span>) + a staffer into a fresh scorer
+    (<code>--noter</code> on <code>scorer train</code>) and evaluate full vs pitch-only end-to-end against
+    the production token-only scorer.
+  </p>
+</article>
+
 <!-- ── Duration as a separate decoder head ── -->
 <article class="entry">
   <h2>Split duration out of the flat token into a separate decoder head — and switch that head from regression to classification</h2>
