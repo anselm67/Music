@@ -261,8 +261,14 @@
       <tr>
         <td><a class="run-link" href="#run-bartok-duration-cls"><span class="tag">bartok-duration-cls</span></a></td><td>2026-06-20</td><td>12</td>
         <td>99.00%&dagger;</td><td>0.1012&dagger;</td>
-        <td><strong>Duration head: regression &rarr; classification.</strong> Same split as <span class="tag">bartok-duration</span>, but the head now <strong>classifies</strong> over the analytic duration table (<code>NUM_DUR_BINS</code> bins, cross-entropy) instead of regressing <code>log2(length)</code>; <code>dur_loss_weight</code> 1.0&rarr;2.0. Teacher-forced val <strong>dur_acc 0.991</strong> (vs the regressor's 0.939, <strong>+5.2 pp</strong>) at −0.8 pp pitch acc (99.00 vs 99.77, partly the heavier dur weight). Free-running / scorer eval pending. &dagger;pitch-only + dur-classification, NOT comparable to the pitch&times;dur rows above</td>
+        <td><strong>Duration head: regression &rarr; classification.</strong> Same split as <span class="tag">bartok-duration</span>, but the head now <strong>classifies</strong> over the analytic duration table (<code>NUM_DUR_BINS</code> bins, cross-entropy) instead of regressing <code>log2(length)</code>; <code>dur_loss_weight</code> 1.0&rarr;2.0. Teacher-forced val <strong>dur_acc 0.991</strong> (vs the regressor's 0.939, <strong>+5.2 pp</strong>) at −0.8 pp pitch acc (99.00 vs 99.77, partly the heavier dur weight). Free-running <strong>PDMX 97.1%</strong> full (97.2% pitch-only) &mdash; <strong>duration now essentially free</strong> (full ≈ pitch-only), but the <code>dur_loss_weight</code>=2.0 pitch tax drops it ~1 pp under the <span class="tag">bartok-duration</span> regression base (98.3% full). &dagger;pitch-only + dur-classification, NOT comparable to the pitch&times;dur rows above</td>
         <td><span class="badge badge-slate">pilot · classification head</span></td>
+      </tr>
+      <tr>
+        <td><a class="run-link" href="#run-bartok-duration-logits"><span class="tag">bartok-duration-logits</span></a></td><td>2026-06-21</td><td>12</td>
+        <td>99.13%&dagger;</td><td>0.0832&dagger;</td>
+        <td><strong>Input-side duration feedback: continuous projection &rarr; bin embedding.</strong> The <span class="tag">bartok-duration-cls</span> recipe, but the decoder's fed-back duration goes from a continuous <code>dur_proj</code> to an <code>nn.Embedding(NUM_DUR_BINS+1, D)</code> bin lookup &mdash; mirroring the now-discrete output head. Teacher-forced val beats <span class="tag">cls</span> on every metric (pitch 99.13 vs 99.00 <strong>+0.13</strong>, dur_acc 0.992 vs 0.991 <strong>+0.11</strong>, val/loss 0.083 vs 0.101). Free-running PDMX 97.3% full / 97.4% pitch-only &mdash; a tie with <span class="tag">cls</span> (unseeded draws, within noise). &dagger;pitch-only + dur-classification, NOT comparable to the pitch&times;dur rows above</td>
+        <td><span class="badge badge-slate">pilot · bin-embedding feedback</span></td>
       </tr>
     </tbody>
   </table>
@@ -882,7 +888,44 @@
       </tbody>
     </table>
     <p style="font-size:0.78rem;color:var(--muted)">Both runs share the split, vocab (552), jitter and 12-ep PDMX recipe; the moving parts are the head (regression vs classification) and <code>dur_loss_weight</code> (1.0 vs 2.0). Per-epoch the cls run plateaus by epoch&nbsp;9 (pitch 0.9894&rarr;0.9899&rarr;0.9900, dur 0.9902&rarr;0.9910&rarr;0.9912), so the gaps are converged, not under-training. dur_loss values are different objectives (L1 vs CE) and not directly comparable; dur_acc is the like-for-like (predicted bin == GT bin).</p>
-    <div class="result-box neutral"><strong>Classification nails the duration the regressor was missing — +5.2 pp dur_acc (0.939 &rarr; 0.991) — at a small pitch-acc cost.</strong> The regressor's residual bin-misses are essentially gone, exactly the failure mode the switch targeted. Pitch acc dips −0.77 pp; that gap is muddied by the heavier <code>dur_loss_weight</code> (2.0 vs 1.0) pulling gradient toward the dur head, so it isn't a clean attribution to the head change alone. These are teacher-forced val only — the decisive read is the free-running / scorer eval on KS &amp; PDMX similarity (pending), since duration fidelity feeds the end-to-end metric, not val token acc. Next pilot step: move the input-side duration feedback from the continuous <code>dur_proj</code> to an <code>nn.Embedding(NUM_DUR_BINS+1, D)</code> bin lookup, mirroring the now-discrete output head.</div>
+    <table class="summary-table">
+      <thead><tr><th>Free-running <code>eval --size 1024</code>, PDMX in-domain</th><th><span class="tag">bartok-duration</span> (regression)</th><th><span class="tag">bartok-duration-cls</span></th></tr></thead>
+      <tbody>
+        <tr><td>pitch/dur (full, recombined)</td><td><strong>98.3%</strong></td><td>97.1% <span style="color:var(--muted)">(−1.2)</span></td></tr>
+        <tr><td>pitch-only (isolating duration error)</td><td><strong>98.7%</strong></td><td>97.2% <span style="color:var(--muted)">(−1.5)</span></td></tr>
+        <tr><td>full − pitch-only gap (duration cost)</td><td>0.4 pp</td><td><strong>0.1 pp</strong></td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">Free-running = <code>noter eval --vocab &lt;KS&gt;/build/vocab.json --size 1024 bartok-duration-cls</code> (greedy, lockstep), eval'd 2026-06-21. The <span class="tag">cls</span> checkpoint predates the input-embedding change so it was re-evaled at its <code>train/bartok-duration-cls</code> tag in a worktree. Sample draws are unseeded, so cross-run deltas under ~0.3 pp are sampling noise.</p>
+    <div class="result-box neutral"><strong>Classification makes duration essentially free — but the heavier dur weight taxes pitch, so combined accuracy regresses on PDMX.</strong> Teacher-forced, classification nails the duration the regressor was missing (+5.2 pp dur_acc, 0.939 &rarr; 0.991), and free-running this shows as a collapsed full−pitch-only gap (0.4 pp &rarr; <strong>0.1 pp</strong>): duration is no longer the bottleneck. But pitch <em>drops</em> — free-running pitch-only 97.2% vs the regression base's 98.7% (−1.5 pp), tracking the teacher-forced −0.77 pp and amplified by <code>dur_loss_weight</code> 2.0 pulling gradient off pitch. Net: full pitch/dur 97.1% &lt; 98.3%, so on the combined metric the regression base still leads PDMX. The duration head is solved; the open lever is recovering the pitch tax (a <code>dur_loss_weight</code> sweep back toward 1.0). Next pilot step taken below: <span class="tag">bartok-duration-logits</span> moves the input-side feedback from continuous <code>dur_proj</code> to a bin embedding.</div>
+  </div>
+
+  <!-- ════════════════════════════════════════════ bartok-duration-logits -->
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-bartok-duration-logits"><span class="tag">bartok-duration-logits</span> — duration feedback, projection &rarr; bin embedding</h2>
+      <span class="session-meta">2026-06-21 · tag <code>train/bartok-duration-logits</code> · 12 ep · the <span class="tag">bartok-duration-cls</span> recipe, input-side duration feedback discretised</span>
+      <span class="badge badge-slate">pilot · bin-embedding feedback</span>
+    </div>
+    <p><strong>The decoder's fed-back duration goes discrete, to match the now-discrete output head.</strong> <span class="tag">bartok-duration-cls</span> classifies duration on the output but still fed the <em>previous</em> note's duration back into the decoder through a continuous <code>dur_proj</code> linear; <span class="tag">bartok-duration-logits</span> replaces that with an <code>nn.Embedding(NUM_DUR_BINS+1, D)</code> bin lookup (<code>NoterModel.target_embedder.dur_embedding</code>), so input and output speak the same discrete duration alphabet. Everything else matches <span class="tag">cls</span> (pitch-only vocab 552, cross-stave, <code>--vocab</code> KS-combined, <code>--jitter 0.5 --augment 0.0</code>, 12 ep, PDMX base, <code>dur_loss_weight</code> 2.0).</p>
+    <table class="summary-table">
+      <thead><tr><th>Teacher-forced val (epoch 11, PDMX split)</th><th><span class="tag">bartok-duration-cls</span> (proj feedback)</th><th><span class="tag">bartok-duration-logits</span> (embed feedback)</th></tr></thead>
+      <tbody>
+        <tr><td>pitch (token) acc</td><td>99.00%</td><td><strong>99.13%</strong> <span style="color:var(--muted)">(+0.13)</span></td></tr>
+        <tr><td>duration acc</td><td>0.9912</td><td><strong>0.9923</strong> <span style="color:var(--muted)">(+0.11 pp)</span></td></tr>
+        <tr><td>val loss</td><td>0.1012</td><td><strong>0.0832</strong> <span style="color:var(--muted)">(−18%)</span></td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">Same fixed val split, so these deltas are clean (unlike the free-running draws below). <span class="tag">logits</span> led <span class="tag">cls</span> at every matched epoch, not just the endpoint.</p>
+    <table class="summary-table">
+      <thead><tr><th>Free-running <code>eval --size 1024</code>, PDMX in-domain</th><th><span class="tag">bartok-duration-cls</span></th><th><span class="tag">bartok-duration-logits</span></th></tr></thead>
+      <tbody>
+        <tr><td>pitch/dur (full, recombined)</td><td>97.1%</td><td>97.3%</td></tr>
+        <tr><td>pitch-only</td><td>97.2%</td><td>97.4%</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">Free-running eval'd 2026-06-21, unseeded draws (<code>random.sample</code>, no fixed seed) on slightly different dataset code, so the +0.2 pp full/pitch-only gap is within sampling noise — call it a tie at ~97.3%. Like <span class="tag">cls</span>, full ≈ pitch-only (duration free) and both sit ~1 pp under the regression base's 98.3% full from the <code>dur_loss_weight</code> pitch tax.</p>
+    <div class="result-box neutral"><strong>Discretising the input feedback is a small strict win on teacher-forced val (pitch +0.13, dur_acc +0.11, val/loss −18%) but free-running PDMX is a wash vs <span class="tag">cls</span>.</strong> The embedding lets the decoder condition on a clean duration bin rather than a continuous scalar, and it shows where the metric is clean (fixed-split val, ahead at every epoch). Free-running the two are indistinguishable given unseeded draws. The bigger story is unchanged from <span class="tag">cls</span>: duration is solved (full ≈ pitch-only), and the combined-accuracy regression vs the regression base is the <code>dur_loss_weight</code>=2.0 pitch tax, not the head or feedback design. <strong>Remaining:</strong> a seeded A/B (and KS / scorer end-to-end eval) to settle cls-vs-logits free-running, and a <code>dur_loss_weight</code> sweep to recover pitch.</div>
   </div>
 
 </main>

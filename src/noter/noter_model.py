@@ -59,7 +59,7 @@ class NoterConfig:
     lr: float = 3e-4
     weight_decay: float = 1e-2
     # Weight on the duration-head classification loss, added to the token CE.
-    dur_loss_weight: float = 2.0
+    dur_loss_weight: float = 1.0
     warmup_steps: int = 500
     # Train-only box-jitter augmentation: probability a train sample's box is
     # jittered (0 = disabled). Applied to the train split only.
