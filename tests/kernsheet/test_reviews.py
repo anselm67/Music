@@ -46,10 +46,9 @@ class TestStaffHeight:
         assert score_findings(_score(_page([50]))) == []
 
     def test_message_pinpoints_outlier_systems(self) -> None:
-        msg = score_findings(_score(_page([50, 59])))[0].message
-        assert "spread 9px" in msg
-        assert "tallest sys0 59px" in msg
-        assert "shortest sys0 50px" in msg
+        finding = score_findings(_score(_page([50, 59])))[0]
+        assert finding.message == "sys0 59px (large), sys0 50px (short)"
+        assert finding.system_index == 0
 
 
 class TestBarNumbers:

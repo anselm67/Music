@@ -354,6 +354,37 @@ class TestReviewWalk:
 
         assert editor._pending_review_pages() == []
 
+    def test_selects_flagged_system(self) -> None:
+        # sys1 holds the tall (100px) staff -> staff_height pins system_index 1.
+        sys0 = System(
+            bar_numbers=[1],
+            bars=[10, 500],
+            staves=[
+                Staff(box=Box(10, 100, 500, 140)),
+                Staff(box=Box(10, 160, 500, 200)),
+            ],
+        )
+        sys1 = System(
+            bar_numbers=[2],
+            bars=[10, 500],
+            staves=[
+                Staff(box=Box(10, 300, 500, 340)),
+                Staff(box=Box(10, 360, 500, 460)),
+            ],
+        )
+        editor = _editor([_page([sys0, sys1])], system_index=0)
+        editor.review_names = ["staff_height"]
+
+        editor._select_flagged_system()
+
+        assert editor.system_index == 1
+
+    def test_no_selection_change_outside_review_walk(self) -> None:
+        editor = _editor([self._bad_page(1)], system_index=0)
+        # review_names is None -> not a review walk, selection untouched.
+        editor._select_flagged_system()
+        assert editor.system_index == 0
+
 
 class TestBarEditing:
     def test_add_bar_inserts_after_selected(self) -> None:

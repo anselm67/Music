@@ -266,6 +266,25 @@ class StaffEditor:
         elif len(self.system.bars) <= 0:
             self.bar_index = -1
 
+    def _select_flagged_system(self) -> None:
+        """During a review walk, point selection at the first system a walked
+        finding pins on this page (e.g. the outlier staff for ``staff_height``),
+        so the user lands on the problem rather than at system 0. No-op if no
+        finding pins a system."""
+        if self.review_names is None:
+            return
+        findings = score_findings(self.score, self.review_names, kern=self.kern)
+        for f in findings:
+            if (
+                f.page_number == self.page.page_number
+                and f.system_index is not None
+                and 0 <= f.system_index < self.page.system_count
+            ):
+                self.system_index = f.system_index
+                self.staff_index = 0 if self.system.staff_count > 0 else -1
+                self.bar_index = 0 if len(self.system.bars) > 0 else -1
+                return
+
     def _load_score(self, id: str) -> None:
         self.score = self.kern_sheet.load_score(id)
         self.images = []
@@ -408,6 +427,27 @@ class StaffEditor:
 
     def get(self) -> Tuple[MatLike, Page]:
         return self.images[self.page_index], self.page
+
+    def print_review_progress(self) -> None:
+        """The review-walk position line (``edit --review``), shown below the ``id``
+        on landing: this score's place in the worklist, plus where the current page
+        sits among the score's flagged pages. No-op outside a review walk."""
+        if self.review_progress is None:
+            return
+        done, total = self.review_progress
+        flagged = sorted(
+            {
+                f.page_number
+                for f in score_findings(self.score, self.review_names, kern=self.kern)
+            }
+        )
+        suffix = ""
+        if self.page.page_number in flagged:
+            pos = flagged.index(self.page.page_number) + 1
+            suffix = f" · flagged page {pos}/{len(flagged)} in this score"
+        elif flagged:
+            suffix = f" · {len(flagged)} flagged page(s) in this score"
+        print(f"[review: score {done}/{total}{suffix}]")
 
     def print_page_status(self) -> None:
         """One-liner shown on page entry: status, flagged reviews, acknowledged ones."""
@@ -718,10 +758,8 @@ class StaffEditor:
 
         self.review_names = review_names
         self.review_progress = review_progress
-        self.clear()
-        print(f"id : {self.id}")
-        print(f"{self.kern.bar_count} bars in kern file.")
         self.fast_mode = fast_mode
+        self.clear()
         if start_page_number is not None:
             indices = [
                 i
@@ -731,8 +769,12 @@ class StaffEditor:
             if indices:
                 self.page_index = indices[0]
                 self._reset_selection()
+                self._select_flagged_system()
             else:
                 print(f"Page {start_page_number} not found; starting at first page.")
+        print(f"id : {self.id}")
+        self.print_review_progress()
+        print(f"{self.kern.bar_count} bars in kern file.")
         self.print_page_status()
 
         while True:
@@ -751,18 +793,6 @@ class StaffEditor:
                     self.replace_page(status=Status.VALIDATED)
                     self.save()
                 pending = self._pending_review_pages()
-                if self.review_progress is not None:
-                    done, total = self.review_progress
-                    if pending:
-                        print(
-                            f"[review: score {done}/{total} · {len(pending)} more "
-                            f"flagged page(s) in this score]"
-                        )
-                    else:
-                        print(
-                            f"[review: {done}/{total} scores done, "
-                            f"{total - done} to go]"
-                        )
                 nxt = (
                     next(
                         (
@@ -778,8 +808,13 @@ class StaffEditor:
                 if nxt is not None:
                     self.page_index = nxt
                     self._reset_selection()
+                    self._select_flagged_system()
+                    self.print_review_progress()
                     self.print_page_status()
                     continue
+                if self.review_progress is not None:
+                    done, total = self.review_progress
+                    print(f"[review: {done}/{total} scores done, {total - done} to go]")
                 return True
             elif key == ord("1"):
                 if self.confirm(f"Delete score {self.id}?"):

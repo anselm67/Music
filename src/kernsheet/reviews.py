@@ -31,6 +31,9 @@ class Finding:
     score_id: str
     page_number: int
     message: str
+    # The system the finding pins, when it has one (e.g. the outlier staff for
+    # ``staff_height``), so the editor can land selection on it; None = page-level.
+    system_index: int | None = None
 
 
 # A review reads the score geometry and, when one is available, the kern token file
@@ -73,14 +76,12 @@ def _staff_height(score: Score, _kern: KernReader | None) -> Iterator[Finding]:
         if spread > STAFF_HEIGHT_TOLERANCE_PX:
             tall_sys = next(si for si, h in staves if h == hi)
             short_sys = next(si for si, h in staves if h == lo)
-            typical = sorted(heights)[len(heights) // 2]
             yield Finding(
                 "staff_height",
                 score.id,
                 page.page_number,
-                f"stave height spread {spread}px (> {STAFF_HEIGHT_TOLERANCE_PX}px): "
-                f"tallest sys{tall_sys} {hi}px, shortest sys{short_sys} {lo}px "
-                f"(typical {typical}px)",
+                f"sys{tall_sys} {hi}px (large), sys{short_sys} {lo}px (short)",
+                system_index=tall_sys,
             )
 
 
