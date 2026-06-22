@@ -809,6 +809,8 @@ class StaffEditor:
                     self.page_index = nxt
                     self._reset_selection()
                     self._select_flagged_system()
+                    self.clear()  # wipe any 't'/'k' dump before the new landing
+                    print(f"id : {self.id}")
                     self.print_review_progress()
                     self.print_page_status()
                     continue
