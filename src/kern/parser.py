@@ -442,7 +442,7 @@ class Parser(Generic[T]):
                     holder = KernSpineHolder(
                         self.handler.open_spine(kern), self.enable_warnings
                     )
-                case "**dynam" | "**dynam/2" | "**mxhm" | "**recip" | "**fb":
+                case "**dynam" | "**dynam/2" | "**mxhm" | "**recip" | "**fb" | "**fing":
                     holder = DynamSpineHolder(
                         self.handler.open_spine(kern), self.enable_warnings
                     )

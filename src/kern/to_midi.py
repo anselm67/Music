@@ -175,7 +175,7 @@ class MidiHandler(Handler[Spine]):
         self, spine_type: str | None = None, parent: Spine | None = None
     ) -> Spine:
         match spine_type:
-            case "**dynam" | "**dynam/2" | "**mxhm" | "**recip" | "**fb":
+            case "**dynam" | "**dynam/2" | "**mxhm" | "**recip" | "**fb" | "**fing":
                 spine = Spine()
             case _:
                 channel = self.allocate_channel()

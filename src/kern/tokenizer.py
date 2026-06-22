@@ -138,9 +138,7 @@ class TokenFormatter:
         # lists chord notes in source order, which is arbitrary; an unsorted target
         # makes the chord ambiguous to train against and penalizes a correct
         # prediction that merely picked a different note order at eval.
-        notes = sorted(
-            chord.notes, key=lambda n: (n.pitch.value, n.sharps - n.flats)
-        )
+        notes = sorted(chord.notes, key=lambda n: (n.pitch.value, n.sharps - n.flats))
         text = " ".join([self.format_note(note) for note in notes])
         return text
 
@@ -177,7 +175,15 @@ class BaseHandler(Handler[Spine]):
         self, spine_type: str | None = None, parent: Spine | None = None
     ) -> Spine:
         match spine_type:
-            case "**dynam" | "**dynam/2" | "**mxhm" | "**recip" | "**fb" | "**text":
+            case (
+                "**dynam"
+                | "**dynam/2"
+                | "**mxhm"
+                | "**recip"
+                | "**fb"
+                | "**text"
+                | "**fing"
+            ):
                 spine: Spine = IgnoredSpine()
             case _:
                 spine = Spine()
