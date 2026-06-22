@@ -14,10 +14,9 @@
 # unfrozen detector/decoder drifting on PDMX) — a strict win at every site,
 # largest at the joint scorer. See memory `project-mixed-finetune`.
 #
-# Run BY THE USER from the repo root (this orchestrator launches training; Claude
-# does not). Each stage is fail-fast and skipped if its checkpoint already exists,
-# so the pipeline is resumable. Set DRYRUN=1 to print the commands without running,
-# FORCE=1 to retrain stages whose checkpoint already exists.
+# Run from the repo root. Each stage is fail-fast and skipped if its checkpoint
+# already exists, so the pipeline is resumable. Set DRYRUN=1 to print the commands
+# without running, FORCE=1 to retrain stages whose checkpoint already exists.
 #
 #   scripts/train_scorer_pipeline.sh <NAME> [SCORER_NAME]
 #   DRYRUN=1 scripts/train_scorer_pipeline.sh my-model

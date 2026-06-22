@@ -302,14 +302,14 @@ registry of cheap geometry checks (first: `staff_height`) recomputed on demand, 
 
 ### Running a training (all stages: `staffer` / `noter` / `scorer`)
 
-**The user runs training, not you.** A run is a multi-hour GPU job the user launches in a separate
-terminal — your job is to *print* the command, never execute it. Same process for every stage;
-only the CLI binary and `docs/<stage>-training.html` differ:
+A run is a multi-hour GPU job. Launch it in the background (or hand the user the command if they
+prefer to run it themselves). Same process for every stage; only the CLI binary and
+`docs/<stage>-training.html` differ:
 
 1. Make sure all tests pass, then commit a `train/<model-name>` tag so the run is reproducible.
    Use a descriptive name; if the model derives from a previous one, include its name (e.g.
    `enhanced2-vflip` = `enhanced2` plus vflip augmentation).
-2. Give the user the command, with the log file routed under the stage:
+2. Run the command (or give it to the user), with the log file routed under the stage:
    ```bash
    staffer --log-file logs/staffer/<model-name>.log train OPTIONS...
    noter   --log-file logs/noter/<model-name>.log   train OPTIONS...
