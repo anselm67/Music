@@ -201,9 +201,7 @@ class ScorerModule(L.LightningModule):
             tgt_in = tgt[:, :, :-1]
             labels = tgt[:, :, 1:].clone()
             labels[~stave_mask] = Vocab.PAD  # exclude padded staves from the loss
-            # Duration head ignored here — the scorer's duration path is a
-            # follow-up; for now its noter sub-model is supervised on tokens only.
-            logits, _ = self.model.noter.decode(
+            logits = self.model.noter.decode(
                 tgt_in, mem_g, pad_g, stave_mask, self._causal_mask(tgt_in.shape[2])
             )  # (ng, max_staves, T-1, max_chords, V)
             V = logits.shape[-1]
@@ -323,7 +321,7 @@ class ScorerModule(L.LightningModule):
         done = ~stave_mask.clone()  # padded staves emit EOS immediately
         for _ in range(c.max_seqlen - 1):
             T = generated.shape[2]
-            logits, _ = self.model.noter.decode(
+            logits = self.model.noter.decode(
                 generated, mem_g, pad_g, stave_mask, self._causal_mask(T)
             )
             next_tokens = logits[:, :, -1, :, :].argmax(dim=-1)  # (ng, smax, mc)

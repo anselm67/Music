@@ -9,8 +9,6 @@ from torch import Tensor
 
 from pdmx import PDMX
 
-from .duration import split_duration
-
 
 class Vocab:
     PAD_T = (0, "PAD")  # Padding value for images and time-axis sequence positions.
@@ -43,15 +41,8 @@ class Vocab:
             return m.group("base") + (m.group("dbl") or "")
         return str_tok
 
-    @staticmethod
-    def _normalize(str_tok: str) -> str:
-        """Map a raw token to its vocab key: strip the bar number, then split the
-        numeric duration off notes/rests (predicted separately by the duration
-        head), leaving the vocab pitch-only."""
-        return split_duration(Vocab._strip_bar_number(str_tok))[0]
-
     def encode(self, str_tok: str) -> int:
-        return self._tok2i.get(Vocab._normalize(str_tok), self.UNK)
+        return self._tok2i.get(Vocab._strip_bar_number(str_tok), self.UNK)
 
     def decode(self, int_tok: int) -> str:
         return self._i2tok.get(int_tok, self.UNK_T[1])
@@ -90,7 +81,7 @@ class Vocab:
             with open(tokens_file, "r") as f:
                 for record in f:
                     for token in record.strip().split():
-                        counts[Vocab._normalize(token)] += 1
+                        counts[Vocab._strip_bar_number(token)] += 1
 
         tok2i: dict[str, int] = {s: i for i, s in Vocab.RESERVED_TOKENS}
         for key, value in counts.items():
@@ -115,7 +106,7 @@ class Vocab:
             with open(tokens_file, "r") as f:
                 for record in f:
                     for token in record.strip().split():
-                        counts[Vocab._normalize(token)] += 1
+                        counts[Vocab._strip_bar_number(token)] += 1
 
         oov = {t: c for t, c in counts.items() if t not in self._tok2i}
         tok2i = dict(self._tok2i)

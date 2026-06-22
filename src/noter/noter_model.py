@@ -10,7 +10,6 @@ from torchvision.transforms import InterpolationMode
 from staffer import StafferConfig
 from utils import current_commit
 
-from .duration import NUM_DUR_BINS, bin_boundaries
 from .noter_vocab import Vocab
 
 
@@ -29,12 +28,12 @@ class NoterConfig:
     page_shape: list[int] = field(default_factory=lambda: StafferConfig().image_shape)
 
     input_shape: list[int] = field(default_factory=lambda: [64, 6 * 128])
-    max_chords: int = 8  # Also known as C
+    max_chords: int = 8
     max_seqlen: int = 128  # Also known as T
     # Staves per system — the cross-stave decode unit. A system's staves are
     # row-aligned (one shared barline grid), batched together and padded to this
     # width (a stave_mask marks the real ones). 2 covers the System2 corpus.
-    max_staves: int = 2  # Also known as S
+    max_staves: int = 2
     vocab_size: int = -1
     pad_idx: int = -1
 
@@ -53,13 +52,11 @@ class NoterConfig:
     dropout: float = 0.1
 
     # Training config.
-    batch_size: int = 16  # Also known as B
+    batch_size: int = 16
     train_len: int = -1
     valid_len: int = -1
     lr: float = 3e-4
     weight_decay: float = 1e-2
-    # Weight on the duration-head classification loss, added to the token CE.
-    dur_loss_weight: float = 1.0
     warmup_steps: int = 500
     # Train-only box-jitter augmentation: probability a train sample's box is
     # jittered (0 = disabled). Applied to the train split only.
@@ -116,8 +113,6 @@ class SourceEmbedding(nn.Module):
 
 
 class TargetEmbedder(nn.Module):
-    _duration_boundaries: Tensor
-
     def __init__(self, config: NoterConfig) -> None:
         super().__init__()
         self.embedding = nn.Embedding(
@@ -134,39 +129,17 @@ class TargetEmbedder(nn.Module):
         self.pos_embed = nn.Parameter(
             0.02 * torch.randn(config.max_seqlen, config.embed_dim)
         )
-        # Per-slot duration injected on the input side as a learned bin embedding,
-        # mirroring the now-discrete (classification) duration head. The duration
-        # left the token (pitch-only vocab), so this is how a slot's note value
-        # reaches the decoder. The incoming log2 length is bucketized to its table
-        # bin; slots that carry no duration use the extra `NUM_DUR_BINS` padding row
-        # (also the zero-init that keeps the token path unperturbed at the start of
-        # training). The whole table is zero-init for that same identity-at-init.
-        self.dur_embedding = nn.Embedding(
-            NUM_DUR_BINS + 1, config.embed_dim, padding_idx=NUM_DUR_BINS
-        )
-        nn.init.zeros_(self.dur_embedding.weight)
-        self.register_buffer("_duration_boundaries", torch.tensor(bin_boundaries()))
         self.norm = nn.LayerNorm(config.embed_dim)
         self.dropout = nn.Dropout(config.dropout)
 
-    def forward(
-        self,
-        target: Tensor,  # (B, T, C) token ids
-        duration: Tensor | None = None,  # (B, T, C) log2 length
-        duration_mask: Tensor | None = None,  # (B, T, C) True where duration present
-    ) -> Tensor:
-        embeds = self.embedding(target)  # (B, T, C, D)
+    def forward(self, target: Tensor) -> Tensor:
+        embeds = self.embedding(target)  # (B, T, H, D)
         embeds = embeds + self.chord_pos_embed  # per-slot position signal
-        if duration is not None:
-            assert duration_mask is not None
-            bins = torch.bucketize(duration.contiguous(), self._duration_boundaries)
-            bins = bins.masked_fill(~duration_mask, NUM_DUR_BINS)  # (B, T, C)
-            embeds = embeds + self.dur_embedding(bins)
-        B, T, C, D = embeds.shape
+        B, T, H, D = embeds.shape
         assert T <= self.pos_embed.shape[0], (
             f"T={T} exceeds max_seqlen={self.pos_embed.shape[0]}"
         )
-        x = self.chord_proj(embeds.view(B, T, C * D))
+        x = self.chord_proj(embeds.view(B, T, H * D))
         return self.dropout(self.norm(x + self.pos_embed[:T]))
 
 
@@ -185,70 +158,54 @@ class CrossStaveDecoderLayer(nn.Module):
 
     def __init__(self, config: NoterConfig) -> None:
         super().__init__()
-        D, num_head, dropout = config.embed_dim, config.num_head, config.dropout
+        d, h, p = config.embed_dim, config.num_head, config.dropout
         # --- standard decoder sublayers (names match nn.TransformerDecoderLayer) ---
-        self.self_attn = nn.MultiheadAttention(
-            D, num_head, dropout=dropout, batch_first=True
-        )
-        self.multihead_attn = nn.MultiheadAttention(
-            D, num_head, dropout=dropout, batch_first=True
-        )
-        self.linear1 = nn.Linear(D, config.mlp_dim)
-        self.linear2 = nn.Linear(config.mlp_dim, D)
-        self.norm1 = nn.LayerNorm(D)
-        self.norm2 = nn.LayerNorm(D)
-        self.norm3 = nn.LayerNorm(D)
-        self.dropout = nn.Dropout(dropout)
-        self.dropout1 = nn.Dropout(dropout)
-        self.dropout2 = nn.Dropout(dropout)
-        self.dropout3 = nn.Dropout(dropout)
+        self.self_attn = nn.MultiheadAttention(d, h, dropout=p, batch_first=True)
+        self.multihead_attn = nn.MultiheadAttention(d, h, dropout=p, batch_first=True)
+        self.linear1 = nn.Linear(d, config.mlp_dim)
+        self.linear2 = nn.Linear(config.mlp_dim, d)
+        self.norm1 = nn.LayerNorm(d)
+        self.norm2 = nn.LayerNorm(d)
+        self.norm3 = nn.LayerNorm(d)
+        self.dropout = nn.Dropout(p)
+        self.dropout1 = nn.Dropout(p)
+        self.dropout2 = nn.Dropout(p)
+        self.dropout3 = nn.Dropout(p)
         # --- new: gated cross-stave attention branch (identity at init) ---
-        self.cross_stave_attn = nn.MultiheadAttention(
-            D, num_head, dropout=dropout, batch_first=True
-        )
-        self.norm_xs = nn.LayerNorm(D)
-        self.dropout_xs = nn.Dropout(dropout)
+        self.cross_stave_attn = nn.MultiheadAttention(d, h, dropout=p, batch_first=True)
+        self.norm_xs = nn.LayerNorm(d)
+        self.dropout_xs = nn.Dropout(p)
         self.xs_gate = nn.Parameter(torch.zeros(1))
 
     def forward(
         self,
         x: Tensor,  # (B*S, T, D)
         memory: Tensor,  # (B*S, P, D)
-        target_mask: Tensor,  # (T, T) causal
-        target_key_pad_mask: Tensor,  # (B*S, T)
-        memory_key_pad_mask: Tensor,  # (B*S, P)
+        tgt_mask: Tensor,  # (T, T) causal
+        tgt_kpm: Tensor,  # (B*S, T)
+        mem_kpm: Tensor,  # (B*S, P)
         xs_mask: Tensor,  # (S*T, S*T) cross-stave time-causal
-        xs_key_pad_mask: Tensor,  # (B, S*T) — True on padded staves
-        B: int,
-        S: int,
+        xs_kpm: Tensor,  # (B, S*T) — True on padded staves
+        bsz: int,
+        staves: int,
     ) -> Tensor:
         a = self.self_attn(
-            x,
-            x,
-            x,
-            attn_mask=target_mask,
-            key_padding_mask=target_key_pad_mask,
-            need_weights=False,
+            x, x, x, attn_mask=tgt_mask, key_padding_mask=tgt_kpm, need_weights=False
         )[0]
         x = self.norm1(x + self.dropout1(a))
         a = self.multihead_attn(
-            x, memory, memory, key_padding_mask=memory_key_pad_mask, need_weights=False
+            x, memory, memory, key_padding_mask=mem_kpm, need_weights=False
         )[0]
         x = self.norm2(x + self.dropout2(a))
         # Cross-stave: couple a system's staves along the (shared) row axis.
-        T, D = x.shape[1], x.shape[2]
-        xq = x.view(B, S, T, D).reshape(B, S * T, D)
+        t, d = x.shape[1], x.shape[2]
+        xq = x.view(bsz, staves, t, d).reshape(bsz, staves * t, d)
         h = self.norm_xs(xq)
         a = self.cross_stave_attn(
-            h,
-            h,
-            h,
-            attn_mask=xs_mask,
-            key_padding_mask=xs_key_pad_mask,
-            need_weights=False,
+            h, h, h, attn_mask=xs_mask, key_padding_mask=xs_kpm, need_weights=False
         )[0]
         xq = xq + self.xs_gate * self.dropout_xs(a)
-        x = xq.view(B, S, T, D).reshape(B * S, T, D)
+        x = xq.view(bsz, staves, t, d).reshape(bsz * staves, t, d)
         a = self.linear2(self.dropout(F.relu(self.linear1(x))))
         return self.norm3(x + self.dropout3(a))
 
@@ -289,10 +246,6 @@ class NoterModel(nn.Module):
         )
         self.decoder = CrossStaveDecoder(config)
         self.mlp = nn.Linear(config.embed_dim, config.max_chords * config.vocab_size)
-        # Duration classification head: a softmax over the analytic duration
-        # table's NUM_DUR_BINS bins per chord slot, parallel to the token head.
-        # Decoded by argmax → bin suffix (noter.duration).
-        self.dur_head = nn.Linear(config.embed_dim, config.max_chords * NUM_DUR_BINS)
 
     def make_src_padding_mask(self, widths: Tensor) -> Tensor:
         """
@@ -316,11 +269,13 @@ class NoterModel(nn.Module):
             col_mask.unsqueeze(1).expand(-1, num_patches_h, -1).reshape(len(widths), -1)
         )
 
-    def _cross_stave_mask(self, S: int, T: int, device: torch.device) -> Tensor:
+    def _cross_stave_mask(
+        self, staves: int, seqlen: int, device: torch.device
+    ) -> Tensor:
         """``(S*T, S*T)`` bool, True where disallowed: query ``(i, t)`` may attend
         key ``(j, s)`` for any staff pair iff ``s <= t`` — causal in the shared row
         clock, free across staves."""
-        times = torch.arange(T, device=device).repeat(S)  # (S*T,)
+        times = torch.arange(seqlen, device=device).repeat(staves)  # (S*T,)
         return times.unsqueeze(0) > times.unsqueeze(1)  # [query, key]: key_t > query_t
 
     def encode(self, source: Tensor, source_widths: Tensor) -> tuple[Tensor, Tensor]:
@@ -338,44 +293,26 @@ class NoterModel(nn.Module):
         memory_pad_mask: Tensor,  # (B*S, P)
         stave_mask: Tensor,  # (B, S) — True on real staves
         target_mask: Tensor,  # (T, T) causal
-        target_dur: Tensor | None = None,  # (B, S, T, max_chords) log2 length
-        target_dur_mask: Tensor | None = None,  # (B, S, T, max_chords) duration present
-    ) -> tuple[Tensor, Tensor]:
-        """Decode a batch of systems → ``(logits, dur_logits)`` of shapes
-        ``(B, S, T, max_chords, vocab_size)`` and
-        ``(B, S, T, max_chords, NUM_DUR_BINS)``."""
-        B, S, T, C = target.shape
-        target_flat = target.reshape(B * S, T, C)
-        duration_flat = (
-            target_dur.reshape(B * S, T, C) if target_dur is not None else None
-        )
-        duration_mask_flat = (
-            target_dur_mask.reshape(B * S, T, C)
-            if target_dur_mask is not None
-            else None
-        )
-        target_embeds = self.target_embedder(
-            target_flat, duration_flat, duration_mask_flat
-        )  # (B*S, T, D)
-        target_key_pad_mask = (target_flat == self.config.pad_idx).all(
-            dim=-1
-        )  # (B*S, T)
-        xs_mask = self._cross_stave_mask(S, T, target.device)
-        xs_key_pad_mask = (~stave_mask).unsqueeze(-1).expand(B, S, T).reshape(B, -1)
+    ) -> Tensor:
+        """Decode a batch of systems → logits ``(B, S, T, max_chords, vocab_size)``."""
+        bsz, staves, t, mc = target.shape
+        tgt_flat = target.reshape(bsz * staves, t, mc)
+        tgt_embeds = self.target_embedder(tgt_flat)  # (B*S, T, D)
+        tgt_kpm = (tgt_flat == self.config.pad_idx).all(dim=-1)  # (B*S, T)
+        xs_mask = self._cross_stave_mask(staves, t, target.device)
+        xs_kpm = (~stave_mask).unsqueeze(-1).expand(bsz, staves, t).reshape(bsz, -1)
         outs = self.decoder(
-            target_embeds,
+            tgt_embeds,
             memory,
             target_mask,
-            target_key_pad_mask,
+            tgt_kpm,
             memory_pad_mask,
             xs_mask,
-            xs_key_pad_mask,
-            B,
-            S,
+            xs_kpm,
+            bsz,
+            staves,
         )
-        logits = self.mlp(outs).view(B, S, T, C, -1)
-        dur_logits = self.dur_head(outs).view(B, S, T, C, NUM_DUR_BINS)
-        return logits, dur_logits
+        return self.mlp(outs).view(bsz, staves, t, mc, -1)
 
     def forward(
         self,
@@ -384,21 +321,11 @@ class NoterModel(nn.Module):
         target: Tensor,  # (B, S, T, max_chords)
         stave_mask: Tensor,  # (B, S)
         target_mask: Tensor,  # (T, T) causal
-        target_dur: Tensor | None = None,  # (B, S, T, max_chords)
-        target_dur_mask: Tensor | None = None,  # (B, S, T, max_chords)
-    ) -> tuple[Tensor, Tensor]:
-        B, S = source.shape[:2]
-        flat_src = source.reshape(B * S, *source.shape[2:])
-        memory, memory_pad_mask = self.encode(flat_src, source_widths.reshape(B * S))
-        return self.decode(
-            target,
-            memory,
-            memory_pad_mask,
-            stave_mask,
-            target_mask,
-            target_dur,
-            target_dur_mask,
-        )
+    ) -> Tensor:
+        bsz, staves = source.shape[:2]
+        flat_src = source.reshape(bsz * staves, *source.shape[2:])
+        memory, mem_pad = self.encode(flat_src, source_widths.reshape(bsz * staves))
+        return self.decode(target, memory, mem_pad, stave_mask, target_mask)
 
     @staticmethod
     def remap_legacy_state_dict(state: dict[str, Tensor]) -> dict[str, Tensor]:

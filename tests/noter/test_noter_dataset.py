@@ -4,8 +4,9 @@ from noter import NoterConfig, SequenceLoader, Vocab
 
 
 def _loader() -> tuple[SequenceLoader, Vocab, MagicMock]:
-    # Vocab is pitch-only; the duration head predicts `/4` separately.
-    vocab = Vocab({"PAD": 0, "UNK": 1, "SOS": 2, "EOS": 3, "SIL": 4, "C": 5, "D": 6})
+    vocab = Vocab(
+        {"PAD": 0, "UNK": 1, "SOS": 2, "EOS": 3, "SIL": 4, "C/4": 5, "D/4": 6}
+    )
     source = MagicMock()
     cfg = NoterConfig()
     return SequenceLoader(source, vocab, cfg.max_seqlen, cfg.max_chords), vocab, source
@@ -20,17 +21,9 @@ def test_load_sequence_skips_record_with_too_few_spines() -> None:
 
 
 def test_load_sequence_reads_requested_spine() -> None:
-    import math
-
     load_sequence, vocab, source = _loader()
     source.records.return_value = ["C/4\tD/4"]
-    result = load_sequence("x", spine_number=1, first_bar=1, last_bar=2)
-    assert result is not None
-    tokens, durs, dmask = result
-    # spine 1 is "D/4" -> duration stripped, first non-SOS chord slot decodes to D
-    assert vocab.decode(int(tokens[1, 0].item())) == "D"
-    # and its duration is captured separately as log2(1/4)
-    assert dmask[1, 0].item() is True
-    assert abs(durs[1, 0].item() - math.log2(1 / 4)) < 1e-6
-    # the SOS row carries no duration
-    assert dmask[0, 0].item() is False
+    seq = load_sequence("x", spine_number=1, first_bar=1, last_bar=2)
+    assert seq is not None
+    # spine 1 is "D/4" -> the first non-SOS row's first chord slot decodes to D/4
+    assert vocab.decode(int(seq[1, 0].item())) == "D/4"

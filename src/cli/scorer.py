@@ -183,10 +183,11 @@ def check(ctx: ClickContext) -> None:
 
     memory, src_pad = model.noter.encode(crops, widths)
     T = config.noter.max_seqlen - 1
-    target = torch.full((boxes.shape[0], T, config.noter.max_chords), Vocab.SOS)
-    tgt_pad = (target == Vocab.PAD).all(dim=-1)
-    logits, _ = model.noter.decode(
-        target, memory, module._causal_mask(T), tgt_pad, src_pad
+    # Treat the two crops as B=2 systems of S=1 stave each for the cross-stave decode.
+    target = torch.full((B, 1, T, config.noter.max_chords), Vocab.SOS)
+    stave_mask = torch.ones(B, 1, dtype=torch.bool)
+    logits = model.noter.decode(
+        target, memory, src_pad, stave_mask, module._causal_mask(T)
     )
     print(f"noter:  memory {tuple(memory.shape)}, logits {tuple(logits.shape)}")
     print("ok — detect → crop → encode → decode wired.")
