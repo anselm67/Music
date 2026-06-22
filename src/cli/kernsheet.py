@@ -303,6 +303,93 @@ def detect(ctx: ClickContext, prefix: str, write: bool, width: int) -> None:
     print(f"\n{ok} score(s) {verb}, {failed} failed, of {candidates} candidate(s).")
 
 
+def _training_sample_counts(ks: KernSheet) -> None:
+    """Report the exact scorer / noter training-sample counts for this corpus.
+
+    Both datasets enrol items up front but silently skip any that fail their
+    ``__getitem__`` supervision contract (a stave whose bar range won't tokenize,
+    a system outside the query budget, etc.), so ``len(dataset)`` over-counts.
+    This walks the dataset access path they use — ``KernSheetSource`` (validated
+    pages only) + the real ``SequenceLoader`` — and replays each contract (minus
+    the image load) to report ``usable`` (the real number trained on) alongside
+    ``enrolled``. Scorer samples are pages; noter samples are systems.
+    """
+    from scorer.scorer_model import ScorerConfig
+
+    from kernsheet import KernSheetSource
+    from noter import SequenceLoader, Vocab
+
+    config = ScorerConfig()
+    c = config.staffer
+    source = KernSheetSource(ks)
+    # The usability verdict never reads vocab *content* — a sequence is unusable
+    # only when its bars are missing, too long, mis-spined, or a chord exceeds
+    # max_chords; unknown tokens map to UNK, not a failure. So an empty vocab gives
+    # identical counts and lets `stats` run on corpora with no built vocab.
+    vocab = Vocab({})
+    load_sequence = SequenceLoader(
+        source, vocab, config.noter.max_seqlen, config.noter.max_chords
+    )
+
+    sc_enrolled = sc_usable = 0  # scorer: one sample per validated, non-empty page
+    no_enrolled = no_usable = 0  # noter: one sample per ≤2-staff bar-numbered system
+    for score in source.scores():
+        try:
+            spine_count: int | None = source.spine_count(score.id)
+        except Exception as e:
+            # NoterDataset skips the whole score when its token file won't load;
+            # ScorerDataset never reads spine_count, so its pages stay enrolled
+            # (and fail to tokenize). Mirror both: drop noter enrolment for this
+            # score (None fails the gate below), keep the scorer page walk.
+            logging.error(f"{score.id}: cannot read spine count ({e})")
+            spine_count = None
+        for page in source.pages(score.id):
+            if not page.systems:  # ScorerDataset skips blank/cover pages
+                continue
+            sc_enrolled += 1
+            page_ok, staff_idx = True, 0
+            for sys_idx, system in enumerate(page.systems):
+                spine_numbers = {1: [0], 2: [1, 0]}.get(system.staff_count, [])
+                valid = bool(spine_numbers) and bool(system.bar_numbers)
+                seqs = (
+                    [
+                        load_sequence(
+                            score.id,
+                            spine,
+                            system.first_bar_number,
+                            system.last_bar_number,
+                        )
+                        for spine in spine_numbers
+                    ]
+                    if valid
+                    else []
+                )
+                tok_ok = valid and all(seq is not None for seq in seqs)
+                # noter enrols the system (drops voiced staves: more spines than
+                # the system has staves) and is usable iff its staves tokenize.
+                if (
+                    valid
+                    and spine_count is not None
+                    and spine_count <= system.staff_count
+                ):
+                    no_enrolled += 1
+                    no_usable += tok_ok
+                # scorer's page contract: every system in the query budget, ≤2
+                # staves with bar numbers, every stave in budget and tokenizable.
+                if sys_idx >= c.num_system_queries or not valid or not tok_ok:
+                    page_ok = False
+                for _ in spine_numbers:
+                    if staff_idx >= c.num_stave_queries:
+                        page_ok = False
+                    staff_idx += 1
+            if page_ok and staff_idx > 0:
+                sc_usable += 1
+
+    print("\nTraining samples (validated pages, exact dataset contract):")
+    print(f"  scorer pages  : {sc_usable:,} usable ({sc_enrolled:,} enrolled)")
+    print(f"  noter systems : {no_usable:,} usable ({no_enrolled:,} enrolled)")
+
+
 @click.command()
 @click.pass_obj
 def stats(ctx: ClickContext) -> None:
@@ -341,6 +428,7 @@ def stats(ctx: ClickContext) -> None:
     print_histogram(systems_per_page, title="Systems per page:")
     print_histogram(staves_per_system, title="Staves per system:")
     print_histogram(bars_per_system, title="Bars per system:")
+    _training_sample_counts(ctx.kern_sheet)
 
 
 @click.command()
