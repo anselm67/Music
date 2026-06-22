@@ -133,7 +133,15 @@ class TokenFormatter:
 
     def format_chord(self, token: Token) -> str:
         chord = cast(Chord, token)
-        text = " ".join([self.format_note(note) for note in chord.notes])
+        # Sort the chord's notes into a canonical low->high order (diatonic pitch,
+        # then accidental) so the same chord always tokenizes identically. Kern
+        # lists chord notes in source order, which is arbitrary; an unsorted target
+        # makes the chord ambiguous to train against and penalizes a correct
+        # prediction that merely picked a different note order at eval.
+        notes = sorted(
+            chord.notes, key=lambda n: (n.pitch.value, n.sharps - n.flats)
+        )
+        text = " ".join([self.format_note(note) for note in notes])
         return text
 
     def format_instrument(self, token: Token) -> str:

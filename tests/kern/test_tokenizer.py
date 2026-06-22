@@ -25,6 +25,27 @@ def tokenize_input(tmp_path: Path, kern_text: str) -> KernReader:
     return KernReader(output)
 
 
+def test_chord_notes_sorted_low_to_high(tmp_path: Path) -> None:
+    """Chord notes tokenize in canonical low->high pitch order regardless of the
+    order they appear in the kern source — so the same chord is unambiguous."""
+    kern = """
+**kern
+*clefG2
+*M4/4
+=1
+4g 4c 4ee 4e
+==
+""".strip()
+    reader = tokenize_input(tmp_path, kern)
+    assert reader.lines == [
+        "clef-GG",
+        "4/4",
+        "=1",
+        "c/4 e/4 g/4 ee/4",
+        "==",
+    ]
+
+
 @pytest.mark.parametrize(
     "input",
     [
