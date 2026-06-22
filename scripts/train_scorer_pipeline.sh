@@ -42,9 +42,13 @@ BASE="${BASE:-$NAME}"   # PDMX bases to fine-tune FROM; defaults to NAME (train 
 # Config — these are the documented best-run recipes; edit to taste. The
 # fine-tune split sizes are over the MIXED epoch (PDMX-primary + KernSheet at
 # $MIX); KernSheet contributes mix*train_len items so its share stays <= the KS
-# dataset (staffer/scorer 2321 pages, noter 26166 staff items), and the
-# noter/scorer need >= 250 train batches (their val_check_interval; the staffer
-# clamps so any split works).
+# dataset (staffer 2487 pages w/ systems, scorer 2480 usable pages, noter 26166
+# staff items), and the noter/scorer need >= 250 train batches (their
+# val_check_interval; the staffer clamps so any split works). NB: the raw
+# "validated pages" count (~6463) badly overstates usable data — ~3976 are
+# empty shared-PDF spillover (a per-work score spans the whole shared PDF). Size
+# train_len to the usable ceiling: scripts/scorer_usable_ks_pages.py measures it;
+# past total ~= usable/$MIX the MixedSource just recycles the same KS pages.
 # ---------------------------------------------------------------------------
 KS=/home/anselm/datasets/KernSheet
 VOCAB="$KS/build/vocab.json"
@@ -73,9 +77,9 @@ NOTER_AUGMENT=0.0
 STAFFER_FT_LR=1e-5; STAFFER_FT_WARMUP=200
 NOTER_FT_LR=1e-4;   NOTER_FT_WARMUP=200
 
-STAFFER_FT_TRAIN=3000; STAFFER_FT_VALID=450     # mixed epoch; KS share ~2010 < 2321 pages
+STAFFER_FT_TRAIN=3700; STAFFER_FT_VALID=550     # mixed epoch; KS share ~2850 covers 2487 pages
 NOTER_FT_TRAIN=23400;  NOTER_FT_VALID=2600      # 26166 staff items
-SCORER_FT_TRAIN=2000;  SCORER_FT_VALID=300      # 2321 pages (>= 250 batches at bs 8)
+SCORER_FT_TRAIN=3200;  SCORER_FT_VALID=500      # KS share ~2480 covers all usable (>= 250 batches at bs 8)
 # ---------------------------------------------------------------------------
 
 run() {
