@@ -20,7 +20,7 @@ from noter import SequenceLoader, Vocab
 
 from .scorer_model import ScorerConfig
 
-Sample = tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]
+Sample = tuple[Tensor, Tensor, Tensor, Tensor, Tensor]
 
 
 class ScorerDataset(Dataset[Sample]):
@@ -96,16 +96,14 @@ class ScorerDataset(Dataset[Sample]):
             sys_boxes = torch.zeros(c.num_system_queries, 4)
             staff_boxes = torch.zeros(c.num_stave_queries, 4)
             assigns = torch.full((c.num_stave_queries,), -1, dtype=torch.long)
-            seq_shape = (
-                c.num_stave_queries,
-                self.config.noter.max_seqlen,
-                self.config.noter.max_chords,
+            tokens = torch.full(
+                (
+                    c.num_stave_queries,
+                    self.config.noter.max_seqlen,
+                    self.config.noter.max_chords,
+                ),
+                self.vocab.PAD,
             )
-            tokens = torch.full(seq_shape, self.vocab.PAD)
-            # Parallel duration targets (log2 length) + a mask of the slots that
-            # carry a numeric duration — the duration head's supervised targets.
-            durations = torch.zeros(seq_shape)
-            dur_mask = torch.zeros(seq_shape, dtype=torch.bool)
 
             is_ok = True
             staff_idx = 0
@@ -141,7 +139,9 @@ class ScorerDataset(Dataset[Sample]):
                     if seq is None:
                         is_ok = False
                         break
-                    seq_tokens, seq_durs, seq_dmask = seq
+                    # SequenceLoader returns (tokens, durations, dur_mask); the
+                    # scorer's duration path is a follow-up, so keep tokens only.
+                    seq_tokens = seq[0]
                     staff_boxes[staff_idx] = torch.tensor(
                         [
                             staff.box.left * sx,
@@ -152,20 +152,10 @@ class ScorerDataset(Dataset[Sample]):
                     )
                     assigns[staff_idx] = sys_idx
                     tokens[staff_idx] = seq_tokens
-                    durations[staff_idx] = seq_durs
-                    dur_mask[staff_idx] = seq_dmask
                     staff_idx += 1
                 if not is_ok:
                     break
 
             if is_ok and staff_idx > 0:
-                return (
-                    image,
-                    sys_boxes,
-                    staff_boxes,
-                    assigns,
-                    tokens,
-                    durations,
-                    dur_mask,
-                )
+                return image, sys_boxes, staff_boxes, assigns, tokens
             idx = (idx + 1) % len(self)

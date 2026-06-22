@@ -340,17 +340,10 @@ class NoterModel(nn.Module):
         target_mask: Tensor,  # (T, T) causal
         target_dur: Tensor | None = None,  # (B, S, T, max_chords) log2 length
         target_dur_mask: Tensor | None = None,  # (B, S, T, max_chords) duration present
-        detach_duration: bool = False,  # cut the duration head's grad to the decoder
     ) -> tuple[Tensor, Tensor]:
         """Decode a batch of systems → ``(logits, dur_logits)`` of shapes
         ``(B, S, T, max_chords, vocab_size)`` and
-        ``(B, S, T, max_chords, NUM_DUR_BINS)``.
-
-        ``detach_duration`` computes the duration logits from a detached decoder
-        output, so the duration loss trains only the duration head. The scorer sets
-        this: duration is a transcription-only readout and must not flow back through
-        the crop bridge into the detector's box coordinates. The standalone noter
-        leaves it off (the head co-trains the decoder, there being no detector)."""
+        ``(B, S, T, max_chords, NUM_DUR_BINS)``."""
         B, S, T, C = target.shape
         target_flat = target.reshape(B * S, T, C)
         duration_flat = (
@@ -381,8 +374,7 @@ class NoterModel(nn.Module):
             S,
         )
         logits = self.mlp(outs).view(B, S, T, C, -1)
-        dur_outs = outs.detach() if detach_duration else outs
-        dur_logits = self.dur_head(dur_outs).view(B, S, T, C, NUM_DUR_BINS)
+        dur_logits = self.dur_head(outs).view(B, S, T, C, NUM_DUR_BINS)
         return logits, dur_logits
 
     def forward(

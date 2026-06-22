@@ -97,9 +97,9 @@
 <article class="entry">
   <h2>Wire the duration head through the end-to-end scorer (loss, generation, eval)</h2>
   <div class="entry-meta">
-    <span>2026-06-21</span>
-    <span class="badge accepted">Accepted — path built, training pending</span>
-    <span class="ref">scorer (<code>ScorerDataset</code>, <code>ScorerModule</code>, <code>cli/scorer.py</code>) · unblocks the duration noter end-to-end · cf. the duration-head entry below</span>
+    <span>2026-06-21 · trained + reverted 2026-06-22</span>
+    <span class="badge superseded">Reverted — token scorer is best; the duration code is preserved at its tags</span>
+    <span class="ref">scorer (<code>ScorerDataset</code>, <code>ScorerModule</code>, <code>cli/scorer.py</code>) · <span class="tag">bartok-duration-logits</span> / <span class="tag">bartok-duration-logits-detach</span> · cf. the duration-head entry below</span>
   </div>
 
   <h3>Context</h3>
@@ -136,14 +136,43 @@
       <strong>full</strong> and <strong>pitch-only</strong> similarity, matching the noter eval.</li>
   </ul>
 
-  <h3>Status / outcome</h3>
+  <h3>Status / outcome — reverted</h3>
   <p>
-    Landed on main (391 tests green incl. a new scorer <code>_step</code>-backprops + generation test;
-    ruff + mypy clean). No asset rebuild — the duration channels were already produced on disk and only
-    discarded at load. Training is the next step: merge a duration noter
-    (<span class="tag">bartok-duration-logits-w1-mixed</span>) + a staffer into a fresh scorer
-    (<code>--noter</code> on <code>scorer train</code>) and evaluate full vs pitch-only end-to-end against
-    the production token-only scorer.
+    Built and trained, then <strong>reverted</strong>. Two runs, same recipe as the
+    <a href="#run-bartok"><span class="tag">bartok</span></a> token baseline (20 ep,
+    <span class="tag">bartok-mixed</span> staffer + <span class="tag">bartok-duration-logits-w1-mixed</span>
+    noter, 0.67 rehearsal mix), evaluated against it:
+  </p>
+  <ul>
+    <li><strong>v1 <span class="tag">bartok-duration-logits</span> — net-negative, and it exposed a real
+      coupling bug.</strong> Full pitch/dur trailed the token baseline by −3.1 pp KS (91.9 vs 95.0) /
+      −1.3 pp PDMX (96.5 vs 97.8), with KS miscounts 11&nbsp;→&nbsp;29. The puzzle: an <em>identical</em>
+      staffer base ended with a <em>worse</em> detector (val/det_loss 0.28&nbsp;→&nbsp;0.37, sys IoU
+      0.937&nbsp;→&nbsp;0.903, stave-err 3.89&nbsp;→&nbsp;5.39 px). Root cause: the scorer's transcription
+      loss feeds the detector <em>by design</em> (the differentiable crop bridge backprops to box coords),
+      and splitting the single pitch×dur cross-entropy into summed pitch-CE + duration-CE roughly tripled
+      the transcription-side magnitude (0.06&nbsp;→&nbsp;0.20), which — at <code>lambda_det = lambda_tr =
+      1.0</code> — over-weighted transcription and dragged the boxes. (Invisible at the noter: no detector
+      there.)</li>
+    <li><strong>v2 <span class="tag">bartok-duration-logits-detach</span> — fix confirmed, still not a
+      win.</strong> Duration is a transcription-only readout, so it must not move geometry:
+      <code>decode(detach_duration=…)</code> computes the duration logits from a detached decoder output,
+      training only the duration head. The detector recovered (det_loss 0.31, sys IoU 0.929, stave-err
+      4.86 px) and end-to-end rose to KS <strong>92.9</strong> / PDMX <strong>97.2</strong> (miscounts
+      11&nbsp;→&nbsp;14) — but still below token <span class="tag">bartok</span> (95.0 / 97.8), and the
+      head-only readout cost some duration accuracy (dur_acc 0.971&nbsp;→&nbsp;0.956).</li>
+  </ul>
+  <p>
+    Verdict: the separate-head split is a clean <em>capability</em> (duration flows end-to-end, full vs
+    pitch-only gap ≈0.3 pp) but a consistent <em>accuracy</em> loss versus the integrated pitch×dur token —
+    the same shape at the scorer as at the noter. <strong>The token scorer (<span class="tag">bruckner</span>
+    / <span class="tag">bartok</span>) is best, so the scorer duration path was reverted</strong> (code
+    restored to the token state; the noter's own duration head is untouched). The work is preserved in the
+    repo at commits <code>b2eecad</code> / <code>4987d3c</code> and tags
+    <code>train/bartok-duration-logits-scorer</code> / <code>train/bartok-duration-logits-detach</code>.
+    Reviving the per-attribute-head direction (toward the ~12 flags-as-heads goal) needs the head to stop
+    costing pitch. Data cards in <code>scorer-training.html</code>
+    (<a href="scorer-training.html#run-bartok-duration-logits"><span class="tag">bartok-duration-logits</span></a>).
   </p>
 </article>
 
