@@ -232,6 +232,7 @@ class ScorerModule(L.LightningModule):
                 self._causal_mask(tgt_in.shape[2]),
                 tgt_dur[:, :, :-1],
                 tgt_dmask[:, :, :-1],
+                detach_duration=True,  # duration must not tug the detector's boxes
             )  # (ng, max_staves, T-1, max_chords, V), (..., NUM_DUR_BINS)
             V = logits.shape[-1]
             tr = F.cross_entropy(

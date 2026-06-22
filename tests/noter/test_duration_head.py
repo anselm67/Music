@@ -54,6 +54,42 @@ def test_forward_returns_token_and_duration_heads() -> None:
     assert dur_logits.shape == (b, s, t, mc, NUM_DUR_BINS)
 
 
+def test_detach_duration_severs_decoder_gradient() -> None:
+    # The scorer sets detach_duration so the duration loss cannot flow back through
+    # the decoder (and thus the crop bridge) into the detector's boxes.
+    module, config, _ = _tiny_module()
+    model = module.model
+    source, widths, target, dur, dmask, smask = _batch(config, b=1)
+    b, s = source.shape[:2]
+    memory, mem_pad = model.encode(
+        source.reshape(b * s, *source.shape[2:]), widths.reshape(b * s)
+    )
+    causal = module._causal_mask(target.shape[2])
+
+    # Detached: the duration head gets gradient, the decoder does not.
+    model.zero_grad()
+    _, dur_logits = model.decode(
+        target, memory, mem_pad, smask, causal, dur, dmask, detach_duration=True
+    )
+    dur_logits.sum().backward()
+    head_grad = model.dur_head.weight.grad
+    assert head_grad is not None and head_grad.abs().sum() > 0
+    assert all(
+        p.grad is None or p.grad.abs().sum() == 0 for p in model.decoder.parameters()
+    )
+
+    # Not detached (the standalone-noter default): the decoder co-trains.
+    model.zero_grad()
+    _, dur_logits = model.decode(
+        target, memory, mem_pad, smask, causal, dur, dmask, detach_duration=False
+    )
+    dur_logits.sum().backward()
+    assert any(
+        p.grad is not None and p.grad.abs().sum() > 0
+        for p in model.decoder.parameters()
+    )
+
+
 def test_predict_returns_tokens_and_durations() -> None:
     module, config, vocab = _tiny_module()
     module.eval()
