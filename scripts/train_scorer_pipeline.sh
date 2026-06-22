@@ -41,7 +41,7 @@ BASE="${BASE:-$NAME}"   # PDMX bases to fine-tune FROM; defaults to NAME (train 
 # Config — these are the documented best-run recipes; edit to taste. The
 # fine-tune split sizes are over the MIXED epoch (PDMX-primary + KernSheet at
 # $MIX); KernSheet contributes mix*train_len items so its share stays <= the KS
-# dataset (staffer 2487 pages w/ systems, scorer 2480 usable pages, noter 14032
+# dataset (staffer 2678 pages w/ systems, scorer 2670 usable pages, noter 15079
 # usable systems — one item per system since the cross-stave change, NOT per
 # staff), and the noter/scorer need >= 250 train batches (their
 # val_check_interval; the staffer clamps so any split works). NB: the raw
@@ -78,9 +78,9 @@ NOTER_AUGMENT=0.0
 STAFFER_FT_LR=1e-5; STAFFER_FT_WARMUP=200
 NOTER_FT_LR=1e-4;   NOTER_FT_WARMUP=200
 
-STAFFER_FT_TRAIN=3700; STAFFER_FT_VALID=550     # mixed epoch; KS share ~2850 covers 2487 pages
-NOTER_FT_TRAIN=18900;  NOTER_FT_VALID=2100      # KS share ~14070 covers 14032 usable systems
-SCORER_FT_TRAIN=3200;  SCORER_FT_VALID=500      # KS share ~2480 covers all usable (>= 250 batches at bs 8)
+STAFFER_FT_TRAIN=3700;  STAFFER_FT_VALID=550    # mixed epoch; KS share ~2847 covers 2678 pages
+NOTER_FT_TRAIN=20400;   NOTER_FT_VALID=2300     # KS share ~15209 covers 15079 usable systems
+SCORER_FT_TRAIN=3500;   SCORER_FT_VALID=500     # KS share ~2680 covers 2670 usable (>= 250 batches at bs 8)
 # ---------------------------------------------------------------------------
 
 run() {
