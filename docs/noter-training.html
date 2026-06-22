@@ -247,6 +247,9 @@
         <td><span class="badge badge-slate">reproduction · parity</span></td>
       </tr>
       <tr>
+        <td colspan="7" style="background:var(--surface,#f6f6f6);color:var(--muted);font-size:0.82rem;padding:0.5rem 0.8rem;border-left:3px solid var(--muted)"><strong>Historical — the duration-head split was removed 2026-06-22.</strong> The <code>bartok-duration-*</code> runs below are the separate-head experiment (pitch-only token + a classification duration head). It proved "duration solved" but never an accuracy win over the integrated pitch×dur token, at the noter or end-to-end at the <a href="scorer-training.html#run-bartok-duration-logits">scorer</a>, so the whole split was reverted and the noter restored to the ~5k pitch+duration token vocab (commit <code>33b2ab4</code>). These checkpoints no longer load with current code; they're preserved at their <code>train/*</code> tags. Kept here as the data record.</td>
+      </tr>
+      <tr>
         <td><a class="run-link" href="#run-bartok-duration"><span class="tag">bartok-duration</span></a></td><td>2026-06-19</td><td>12</td>
         <td>99.77%&dagger;</td><td>0.0049&dagger;</td>
         <td><strong>Duration-head pilot</strong> — duration pulled out of the flat token into a separate regression head over <code>log2(length)</code>; <strong>pitch-only vocab</strong> (489 / KS-combined 552, ~10&times; smaller). Free-running <strong>PDMX 98.3%</strong> full pitch/dur (98.7% pitch-only; dur snap-acc 0.94) &mdash; splitting duration out doesn't degrade transcription. &dagger;val acc/loss are pitch-only + duration-regression, NOT comparable to the pitch&times;dur rows above</td>

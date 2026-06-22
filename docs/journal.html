@@ -181,7 +181,7 @@
   <h2>Split duration out of the flat token into a separate decoder head — and switch that head from regression to classification</h2>
   <div class="entry-meta">
     <span>2026-06-18 · pivot 2026-06-20</span>
-    <span class="badge superseded">Regression pilot superseded — classification head next</span>
+    <span class="badge superseded">Removed 2026-06-22 — the whole separate-head split was reverted; token scheme restored</span>
     <span class="ref">noter (<code>duration.py</code> codec, <code>NoterModel</code> head, <code>NoterModule</code> loss) · pilot lineage <code>bartok-duration</code> / <code>bartok-duration-mixed</code></span>
   </div>
 
@@ -276,6 +276,18 @@
     separate-head approach but is <em>not yet a win</em>. The classification-head switch is the next
     step, targeting the real-scan duration gap directly; <span class="tag">bruckner-mixed</span> remains
     the production transcriber until it beats it.
+  </p>
+  <p style="border-left:3px solid var(--muted);padding-left:0.8rem;color:var(--muted)">
+    <strong>Final outcome (2026-06-22) — removed.</strong> The classification head and the end-to-end
+    <a href="#run-bartok-duration-logits">scorer path</a> were both built and evaluated (see the entry
+    above and the <code>bartok-duration-*</code> cards). The separate-head split is a clean
+    <em>capability</em> — duration "solved", full vs pitch-only gap ≈0.3 pp — but never an
+    <em>accuracy</em> win over the integrated pitch×dur token, at the noter or the scorer. So the entire
+    split was reverted and the noter restored to the ~5k pitch+duration token vocab (commit
+    <code>33b2ab4</code>); <span class="tag">bruckner</span> / <span class="tag">bartok</span> (token) stay
+    production. This whole line of work is preserved in the repo at its <code>train/*</code> tags and
+    commits <code>f06029a</code>…<code>2a346be</code> (noter) + <code>b2eecad</code>/<code>4987d3c</code>
+    (scorer); the <code>bartok-duration-*</code> cards below are kept as the historical record.
   </p>
 </article>
 
