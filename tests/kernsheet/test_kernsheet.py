@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from kernsheet import KernSheet
 
 
@@ -103,6 +105,55 @@ def test_delete_entry_removes_owned_files_but_keeps_shared_pdf(tmp_path: Path) -
     assert "work" not in ks.catalog.entries
     assert not ks.has_score("work/ed0") and not ks.has_score("work/ed1")
     assert "work/ed1" not in ks.id2key
+
+
+def test_training_sample_counts_tolerates_unloadable_layout(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A score whose layout JSON won't parse must be skipped, not abort the whole
+    # report. _make writes a non-JSON stub ("x") for the layout, so load_score
+    # raises for this score; the helper should log-and-continue and still print.
+    from cli.kernsheet import _training_sample_counts
+
+    ks = _make(tmp_path, {"work/p01": [{"json_path": "work/p01.json"}]})
+    _training_sample_counts(ks)  # must not raise
+
+    assert "Training samples" in capsys.readouterr().out
+
+
+def test_load_score_stamps_canonical_id_over_embedded(tmp_path: Path) -> None:
+    # The on-disk `id` is non-authoritative; load_score must return the catalog
+    # id, not whatever (possibly stale/wrong) id the file embeds.
+    ks = _make(tmp_path, {"work/p08": [{"json_path": "work/p08-catelin.json"}]})
+    (tmp_path / "layout/work/p08-catelin.json").write_text(
+        json.dumps({"id": "work/p09-catelin", "pages": []})  # WRONG embedded id
+    )
+
+    assert ks.load_score("work/p08-catelin").id == "work/p08-catelin"
+
+
+def test_delete_score_with_mismatched_key_is_a_noop(tmp_path: Path) -> None:
+    # Passing a score that belongs to a DIFFERENT entry (e.g. from a worklist
+    # poisoned by a bad embedded id) must not unlink its layout or mutate either
+    # entry — otherwise the file goes but the catalog keeps a dangling reference.
+    ks = _make(
+        tmp_path,
+        {
+            "work/p08": [{"json_path": "work/p08-catelin.json"}],
+            "work/p09": [{"json_path": "work/p09-catelin.json"}],
+        },
+    )
+
+    ks.delete_score("work/p08", ks.id2score["work/p09-catelin"])
+
+    assert (tmp_path / "layout/work/p09-catelin.json").exists()  # NOT unlinked
+    assert ks.has_score("work/p09-catelin")  # still a live score
+    assert [s.json_path for s in ks.catalog.entries["work/p09"].scores] == [
+        "work/p09-catelin.json"
+    ]
+    assert [s.json_path for s in ks.catalog.entries["work/p08"].scores] == [
+        "work/p08-catelin.json"
+    ]
 
 
 def test_delete_persists_to_catalog_on_disk(tmp_path: Path) -> None:

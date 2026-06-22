@@ -333,7 +333,18 @@ def _training_sample_counts(ks: KernSheet) -> None:
 
     sc_enrolled = sc_usable = 0  # scorer: one sample per validated, non-empty page
     no_enrolled = no_usable = 0  # noter: one sample per ≤2-staff bar-numbered system
-    for score in source.scores():
+    # Iterate ks.items() (not source.scores()) so the load sits inside this
+    # try/except: source.scores() loads each score *inside its generator*, so a
+    # bad layout would throw from the `for` itself, past any guard in the body.
+    # Validated-only page filtering replicates KernSheetSource.pages().
+    for _, kern_score in ks.items():
+        try:
+            score = ks.load_score(kern_score.id)
+        except Exception as e:
+            # One unloadable layout shouldn't abort the whole report (the main
+            # stats loop tolerates this too); skip and move on.
+            logging.error(f"{kern_score.id}: cannot load score ({e})")
+            continue
         try:
             spine_count: int | None = source.spine_count(score.id)
         except Exception as e:
@@ -343,7 +354,7 @@ def _training_sample_counts(ks: KernSheet) -> None:
             # score (None fails the gate below), keep the scorer page walk.
             logging.error(f"{score.id}: cannot read spine count ({e})")
             spine_count = None
-        for page in source.pages(score.id):
+        for page in (p for p in score.pages if p.validated):
             if not page.systems:  # ScorerDataset skips blank/cover pages
                 continue
             sc_enrolled += 1

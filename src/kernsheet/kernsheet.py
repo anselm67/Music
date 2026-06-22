@@ -3,7 +3,7 @@
 import json
 import logging
 import os
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Iterator, cast
 
@@ -128,7 +128,13 @@ class KernSheet:
         score = self.id2score[id]
         if not score.json_path:
             raise ValueError(f"{id}: unmigrated score has no layout")
-        return Score.from_json(json.loads(self.layout_path(score).read_text()))
+        result = Score.from_json(json.loads(self.layout_path(score).read_text()))
+        # The on-disk `id` is NOT authoritative: a stale/mismatched embedded id
+        # has poisoned the review worklist before (it flows into Finding.score_id,
+        # then routes the editor's edit/delete to the wrong file). The catalog key
+        # is the source of truth, so stamp it on and never trust the file's copy
+        # (mirrors how _load_catalog ignores the stale embedded id on KernScore).
+        return replace(result, id=id)
 
     def save_score(self, id: str, score: Score) -> None:
         kern_score = self.id2score[id]
@@ -151,6 +157,13 @@ class KernSheet:
         :meth:`delete_entry`."""
         entry = self.catalog.entries.get(key)
         if entry is None:
+            return
+        if score not in entry.scores:
+            # Guard: never unlink a layout for a score that isn't actually in this
+            # entry. A mismatched (key, score) — e.g. from a worklist poisoned by a
+            # bad embedded id — would otherwise delete the file while leaving the
+            # catalog referencing it (a dangling entry that crashes every load).
+            logging.error(f"delete_score: {score.id} not in entry {key}; ignoring")
             return
         entry.scores = [s for s in entry.scores if s != score]
         self._unlink(self.layout_path(score))
