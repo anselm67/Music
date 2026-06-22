@@ -139,9 +139,7 @@ class ScorerDataset(Dataset[Sample]):
                     if seq is None:
                         is_ok = False
                         break
-                    # SequenceLoader returns (tokens, durations, dur_mask); the
-                    # scorer's duration path is a follow-up, so keep tokens only.
-                    seq_tokens = seq[0]
+                    seq_tokens = seq  # (max_seqlen, max_chords) token ids
                     staff_boxes[staff_idx] = torch.tensor(
                         [
                             staff.box.left * sx,
