@@ -87,32 +87,31 @@ def _staff_height(score: Score, _kern: KernReader | None) -> Iterator[Finding]:
 
 @register("zero_width_staff")
 def _zero_width_staff(score: Score, _kern: KernReader | None) -> Iterator[Finding]:
-    """A staff box must enclose a positive-width crop, else the noter dataset reads an
-    empty source and the encoder crashes (``to_padded_tensor: ... non-zero numel``). The
-    crop is ``min(box.width, image_width - box.left)``, so a collapsed box (``left ==
-    right``) or one whose left edge sits at/past the page width yields a zero-width
-    image. These are corrupt annotations (an editor collapse, or a bad migration), so
-    flag the offending system for a fix or rejection."""
+    """A staff crops to zero width — and crashes the noter encoder
+    (``to_padded_tensor: ... non-zero numel``) — when its system's horizontal span is
+    degenerate. Staff x is derived from the system's ``bars`` (``bars[0]..bars[-1]``),
+    so the crop collapses two ways: a degenerate bar span (``bars[0] == bars[-1]``, a
+    single barline with no enclosed bar) or bars that sit entirely past the page's
+    right edge (``bars[0] >= image_width``, so ``image_width - left <= 0``). Flag the
+    offending system so its bars are fixed or the page rejected. (A system with no bars
+    at all is the ``bar_numbers`` review's job and is left to it.)"""
     for page in score.pages:
         for si, sys in enumerate(page.systems):
-            bad = next(
-                (
-                    staff.box
-                    for staff in sys.staves
-                    if staff.box.width <= 0 or staff.box.left >= page.image_width
-                ),
-                None,
+            if not sys.bars:
+                continue
+            if sys.bars[-1] - sys.bars[0] <= 0:
+                reason = f"bars span {sys.bars[0]}..{sys.bars[-1]} is degenerate"
+            elif sys.bars[0] >= page.image_width:
+                reason = f"bars start {sys.bars[0]} past page width {page.image_width}"
+            else:
+                continue
+            yield Finding(
+                "zero_width_staff",
+                score.id,
+                page.page_number,
+                f"sys{si} {reason} — staves crop to zero width, crash the noter",
+                system_index=si,
             )
-            if bad is not None:
-                yield Finding(
-                    "zero_width_staff",
-                    score.id,
-                    page.page_number,
-                    f"sys{si} staff box left={bad.left} right={bad.right} "
-                    f"(width {bad.width}, page width {page.image_width}) — "
-                    f"crops to zero width, crashes the noter encoder",
-                    system_index=si,
-                )
 
 
 @register("bar_numbers")

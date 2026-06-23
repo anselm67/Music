@@ -12,20 +12,19 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 from kernsheet.editor import StaffEditor
-from sheetmusic import Box, Page, Score, Staff, Status, System
+from sheetmusic import Page, Score, Staff, Status, System
 
 
 def _sys(top: int, bottom: int, bars: list[int]) -> System:
     """A two-staff (treble/bass) grand system spanning ``[top, bottom]`` with the
     inter-staff gap set to a third of the height."""
     third = (bottom - top) // 3
-    left, right = (bars[0], bars[-1]) if bars else (10, 500)
     return System(
         bar_numbers=[1],
         bars=list(bars),
         staves=[
-            Staff(box=Box(left, top, right, top + third)),
-            Staff(box=Box(left, bottom - third, right, bottom)),
+            Staff(top=top, bottom=top + third),
+            Staff(top=bottom - third, bottom=bottom),
         ],
     )
 
@@ -138,9 +137,9 @@ class TestResizeSystem:
                             bar_numbers=[1],
                             bars=[10, 500],
                             staves=[
-                                Staff(box=Box(10, 100, 500, 140)),
-                                Staff(box=Box(10, 200, 500, 240)),
-                                Staff(box=Box(10, 300, 500, 340)),
+                                Staff(top=100, bottom=140),
+                                Staff(top=200, bottom=240),
+                                Staff(top=300, bottom=340),
                             ],
                         )
                     ]
@@ -191,8 +190,8 @@ class TestResizeStaves:
             bar_numbers=[1],
             bars=[10, 500],
             staves=[
-                Staff(box=Box(10, 100, 500, 140)),
-                Staff(box=Box(10, 200, 500, 260)),
+                Staff(top=100, bottom=140),
+                Staff(top=200, bottom=260),
             ],
         )
 
@@ -247,16 +246,16 @@ class TestApplySystemRatio:
             bar_numbers=[1],
             bars=[10, 500],
             staves=[
-                Staff(box=Box(10, 100, 500, 140)),
-                Staff(box=Box(10, 160, 500, 200)),
+                Staff(top=100, bottom=140),
+                Staff(top=160, bottom=200),
             ],
         )
         sys1 = System(
             bar_numbers=[1],
             bars=[20, 400],
             staves=[
-                Staff(box=Box(20, 300, 400, 360)),
-                Staff(box=Box(20, 400, 400, 470)),
+                Staff(top=300, bottom=360),
+                Staff(top=400, bottom=470),
             ],
         )
         editor = _editor([_page([sys0, sys1])], system_index=0)
@@ -287,14 +286,14 @@ class TestApplySystemRatio:
             bar_numbers=[1],
             bars=[10, 500],
             staves=[
-                Staff(box=Box(10, 100, 500, 140)),
-                Staff(box=Box(10, 160, 500, 200)),
+                Staff(top=100, bottom=140),
+                Staff(top=160, bottom=200),
             ],
         )
         sys1 = System(
             bar_numbers=[1],
             bars=[20, 400],
-            staves=[Staff(box=Box(20, 300, 400, 380))],
+            staves=[Staff(top=300, bottom=380)],
         )
         editor = _editor([_page([sys0, sys1])], system_index=0)
 
@@ -327,8 +326,8 @@ class TestReviewWalk:
             bar_numbers=[1],
             bars=[10, 500],
             staves=[
-                Staff(box=Box(10, 100, 500, 140)),
-                Staff(box=Box(10, 160, 500, 260)),
+                Staff(top=100, bottom=140),
+                Staff(top=160, bottom=260),
             ],
         )
         return _page([sys], page_number=page_number)
@@ -360,16 +359,16 @@ class TestReviewWalk:
             bar_numbers=[1],
             bars=[10, 500],
             staves=[
-                Staff(box=Box(10, 100, 500, 140)),
-                Staff(box=Box(10, 160, 500, 200)),
+                Staff(top=100, bottom=140),
+                Staff(top=160, bottom=200),
             ],
         )
         sys1 = System(
             bar_numbers=[2],
             bars=[10, 500],
             staves=[
-                Staff(box=Box(10, 300, 500, 340)),
-                Staff(box=Box(10, 360, 500, 460)),
+                Staff(top=300, bottom=340),
+                Staff(top=360, bottom=460),
             ],
         )
         editor = _editor([_page([sys0, sys1])], system_index=0)
@@ -589,8 +588,8 @@ class TestPageCommands:
             bar_numbers=[1],
             bars=[10, 140, 270, 400, 530],
             staves=[
-                Staff(box=Box(10, 0, 400, 40)),
-                Staff(box=Box(10, 60, 400, 200)),
+                Staff(top=0, bottom=40),
+                Staff(top=60, bottom=200),
             ],
         )
         editor = _editor([_page([bad])])

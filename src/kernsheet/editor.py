@@ -16,7 +16,7 @@ from cv2.typing import MatLike
 
 from kern import KernReader
 from kernsheet import ClassicalStaffer, Finding, KernSheet, score_findings
-from sheetmusic import Box, Page, Score, Staff, Status, System
+from sheetmusic import Page, Score, Staff, Status, System
 from utils import format_sequence_columns
 
 
@@ -130,7 +130,8 @@ class StaffEditor:
         if self.system_index < 0:
             return
         new_staves = [
-            replace(staff, box=staff.box.up(delta)) for staff in self.system.staves
+            replace(staff, top=staff.top - delta, bottom=staff.bottom - delta)
+            for staff in self.system.staves
         ]
         self.page.systems[self.system_index] = replace(self.system, staves=new_staves)
 
@@ -152,9 +153,7 @@ class StaffEditor:
             box = staff.box
             new_top = top + round((box.top - top) * factor)
             new_bottom = top + round((box.bottom - top) * factor)
-            staves.append(
-                replace(staff, box=Box(box.left, new_top, box.right, new_bottom))
-            )
+            staves.append(replace(staff, top=new_top, bottom=new_bottom))
         self.replace_system(staves=staves)
 
     def resize_staves(self, delta: int) -> None:
@@ -180,11 +179,7 @@ class StaffEditor:
                 if j == n - 1
                 else round(sys_top + j * (height + gap))
             )
-            new.append(
-                replace(
-                    staff, box=Box(staff.box.left, top, staff.box.right, top + height)
-                )
-            )
+            new.append(replace(staff, top=top, bottom=top + height))
         self.replace_system(staves=new)
 
     def apply_system_ratio(self) -> None:
@@ -208,12 +203,8 @@ class StaffEditor:
             staves = [
                 replace(
                     staff,
-                    box=Box(
-                        staff.box.left,
-                        top + j * (height + gap),
-                        staff.box.right,
-                        top + j * (height + gap) + height,
-                    ),
+                    top=top + j * (height + gap),
+                    bottom=top + j * (height + gap) + height,
                 )
                 for j, staff in enumerate(system.staves)
             ]
@@ -592,8 +583,8 @@ class StaffEditor:
             bar_numbers=[],
             bars=[left, right],
             staves=[
-                Staff(Box(left, top, right, top + staff_height)),
-                Staff(Box(left, bottom - staff_height, right, bottom)),
+                Staff(top=top, bottom=top + staff_height),
+                Staff(top=bottom - staff_height, bottom=bottom),
             ],
         )
 

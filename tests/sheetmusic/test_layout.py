@@ -7,7 +7,7 @@ class TestScore:
             bar_numbers=[1],
             bars=[1, 2],
             svg_bar_numbers=[],
-            staves=[Staff(box=Box(0, 0, 10, 10))],
+            staves=[Staff(top=0, bottom=10)],
         )
         page = Page(
             page_number=1,
@@ -25,13 +25,14 @@ class TestScore:
     def test_computed_properties(self) -> None:
         system = System(
             bar_numbers=[1],
-            bars=[1, 2],
+            bars=[0, 20],
             svg_bar_numbers=[],
             staves=[
-                Staff(box=Box(0, 0, 10, 10)),
-                Staff(box=Box(10, 0, 20, 10)),
+                Staff(top=0, bottom=10),
+                Staff(top=0, bottom=10),
             ],
         )
+        # x from bars[0]..bars[-1]; y is the staff hull.
         assert system.box == Box(0, 0, 20, 10)
         page = Page(
             page_number=1,
@@ -48,9 +49,9 @@ class TestScale:
     def test_scale(self) -> None:
         system = System(
             bar_numbers=[1],
-            bars=[1, 2],
+            bars=[0, 10],
             svg_bar_numbers=[],
-            staves=[Staff(box=Box(0, 0, 10, 10))],
+            staves=[Staff(top=0, bottom=10)],
         )
         page = Page(
             page_number=1,

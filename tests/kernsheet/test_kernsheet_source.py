@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image
 
 from kernsheet import KernSheet, KernSheetSource
-from sheetmusic import Box, Page, Score, Source, Staff, Status, System
+from sheetmusic import Page, Score, Source, Staff, Status, System
 
 
 def _score(json_path: str, pdf_path: str, id: str | None = None) -> dict[str, str]:
@@ -35,7 +35,7 @@ def _page(page_number: int, width: int = 40, validated: bool = True) -> Page:
             System(
                 bar_numbers=[1],
                 bars=[0, 10],
-                staves=[Staff(box=Box(0, 0, 10, 10))],
+                staves=[Staff(top=0, bottom=10)],
             )
         ],
         status=Status.VALIDATED if validated else Status.PENDING,

@@ -80,15 +80,17 @@ class Box:
 
 @dataclass(frozen=True)
 class Staff:
-    box: Box
+    """A staff is a vertical band: it owns only ``top``/``bottom``. Its horizontal
+    extent belongs to the parent ``System`` (its ``bars``), which fills in the
+    derived ``box`` x in ``System.__post_init__``. A lone staff (not yet inside a
+    System) carries a placeholder zero-width x until the System claims it."""
 
-    @property
-    def top(self) -> int:
-        return self.box.top
+    top: int
+    bottom: int
+    box: Box = field(init=False, compare=False, repr=False)
 
-    @property
-    def bottom(self) -> int:
-        return self.box.bottom
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "box", Box(0, self.top, 0, self.bottom))
 
     @property
     def left(self) -> int:
@@ -99,7 +101,7 @@ class Staff:
         return self.box.right
 
     def scale(self, w_scale: float, h_scale: float) -> "Staff":
-        return Staff(box=self.box.scale(w_scale, h_scale))
+        return Staff(top=int(self.top * h_scale), bottom=int(self.bottom * h_scale))
 
 
 @dataclass(frozen=True)
@@ -123,10 +125,22 @@ class System:
     box: Box = field(init=False)
 
     def __post_init__(self) -> None:
-        first, last = self.staves[0].box, self.staves[-1].box
-        object.__setattr__(
-            self, "box", Box(first.left, first.top, last.right, last.bottom)
-        )
+        # The system's barlines are the single source of horizontal extent: x runs
+        # from the first to the last barline. Give each staff a derived box with that
+        # x (staves store only top/bottom). Rebuild the staves as fresh copies rather
+        # than mutating the inputs, so a staff shared across systems can't be
+        # retroactively corrupted. Then derive the system box as the staff hull.
+        left = self.bars[0] if self.bars else 0
+        right = self.bars[-1] if self.bars else 0
+        staves = []
+        for s in self.staves:
+            staff = Staff(top=s.top, bottom=s.bottom)
+            object.__setattr__(staff, "box", Box(left, s.top, right, s.bottom))
+            staves.append(staff)
+        object.__setattr__(self, "staves", staves)
+        top = min((s.top for s in staves), default=0)
+        bottom = max((s.bottom for s in staves), default=0)
+        object.__setattr__(self, "box", Box(left, top, right, bottom))
 
     @property
     def top(self) -> int:
@@ -163,6 +177,8 @@ class System:
     def asdict(self) -> dict[str, object]:
         obj = asdict(self)
         obj.pop("box", None)
+        for staff in obj["staves"]:
+            staff.pop("box", None)
         return obj
 
     def scale(self, w_scale: float, h_scale: float) -> "System":
@@ -255,10 +271,12 @@ class Score:
 
     def asdict(self) -> dict[str, object]:
         obj = asdict(self)
-        # Hack out the derived 'box' attribute from all systems.
+        # Hack out the derived 'box' attribute from all systems and staves.
         for page in obj["pages"]:
             for system in page["systems"]:
                 system.pop("box", None)
+                for staff in system["staves"]:
+                    staff.pop("box", None)
         return obj
 
     def resize(self, width: int, height: int) -> "Score":
