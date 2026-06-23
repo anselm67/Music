@@ -51,6 +51,40 @@ class TestStaffHeight:
         assert finding.system_index == 0
 
 
+class TestZeroWidthStaff:
+    def _page(self, staves: list[Box]) -> Page:
+        system = System(
+            bar_numbers=[1], bars=[0, 100], staves=[Staff(box=b) for b in staves]
+        )
+        return Page(
+            page_number=1,
+            image_width=200,
+            image_height=300,
+            systems=[system],
+            status=Status.PENDING,
+            reviewed=[],
+        )
+
+    def test_positive_width_no_finding(self) -> None:
+        assert score_findings(_score(self._page([Box(0, 0, 100, 50)]))) == []
+
+    def test_collapsed_box_flags(self) -> None:
+        findings = score_findings(_score(self._page([Box(50, 0, 50, 60)])))
+        assert [f.review for f in findings] == ["zero_width_staff"]
+        assert findings[0].system_index == 0
+
+    def test_left_past_page_width_flags(self) -> None:
+        findings = score_findings(_score(self._page([Box(200, 0, 260, 60)])))
+        assert [f.review for f in findings] == ["zero_width_staff"]
+
+    def test_one_finding_per_system(self) -> None:
+        page = self._page([Box(50, 0, 50, 60), Box(50, 60, 50, 120)])
+        findings = [
+            f for f in score_findings(_score(page)) if f.review == "zero_width_staff"
+        ]
+        assert len(findings) == 1
+
+
 class TestBarNumbers:
     def _page(self, bar_numbers: list[int]) -> Page:
         # VALIDATED on purpose: the point of this review is to flag barless systems

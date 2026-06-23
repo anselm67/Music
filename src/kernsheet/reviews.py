@@ -85,6 +85,36 @@ def _staff_height(score: Score, _kern: KernReader | None) -> Iterator[Finding]:
             )
 
 
+@register("zero_width_staff")
+def _zero_width_staff(score: Score, _kern: KernReader | None) -> Iterator[Finding]:
+    """A staff box must enclose a positive-width crop, else the noter dataset reads an
+    empty source and the encoder crashes (``to_padded_tensor: ... non-zero numel``). The
+    crop is ``min(box.width, image_width - box.left)``, so a collapsed box (``left ==
+    right``) or one whose left edge sits at/past the page width yields a zero-width
+    image. These are corrupt annotations (an editor collapse, or a bad migration), so
+    flag the offending system for a fix or rejection."""
+    for page in score.pages:
+        for si, sys in enumerate(page.systems):
+            bad = next(
+                (
+                    staff.box
+                    for staff in sys.staves
+                    if staff.box.width <= 0 or staff.box.left >= page.image_width
+                ),
+                None,
+            )
+            if bad is not None:
+                yield Finding(
+                    "zero_width_staff",
+                    score.id,
+                    page.page_number,
+                    f"sys{si} staff box left={bad.left} right={bad.right} "
+                    f"(width {bad.width}, page width {page.image_width}) — "
+                    f"crops to zero width, crashes the noter encoder",
+                    system_index=si,
+                )
+
+
 @register("bar_numbers")
 def _bar_numbers(score: Score, _kern: KernReader | None) -> Iterator[Finding]:
     """Every system needs bar numbers — they pin its transcription target. A system
