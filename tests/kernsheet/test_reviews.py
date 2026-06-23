@@ -1,5 +1,5 @@
 from kern import KernReader
-from sheetmusic import Box, Page, Score, Staff, Status, System
+from sheetmusic import Page, Score, Staff, Status, System
 from kernsheet.reviews import STAFF_HEIGHT_TOLERANCE_PX, score_findings
 
 
@@ -11,7 +11,7 @@ def _page(
     reviewed: list[str] | None = None,
 ) -> Page:
     """A one-system page whose staves have the given pixel heights (top at 0)."""
-    staves = [Staff(box=Box(0, 0, 100, h)) for h in heights]
+    staves = [Staff(top=0, bottom=h) for h in heights]
     system = System(bar_numbers=[1], bars=[0, 100], staves=staves)
     return Page(
         page_number=page_number,
@@ -51,11 +51,54 @@ class TestStaffHeight:
         assert finding.system_index == 0
 
 
+class TestZeroWidthStaff:
+    def _page(self, bars: list[int], *, n_staves: int = 2) -> Page:
+        """A one-system page with the given bars span and ``n_staves`` staves."""
+        staves = [Staff(top=60 * i, bottom=60 * i + 40) for i in range(n_staves)]
+        system = System(bar_numbers=[1], bars=bars, staves=staves)
+        return Page(
+            page_number=1,
+            image_width=200,
+            image_height=300,
+            systems=[system],
+            status=Status.PENDING,
+            reviewed=[],
+        )
+
+    def test_positive_span_no_finding(self) -> None:
+        names = ["zero_width_staff"]
+        assert score_findings(_score(self._page([0, 100])), names=names) == []
+
+    def test_degenerate_span_flags(self) -> None:
+        findings = score_findings(
+            _score(self._page([50, 50])), names=["zero_width_staff"]
+        )
+        assert [f.review for f in findings] == ["zero_width_staff"]
+        assert findings[0].system_index == 0
+
+    def test_bars_past_page_width_flags(self) -> None:
+        # image_width is 200; bars sitting entirely past it crop to zero width.
+        findings = score_findings(
+            _score(self._page([260, 360])), names=["zero_width_staff"]
+        )
+        assert [f.review for f in findings] == ["zero_width_staff"]
+
+    def test_empty_bars_left_to_bar_numbers(self) -> None:
+        # A barless system is the bar_numbers review's job, not this one.
+        findings = score_findings(_score(self._page([])), names=["zero_width_staff"])
+        assert findings == []
+
+    def test_one_finding_per_system(self) -> None:
+        page = self._page([50, 50], n_staves=3)
+        findings = score_findings(_score(page), names=["zero_width_staff"])
+        assert len(findings) == 1
+
+
 class TestBarNumbers:
     def _page(self, bar_numbers: list[int]) -> Page:
         # VALIDATED on purpose: the point of this review is to flag barless systems
         # that slipped through validation (VALIDATED does not suppress findings).
-        staves = [Staff(box=Box(0, 0, 100, 50)), Staff(box=Box(0, 60, 100, 110))]
+        staves = [Staff(top=0, bottom=50), Staff(top=60, bottom=110)]
         system = System(bar_numbers=bar_numbers, bars=[0, 100], staves=staves)
         return Page(
             page_number=1,
@@ -85,7 +128,7 @@ class TestBarDrift:
         return System(
             bar_numbers=[first] if numbered else [],
             bars=bars,
-            staves=[Staff(box=Box(0, 0, 100, 50))],
+            staves=[Staff(top=0, bottom=50)],
         )
 
     @classmethod

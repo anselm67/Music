@@ -160,34 +160,35 @@ def main() -> None:
         scale = letterbox_scale(H, W, th, tw)
         sx, sy = scale / tw, scale / th
 
-        gt_staves = [stave for system in page.systems for stave in system.staves]
-        if not gt_staves:
+        # Staff x is the system's barline span; staff_boxes vends full boxes.
+        gt_boxes = [box for system in page.systems for box in system.staff_boxes]
+        if not gt_boxes:
             continue
-        n_gt += len(gt_staves)
+        n_gt += len(gt_boxes)
 
         pred = _predict_boxes(model, img)  # normalised ltrb
-        n_extra += max(0, len(pred) - len(gt_staves))
+        n_extra += max(0, len(pred) - len(gt_boxes))
 
         if not pred:
-            n_missed += len(gt_staves)
+            n_missed += len(gt_boxes)
             continue
 
-        gt_cy = [(s.box.top + s.box.bottom) / 2.0 for s in gt_staves]
+        gt_cy = [(b.top + b.bottom) / 2.0 for b in gt_boxes]
         pred_cy = [((t + b) / 2.0) / sy for (_, t, _, b) in pred]
 
         cost = [[abs(g - p) for p in pred_cy] for g in gt_cy]
         rows, cols = linear_sum_assignment(cost)
         matched: dict[int, int] = {}
         for r, c in zip(rows, cols):
-            thresh = 0.5 * gt_staves[r].box.height
+            thresh = 0.5 * gt_boxes[r].height
             if cost[r][c] <= thresh:
                 matched[r] = c
 
-        n_missed += len(gt_staves) - len(matched)
+        n_missed += len(gt_boxes) - len(matched)
 
         for gi, pi in matched.items():
             pl, pt, pr, pb = pred[pi]
-            gt = gt_staves[gi].box
+            gt = gt_boxes[gi]
             dleft.append(pl / sx - gt.left)
             dright.append(pr / sx - gt.right)
             dtop.append(pt / sy - gt.top)

@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from pdmx import PDMX, PdmxSource
-from sheetmusic import Box, Page, Score, Source, Staff, Status, System
+from sheetmusic import Page, Score, Source, Staff, Status, System
 
 
 def _make_pdmx(tmp_path: Path, mxl_rel: str = "mxl/a/b/x.mxl") -> PDMX:
@@ -23,7 +23,7 @@ def _page(page_number: int) -> Page:
                 bar_numbers=[1],
                 bars=[0, 10],
                 svg_bar_numbers=[1],
-                staves=[Staff(box=Box(0, 0, 10, 10))],
+                staves=[Staff(top=0, bottom=10)],
             )
         ],
         status=Status.VALIDATED,

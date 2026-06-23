@@ -178,7 +178,7 @@ class NoterDataset(Dataset):
                         (
                             score.id,
                             page.page_number,
-                            [staff.box for staff in system.staves],
+                            system.staff_boxes,
                             spine_numbers,
                             system.first_bar_number,
                             system.last_bar_number,

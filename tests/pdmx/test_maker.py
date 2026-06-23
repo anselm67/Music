@@ -328,7 +328,7 @@ class TestLayoutId:
     async def test_make_layout_writes_home_relative_id(self, tmp_path: Path) -> None:
         import json
 
-        from sheetmusic import Box, Page, Staff, Status, System
+        from sheetmusic import Page, Staff, Status, System
 
         p = make_maker(tmp_path, force=True)
         svg = tmp_path / "svg/1/aa/score.svg"
@@ -344,7 +344,7 @@ class TestLayoutId:
                     bar_numbers=[1],
                     bars=[0, 10],
                     svg_bar_numbers=[1],
-                    staves=[Staff(box=Box(0, 0, 10, 10))],
+                    staves=[Staff(top=0, bottom=10)],
                 )
             ],
             status=Status.VALIDATED,

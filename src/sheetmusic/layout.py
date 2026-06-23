@@ -80,38 +80,28 @@ class Box:
 
 @dataclass(frozen=True)
 class Staff:
-    box: Box
+    """A staff is a vertical band: it owns only ``top``/``bottom``. Its horizontal
+    extent is the parent ``System``'s (its ``bars``), so a staff carries no x — read
+    a staff's full box from ``System.staff_boxes``."""
+
+    top: int
+    bottom: int
 
     @property
-    def top(self) -> int:
-        return self.box.top
+    def height(self) -> int:
+        return self.bottom - self.top
 
-    @property
-    def bottom(self) -> int:
-        return self.box.bottom
-
-    @property
-    def left(self) -> int:
-        return self.box.left
-
-    @property
-    def right(self) -> int:
-        return self.box.right
-
-    def scale(self, w_scale: float, h_scale: float) -> "Staff":
-        return Staff(box=self.box.scale(w_scale, h_scale))
+    def scale(self, h_scale: float) -> "Staff":
+        return Staff(top=int(self.top * h_scale), bottom=int(self.bottom * h_scale))
 
 
 @dataclass(frozen=True)
 class System:
     """Describes a system - or group of staves - layout.
 
-    Some constraints:
-    - All staves in a System have the same number of bars,
-    - All staves in a System have the same left and right coordinates,
-
-    Returns:
-        _type_: A frozen dataclass describing the system layout.
+    All staves in a System share the same horizontal extent — the barline span
+    ``bars[0]..bars[-1]`` — so x lives only here, not per-staff. A staff carries just
+    its vertical band; ``staff_boxes`` reconstructs full staff boxes on demand.
     """
 
     bar_numbers: list[int]
@@ -123,10 +113,20 @@ class System:
     box: Box = field(init=False)
 
     def __post_init__(self) -> None:
-        first, last = self.staves[0].box, self.staves[-1].box
-        object.__setattr__(
-            self, "box", Box(first.left, first.top, last.right, last.bottom)
-        )
+        # The system's barlines are the single source of horizontal extent (x runs
+        # from the first to the last barline); the staff hull gives the vertical.
+        left = self.bars[0] if self.bars else 0
+        right = self.bars[-1] if self.bars else 0
+        top = min((s.top for s in self.staves), default=0)
+        bottom = max((s.bottom for s in self.staves), default=0)
+        object.__setattr__(self, "box", Box(left, top, right, bottom))
+
+    @property
+    def staff_boxes(self) -> list["Box"]:
+        """Each staff's full box: the system's horizontal span (from ``bars``) with
+        the staff's own top/bottom. Staves don't store x — it is the system's."""
+        left, right = self.box.left, self.box.right
+        return [Box(left, s.top, right, s.bottom) for s in self.staves]
 
     @property
     def top(self) -> int:
@@ -169,7 +169,7 @@ class System:
         return System(
             bar_numbers=self.bar_numbers,
             bars=[int(b * w_scale) for b in self.bars],
-            staves=[s.scale(w_scale, h_scale) for s in self.staves],
+            staves=[s.scale(h_scale) for s in self.staves],
             svg_bar_numbers=self.svg_bar_numbers,
         )
 

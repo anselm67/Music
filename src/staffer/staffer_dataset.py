@@ -141,13 +141,14 @@ class StafferDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]]):
                     ]
                 )
                 for staff in system.staves:
-                    # ltrb; only cols [1,3] (top, bottom) are used in the loss
+                    # ltrb; only cols [1,3] (top, bottom) are used in the loss. x is
+                    # the system's (staves share the barline span), not per-staff.
                     staff_boxes[staff_idx] = torch.tensor(
                         [
-                            staff.box.left * sx,
-                            staff.box.top * sy,
-                            staff.box.right * sx,
-                            staff.box.bottom * sy,
+                            system.box.left * sx,
+                            staff.top * sy,
+                            system.box.right * sx,
+                            staff.bottom * sy,
                         ]
                     )
                     assigns[staff_idx] = sys_idx
