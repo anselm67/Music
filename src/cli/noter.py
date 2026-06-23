@@ -615,13 +615,22 @@ def train(
             # A single-stave checkpoint uses a fused nn.Transformer; remap its keys
             # onto the split encoder/decoder. The cross-stave params have no legacy
             # counterpart and stay at init (zero gate → identical to the base noter),
-            # so load non-strict but reject anything missing beyond those.
+            # so load non-strict but reject anything missing beyond those. The
+            # articulation head/feedback (art_proj/art_head) are likewise absent from
+            # a token-only base and stay at their zero/identity init.
             state = NoterModel.remap_legacy_state_dict(state)
             result = module.load_state_dict(state, strict=False)
+            allowed_missing = (
+                "cross_stave",
+                "norm_xs",
+                "xs_gate",
+                "art_proj",
+                "art_head",
+            )
             stray = [
                 k
                 for k in result.missing_keys
-                if "cross_stave" not in k and "norm_xs" not in k and "xs_gate" not in k
+                if not any(tag in k for tag in allowed_missing)
             ]
             if stray or result.unexpected_keys:
                 raise click.ClickException(
