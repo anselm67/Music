@@ -93,6 +93,65 @@
      following the format of the entries that follow. Keep newest-first order.
      ════════════════════════════════════════════════════════════════════════ -->
 
+<!-- ── GT kern source: NIFC Chopin first editions ── -->
+<article class="entry">
+  <h2>Source GT kern for missing works from the NIFC Chopin first-editions — not PDMX</h2>
+  <div class="entry-meta">
+    <span>2026-06-22 / 06-23</span>
+    <span class="badge accepted">Accepted — adopted as the Chopin GT-kern source</span>
+    <span class="ref">KernSheet data (<code>chopin/etudes</code>, <code>chopin/nocturne</code>) · <a href="https://github.com/pl-wnifc/humdrum-chopin-first-editions">pl-wnifc/humdrum-chopin-first-editions</a> · <code>**fing</code> tokenizer support <code>c8fe77f</code></span>
+  </div>
+
+  <h3>Context</h3>
+  <p>
+    KernSheet pairs real scanned editions with token GT derived from <em>curated</em> kern — historically
+    kern-score (<code>kern.humdrum.org</code>) and ASAP. Growing the corpus into works those don't cover
+    (Études Op.10 nos&nbsp;2/6/11, Op.25 nos&nbsp;3/6/7/9, and the Nocturnes — KernSheet had <strong>1 of
+    ~21</strong>) needed a reliable kern source for the gaps. The obvious candidate, <strong>PDMX</strong>,
+    turned out unfit for GT: it <em>has</em> the pieces, but as raw, unvetted crowd-sourced MuseScore
+    uploads — and the ones we sampled didn't even convert through the project's own
+    <code>musicxml&nbsp;→&nbsp;humdrum</code> Verovio path (it crashed, <code>std::out_of_range</code>),
+    which is why they have no built <code>krn</code> in the corpus. Crowd transcriptions are a convenience
+    source at best, not ground truth.
+  </p>
+
+  <h3>Decision</h3>
+  <p>
+    Adopt the <strong>NIFC "Chopin First Editions"</strong> Humdrum collection
+    (<code>github.com/pl-wnifc/humdrum-chopin-first-editions</code>, 512 <code>.krn</code> files) — the
+    complete Chopin œuvre hand-encoded from first editions by the Fryderyk Chopin Institute (the back-end of
+    chopinscores.org / humdrum.nifc.pl, same lineage as the kern-score files we already trust). Files are
+    named <code>&lt;opus&gt;-&lt;plate&gt;&lt;edition&gt;-&lt;NNN&gt;.krn</code> with multiple first editions
+    per opus (BH, Sm, KI, LE, …); we pick one complete edition per work, skip the non-solo-piano opuses
+    (Op.3/8/65/73/74/11/21 — chamber / songs / concertos, &gt;2-staff), and ingest each work via the
+    existing shared-PDF edition workflow (route the kern to a scan edition, <code>kernsheet detect</code>
+    cv2-seeds a full-book layout cloned per entry, human validates per piece).
+  </p>
+  <p>Two integration changes this required:</p>
+  <ul>
+    <li><strong>Tokenizer</strong>: NIFC files interleave <code>**fing</code> (fingering) and
+      <code>**dynam</code> spines with the two <code>**kern</code> staves. Added <code>**fing</code> to the
+      dropped non-kern interpretations (<code>parser</code> / <code>tokenizer</code> / <code>to_midi</code>,
+      commit <code>c8fe77f</code>) so they tokenize to a clean <code>spine_count = 2</code>, exactly as
+      <code>**dynam</code>/<code>**fb</code>/<code>**text</code> already did.</li>
+    <li><strong>Data-quality policy</strong>: the encodings carry <em>sporadic single-token corruptions
+      shared across editions</em> (stray-letter pitches like <code>16edee-</code>→<code>eee-</code>, dropped
+      chord pitches <code>8\</code>→<code>8f\</code>, misplaced articulation, transposed invisible-rest
+      markers <code>8yyr</code>→<code>8ryy</code>). Policy: correct only when <strong>pinned by the
+      surrounding figure or voice</strong>, document every edit as an <code>!!!ONB</code> reference record in
+      the krn, and <strong>surface ambiguous cases for human adjudication against the engraving</strong>
+      rather than guessing (one Nocturne note needed the Pugno scan to settle B♭ vs C♭).</li>
+  </ul>
+
+  <div class="outcome">
+    <strong>Outcome.</strong> Études Op.10 now complete (1–12, with two scan editions per entry), Op.25
+    complete, and Nocturnes <strong>1&nbsp;→&nbsp;19</strong> (Op.9–62) — all GT-grade. ~13 editorial
+    corrections, each <code>!!!ONB</code>-documented. The seeded layouts are cv2-detected and still need
+    editor validation before they count as training data. NIFC can still fill the next gaps the same way:
+    waltzes (4→~17), polonaises (1→~11), impromptus (0→4).
+  </div>
+</article>
+
 <!-- ── Scorer duration path ── -->
 <article class="entry">
   <h2>Wire the duration head through the end-to-end scorer (loss, generation, eval)</h2>
