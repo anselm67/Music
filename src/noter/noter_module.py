@@ -8,6 +8,8 @@ from torch import Tensor
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
 
+from kern import NUM_ARTICULATIONS
+
 from .noter_model import NoterConfig, NoterModel
 from .noter_vocab import Vocab
 
@@ -39,14 +41,27 @@ class NoterModule(L.LightningModule):
         return self.model(source, source_widths, target, stave_mask, causal)
 
     def _step(self, batch: tuple, stage: str) -> Tensor:
-        source, source_widths, target, stave_mask = batch
+        source, source_widths, target, articulations, stave_mask = batch
         # target: (B, S, T, max_chords) — teacher-forced input is target[:, :, :-1],
         # labels shifted by one. Padded staves are excluded from the loss.
-        logits = self.forward(
-            source, source_widths, target[:, :, :-1], stave_mask
-        )  # (B, S, T-1, max_chords, vocab_size)
+        tgt_in = target[:, :, :-1]
+        causal = self._causal_mask(tgt_in.shape[2])
         labels = target[:, :, 1:].clone()  # (B, S, T-1, max_chords)
         labels[~stave_mask] = Vocab.PAD
+
+        if self.config.articulations:
+            # The input note's articulation is fed back alongside its token; the
+            # head predicts the *next* note's articulation (shifted, like tokens).
+            logits, art_logits = self.model.forward_both(
+                source,
+                source_widths,
+                tgt_in,
+                stave_mask,
+                causal,
+                articulations[:, :, :-1],
+            )
+        else:
+            logits = self.model(source, source_widths, tgt_in, stave_mask, causal)
 
         V = logits.shape[-1]
         loss = F.cross_entropy(
@@ -56,17 +71,48 @@ class NoterModule(L.LightningModule):
         )
 
         # Token accuracy (ignoring PAD)
+        slot_mask = labels != Vocab.PAD
         with torch.no_grad():
-            mask = labels != Vocab.PAD
-            correct = (logits.argmax(-1) == labels) & mask
-            accuracy = correct.sum() / mask.sum().clamp(min=1)
+            correct = (logits.argmax(-1) == labels) & slot_mask
+            accuracy = correct.sum() / slot_mask.sum().clamp(min=1)
 
         self.log(f"{stage}/loss", loss, prog_bar=True)
         self.log(f"{stage}/accuracy", accuracy, prog_bar=True)
+
+        if self.config.articulations:
+            loss = loss + self._articulation_loss(
+                art_logits, articulations[:, :, 1:], slot_mask, stage
+            )
+
         if stage == "train":
             self.log("train/lr", self.trainer.optimizers[0].param_groups[0]["lr"])
 
         return loss
+
+    def _articulation_loss(
+        self, art_logits: Tensor, art_labels: Tensor, slot_mask: Tensor, stage: str
+    ) -> Tensor:
+        """Masked multi-label BCE over the articulation head.
+
+        ``art_logits``/``art_labels``: (B, S, T-1, max_chords, NUM_ARTICULATIONS);
+        ``slot_mask``: (B, S, T-1, max_chords) — the same non-PAD note slots the
+        token loss covers (padded staves already folded in). Logs per-flag accuracy
+        and positive recall (the latter catches an all-negatives collapse, since
+        most notes carry no articulation)."""
+        if not slot_mask.any():
+            return art_logits.sum() * 0.0
+        logits = art_logits[slot_mask]  # (N, A)
+        labels = art_labels[slot_mask]  # (N, A)
+        loss = F.binary_cross_entropy_with_logits(logits, labels)
+        with torch.no_grad():
+            preds = logits > 0  # logit > 0 <=> prob > 0.5
+            pos = labels > 0.5
+            acc = (preds == pos).float().mean()
+            recall = (preds & pos).sum() / pos.sum().clamp(min=1)
+        self.log(f"{stage}/art_loss", loss, prog_bar=True)
+        self.log(f"{stage}/art_acc", acc)
+        self.log(f"{stage}/art_recall", recall, prog_bar=True)
+        return self.config.articulation_weight * loss
 
     @torch.no_grad()
     def predict(
@@ -84,16 +130,34 @@ class NoterModule(L.LightningModule):
         generated = torch.full(
             (B, S, 1, c.max_chords), Vocab.SOS, device=self.device, dtype=torch.long
         )
+        # When the articulation head is on, carry a parallel buffer of generated
+        # articulations (SOS row = zeros) and feed it back as input, mirroring the
+        # teacher-forced training path. The buffer is row-aligned with `generated`.
+        art = (
+            torch.zeros(B, S, 1, c.max_chords, NUM_ARTICULATIONS, device=self.device)
+            if c.articulations
+            else None
+        )
         done = ~stave_mask.clone()  # padded staves emit EOS immediately
         for _ in range(c.max_seqlen - 1):
             T = generated.shape[2]
-            logits = self.model.decode(
-                generated, memory, mem_pad, stave_mask, self._causal_mask(T)
-            )
+            causal = self._causal_mask(T)
+            if c.articulations:
+                logits, art_logits = self.model.decode_both(
+                    generated, memory, mem_pad, stave_mask, causal, art
+                )
+            else:
+                logits = self.model.decode(
+                    generated, memory, mem_pad, stave_mask, causal
+                )
             next_tokens = logits[:, :, -1, :, :].argmax(dim=-1)  # (B, S, max_chords)
             next_tokens[done] = Vocab.EOS  # keep finished staves at EOS
             done = done | (next_tokens[..., 0] == Vocab.EOS)
             generated = torch.cat([generated, next_tokens.unsqueeze(2)], dim=2)
+            if art is not None:
+                next_art = (art_logits[:, :, -1] > 0).float()  # (B, S, mc, A)
+                next_art[done] = 0.0  # finished staves carry no articulation
+                art = torch.cat([art, next_art.unsqueeze(2)], dim=2)
             if done.all():
                 break
         return generated[:, :, 1:]  # strip SOS

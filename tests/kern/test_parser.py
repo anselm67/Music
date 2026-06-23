@@ -201,7 +201,7 @@ class TestHumdrumParser(unittest.TestCase):
             ),
         )
 
-    def test_thrilled_note(self) -> None:
+    def test_trilled_note(self) -> None:
         self.parse_one_token(
             "4anT^\n",
             Note(
@@ -209,7 +209,8 @@ class TestHumdrumParser(unittest.TestCase):
                 sharps=0,
                 flats=0,
                 duration=Duration(4, 0),
-                is_upper_thrill=True,
+                is_whole_trill=True,
+                is_accent=True,
             ),
         )
         self.parse_one_token(
@@ -219,7 +220,38 @@ class TestHumdrumParser(unittest.TestCase):
                 sharps=0,
                 flats=0,
                 duration=Duration(4, 0),
-                is_lower_thrill=True,
+                is_half_trill=True,
+                is_accent=True,
+            ),
+        )
+
+    def test_articulated_note(self) -> None:
+        self.parse_one_token(
+            "4cc'\n",
+            Note(
+                pitch=Pitch.cc,
+                duration=Duration(4, 0),
+                is_staccato=True,
+            ),
+        )
+        self.parse_one_token(
+            "2g;\n",
+            Note(
+                pitch=Pitch.g,
+                duration=Duration(2, 0),
+                is_fermata=True,
+            ),
+        )
+
+    def test_tie_continue(self) -> None:
+        # Kern `_` marks a note in the middle of a tie chain (tied both ways),
+        # distinct from `[` (start) and `]` (end).
+        self.parse_one_token(
+            "4c_\n",
+            Note(
+                pitch=Pitch.c,
+                duration=Duration(4, 0),
+                continues_tie=True,
             ),
         )
 

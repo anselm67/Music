@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from torch import Tensor, nn
 from torchvision.transforms import InterpolationMode
 
+from kern import NUM_ARTICULATIONS
 from staffer import StafferConfig
 from utils import current_commit
 
@@ -36,6 +37,15 @@ class NoterConfig:
     max_staves: int = 2
     vocab_size: int = -1
     pad_idx: int = -1
+
+    # Separate articulation flow: a per-note multi-hot (tie, staccato, fermata,
+    # accent) predicted by its own head and fed back on the input side, alongside
+    # the pitch x duration token (which is unchanged). Off by default so existing
+    # checkpoints and the scorer are unaffected.
+    articulations: bool = False
+    # BCE weight for the articulation head. The duration-head pilot showed a high
+    # auxiliary weight taxes the primary (pitch) task; keep this at parity (1.0).
+    articulation_weight: float = 1.0
 
     interpolation: InterpolationMode = InterpolationMode.BILINEAR
     antialias: bool = False
@@ -129,12 +139,23 @@ class TargetEmbedder(nn.Module):
         self.pos_embed = nn.Parameter(
             0.02 * torch.randn(config.max_seqlen, config.embed_dim)
         )
+        # Per-slot articulation injected on the input side as a learned projection
+        # of the multi-hot, mirroring the (separate) articulation head. Zero-init
+        # so the token path is unperturbed at the start of training (identity), and
+        # so a checkpoint trained without articulations loads unchanged.
+        self.art_proj: nn.Linear | None = None
+        if config.articulations:
+            self.art_proj = nn.Linear(NUM_ARTICULATIONS, config.embed_dim)
+            nn.init.zeros_(self.art_proj.weight)
+            nn.init.zeros_(self.art_proj.bias)
         self.norm = nn.LayerNorm(config.embed_dim)
         self.dropout = nn.Dropout(config.dropout)
 
-    def forward(self, target: Tensor) -> Tensor:
+    def forward(self, target: Tensor, articulations: Tensor | None = None) -> Tensor:
         embeds = self.embedding(target)  # (B, T, H, D)
         embeds = embeds + self.chord_pos_embed  # per-slot position signal
+        if articulations is not None and self.art_proj is not None:
+            embeds = embeds + self.art_proj(articulations)  # (B, T, H, D)
         B, T, H, D = embeds.shape
         assert T <= self.pos_embed.shape[0], (
             f"T={T} exceeds max_seqlen={self.pos_embed.shape[0]}"
@@ -246,6 +267,12 @@ class NoterModel(nn.Module):
         )
         self.decoder = CrossStaveDecoder(config)
         self.mlp = nn.Linear(config.embed_dim, config.max_chords * config.vocab_size)
+        # Separate per-slot articulation head (multi-label logits), only when enabled.
+        self.art_head: nn.Linear | None = None
+        if config.articulations:
+            self.art_head = nn.Linear(
+                config.embed_dim, config.max_chords * NUM_ARTICULATIONS
+            )
 
     def make_src_padding_mask(self, widths: Tensor) -> Tensor:
         """
@@ -286,18 +313,25 @@ class NoterModel(nn.Module):
         )
         return memory, src_pad_mask
 
-    def decode(
+    def _decode_hidden(
         self,
         target: Tensor,  # (B, S, T, max_chords)
         memory: Tensor,  # (B*S, P, D)
         memory_pad_mask: Tensor,  # (B*S, P)
         stave_mask: Tensor,  # (B, S) — True on real staves
         target_mask: Tensor,  # (T, T) causal
-    ) -> Tensor:
-        """Decode a batch of systems → logits ``(B, S, T, max_chords, vocab_size)``."""
+        articulations: Tensor | None,  # (B, S, T, max_chords, NUM_ARTICULATIONS)
+    ) -> tuple[Tensor, tuple[int, int, int, int]]:
+        """Run the decoder → hidden states ``(B*S, T, D)`` + the ``(B,S,T,mc)`` shape,
+        shared by the token and articulation heads (one decoder pass)."""
         bsz, staves, t, mc = target.shape
         tgt_flat = target.reshape(bsz * staves, t, mc)
-        tgt_embeds = self.target_embedder(tgt_flat)  # (B*S, T, D)
+        art_flat = (
+            articulations.reshape(bsz * staves, t, mc, NUM_ARTICULATIONS)
+            if articulations is not None
+            else None
+        )
+        tgt_embeds = self.target_embedder(tgt_flat, art_flat)  # (B*S, T, D)
         tgt_kpm = (tgt_flat == self.config.pad_idx).all(dim=-1)  # (B*S, T)
         xs_mask = self._cross_stave_mask(staves, t, target.device)
         xs_kpm = (~stave_mask).unsqueeze(-1).expand(bsz, staves, t).reshape(bsz, -1)
@@ -312,7 +346,40 @@ class NoterModel(nn.Module):
             bsz,
             staves,
         )
+        return outs, (bsz, staves, t, mc)
+
+    def decode(
+        self,
+        target: Tensor,  # (B, S, T, max_chords)
+        memory: Tensor,  # (B*S, P, D)
+        memory_pad_mask: Tensor,  # (B*S, P)
+        stave_mask: Tensor,  # (B, S) — True on real staves
+        target_mask: Tensor,  # (T, T) causal
+    ) -> Tensor:
+        """Decode a batch of systems → logits ``(B, S, T, max_chords, vocab_size)``."""
+        outs, (bsz, staves, t, mc) = self._decode_hidden(
+            target, memory, memory_pad_mask, stave_mask, target_mask, None
+        )
         return self.mlp(outs).view(bsz, staves, t, mc, -1)
+
+    def decode_both(
+        self,
+        target: Tensor,  # (B, S, T, max_chords)
+        memory: Tensor,  # (B*S, P, D)
+        memory_pad_mask: Tensor,  # (B*S, P)
+        stave_mask: Tensor,  # (B, S) — True on real staves
+        target_mask: Tensor,  # (T, T) causal
+        articulations: Tensor | None,  # (B, S, T, max_chords, NUM_ARTICULATIONS)
+    ) -> tuple[Tensor, Tensor]:
+        """Decode → (token logits ``(B,S,T,mc,vocab)``, articulation logits
+        ``(B,S,T,mc,NUM_ARTICULATIONS)``). Requires ``config.articulations``."""
+        assert self.art_head is not None, "decode_both needs config.articulations"
+        outs, (bsz, staves, t, mc) = self._decode_hidden(
+            target, memory, memory_pad_mask, stave_mask, target_mask, articulations
+        )
+        tok_logits = self.mlp(outs).view(bsz, staves, t, mc, -1)
+        art_logits = self.art_head(outs).view(bsz, staves, t, mc, NUM_ARTICULATIONS)
+        return tok_logits, art_logits
 
     def forward(
         self,
@@ -326,6 +393,24 @@ class NoterModel(nn.Module):
         flat_src = source.reshape(bsz * staves, *source.shape[2:])
         memory, mem_pad = self.encode(flat_src, source_widths.reshape(bsz * staves))
         return self.decode(target, memory, mem_pad, stave_mask, target_mask)
+
+    def forward_both(
+        self,
+        source: Tensor,  # (B, S, 1, H, W)
+        source_widths: Tensor,  # (B, S)
+        target: Tensor,  # (B, S, T, max_chords)
+        stave_mask: Tensor,  # (B, S)
+        target_mask: Tensor,  # (T, T) causal
+        articulations: Tensor,  # (B, S, T, max_chords, NUM_ARTICULATIONS)
+    ) -> tuple[Tensor, Tensor]:
+        """``forward`` with the articulation head: (token logits, articulation
+        logits). Requires ``config.articulations``."""
+        bsz, staves = source.shape[:2]
+        flat_src = source.reshape(bsz * staves, *source.shape[2:])
+        memory, mem_pad = self.encode(flat_src, source_widths.reshape(bsz * staves))
+        return self.decode_both(
+            target, memory, mem_pad, stave_mask, target_mask, articulations
+        )
 
     @staticmethod
     def remap_legacy_state_dict(state: dict[str, Tensor]) -> dict[str, Tensor]:

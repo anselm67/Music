@@ -7,6 +7,7 @@ from pathlib import Path
 import torch
 from torch import Tensor
 
+from kern import split_articulation
 from pdmx import PDMX
 
 
@@ -36,13 +37,17 @@ class Vocab:
         return len(self._tok2i)
 
     @staticmethod
-    def _strip_bar_number(str_tok: str) -> str:
+    def _strip(str_tok: str) -> str:
+        """The vocab key for a token: bar number and articulation suffix removed,
+        so a tied/staccato/etc note maps to the same id as its plain form (the
+        articulation rides a separate channel — see ``split_articulation``)."""
+        str_tok, _ = split_articulation(str_tok)
         if m := Vocab.BAR_RE.match(str_tok):
             return m.group("base") + (m.group("dbl") or "")
         return str_tok
 
     def encode(self, str_tok: str) -> int:
-        return self._tok2i.get(Vocab._strip_bar_number(str_tok), self.UNK)
+        return self._tok2i.get(Vocab._strip(str_tok), self.UNK)
 
     def decode(self, int_tok: int) -> str:
         return self._i2tok.get(int_tok, self.UNK_T[1])
@@ -81,7 +86,7 @@ class Vocab:
             with open(tokens_file, "r") as f:
                 for record in f:
                     for token in record.strip().split():
-                        counts[Vocab._strip_bar_number(token)] += 1
+                        counts[Vocab._strip(token)] += 1
 
         tok2i: dict[str, int] = {s: i for i, s in Vocab.RESERVED_TOKENS}
         for key, value in counts.items():
@@ -106,7 +111,7 @@ class Vocab:
             with open(tokens_file, "r") as f:
                 for record in f:
                     for token in record.strip().split():
-                        counts[Vocab._strip_bar_number(token)] += 1
+                        counts[Vocab._strip(token)] += 1
 
         oov = {t: c for t, c in counts.items() if t not in self._tok2i}
         tok2i = dict(self._tok2i)

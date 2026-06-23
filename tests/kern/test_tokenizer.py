@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from kern import KernReader, tokenize
+from kern import KernReader, split_articulation, tokenize
 
 
 def check_tokenization(tmp_path: Path, kern_text: str) -> bool:
@@ -42,6 +42,48 @@ def test_chord_notes_sorted_low_to_high(tmp_path: Path) -> None:
         "4/4",
         "=1",
         "c/4 e/4 g/4 ee/4",
+        "==",
+    ]
+
+
+def test_split_articulation() -> None:
+    # bits: [tie-to-next, tie-from-prev, staccato, fermata, accent]
+    F = False
+    assert split_articulation("c/4@[f") == ("c/4", [True, F, F, True, F])
+    assert split_articulation("c/4@a") == ("c/4", [F, F, F, F, True])
+    # A tie-middle (`_`) folds into both tie bits.
+    assert split_articulation("c/4@[]") == ("c/4", [True, True, F, F, F])
+    assert split_articulation("c/4") == ("c/4", [F, F, F, F, F])
+    # Non-note tokens have no suffix and pass through unchanged.
+    assert split_articulation("=1") == ("=1", [F, F, F, F, F])
+
+
+def test_articulation_suffix(tmp_path: Path) -> None:
+    """Tie/staccato/fermata/accent ride a note token as an @-suffix; an unflagged
+    note is unchanged, so its vocab id is untouched. The tie-middle note `e_` ties
+    both ways -> `@[]`."""
+    kern = """
+**kern
+*clefG2
+*M4/4
+=1
+4c'
+4d;
+[4e
+4e_
+4e]
+==
+""".strip()
+    reader = tokenize_input(tmp_path, kern)
+    assert reader.lines == [
+        "clef-GG",
+        "4/4",
+        "=1",
+        "c/4@s",
+        "d/4@f",
+        "e/4@[",
+        "e/4@[]",
+        "e/4@]",
         "==",
     ]
 

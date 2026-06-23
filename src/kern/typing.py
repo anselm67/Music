@@ -257,6 +257,9 @@ class Note(DurationToken):
     sharps: int = 0
     starts_tie: bool = False
     ends_tie: bool = False
+    # Kern `_`: a note in the middle of a tie chain — tied both to the previous and
+    # the next note. Distinct from `[`/`]`, which only mark the chain's ends.
+    continues_tie: bool = False
     starts_slur: bool = False
     ends_slur: bool = False
     starts_phrase: bool = False
@@ -267,8 +270,11 @@ class Note(DurationToken):
     is_groupetto: bool = False
     has_left_beam: bool = False
     has_right_beam: bool = False
-    is_upper_thrill: bool = False
-    is_lower_thrill: bool = False
+    is_whole_trill: bool = False
+    is_half_trill: bool = False
+    is_staccato: bool = False
+    is_fermata: bool = False
+    is_accent: bool = False
     is_drum: bool = False
 
     def __lt__(self, other: object) -> bool:

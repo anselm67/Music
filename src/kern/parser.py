@@ -89,7 +89,7 @@ class KernSpineHolder[T](SpineHolder):
         if self.enable_warnings:
             if ritardendo_text:
                 print(f"Un-handled ritardendo(?) duration in {orig_token}.")
-            for x in r'MmWwsS$R\'/\\Q"`~^':
+            for x in r'MmWwsS$R/\\Q"`~':
                 if x in additional:
                     print(f"Warning: flags {additional} in {orig_token} not handled.")
                     break
@@ -101,6 +101,7 @@ class KernSpineHolder[T](SpineHolder):
             sharps=additional.count("#"),
             starts_tie="[" in additional,
             ends_tie="]" in additional,
+            continues_tie="_" in additional,
             starts_slur="(" in additional,
             ends_slur=")" in additional,
             starts_phrase="{" in additional,
@@ -111,8 +112,11 @@ class KernSpineHolder[T](SpineHolder):
             is_groupetto="Q" in additional,
             has_left_beam="k" in additional,
             has_right_beam="K" in additional,
-            is_upper_thrill="T" in additional,
-            is_lower_thrill="t" in additional,
+            is_whole_trill="T" in additional,
+            is_half_trill="t" in additional,
+            is_staccato="'" in additional,
+            is_fermata=";" in additional,
+            is_accent="^" in additional,
             is_drum="R" in additional,
         )
 

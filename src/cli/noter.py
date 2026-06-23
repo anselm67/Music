@@ -210,7 +210,7 @@ def show(ctx: ClickContext) -> None:
     while True:
         index = random.randint(0, len(dataset) - 1)
         score_id, page_number = dataset.items[index][:2]
-        images, _, sequences, mask = dataset[index]
+        images, _, sequences, _, mask = dataset[index]
         staves = mask.nonzero(as_tuple=True)[0].tolist()
         print(ctx.source.image_path(score_id, page_number))
         print(_format_spines([dataset.vocab.i2tok(sequences[g]) for g in staves]))
@@ -269,7 +269,7 @@ def image_stats(ctx: ClickContext, num_workers: int) -> None:
     pix_sum = 0
     pix_sum2 = 0
     pix_count = 0
-    for images, _, _, masks in loader:
+    for images, _, _, _, masks in loader:
         # (B, S, 1, H, W) → only the real staves (masks True); pad slots are zeros.
         for img in images[masks]:
             arr = img.squeeze(0).cpu().numpy()
@@ -443,6 +443,21 @@ def grow_checkpoint(src_ckpt: Path, out_ckpt: Path, vocab_path: Path) -> None:
     "KernSheet without checkpoint surgery (the extra rows stay unlearned).",
 )
 @click.option(
+    "--articulations",
+    is_flag=True,
+    default=False,
+    help="Enable the separate articulation flow: a per-note multi-hot (tie, "
+    "staccato, fermata, accent) with its own head + input feedback, alongside "
+    "the unchanged pitch x duration token.",
+)
+@click.option(
+    "--articulation-weight",
+    type=float,
+    default=None,
+    help="BCE weight for the articulation head (default 1.0); only with "
+    "--articulations.",
+)
+@click.option(
     "--kern-sheet",
     "kern_sheet",
     type=(click.Path(exists=True, file_okay=False, path_type=Path), float),
@@ -468,6 +483,8 @@ def train(
     warmup_steps: int,
     jitter: float | None,
     augment: float | None,
+    articulations: bool,
+    articulation_weight: float | None,
     vocab_path: Path | None,
     kern_sheet: tuple[Path, float] | None,
 ) -> None:
@@ -490,10 +507,12 @@ def train(
             or warmup_steps >= 0
             or jitter is not None
             or augment is not None
+            or articulations
+            or articulation_weight is not None
         ):
             logging.warning(
-                "Resuming from checkpoint; --train-len/--valid-len/--lr/"
-                "--warmup-steps/--jitter/--augment ignored."
+                "Resuming from checkpoint; --train-len/--valid-len/--lr/--warmup-"
+                "steps/--jitter/--augment/--articulations(-weight) ignored."
             )
     else:
         ckpt_path = None
@@ -511,6 +530,9 @@ def train(
             config.jitter = jitter
         if augment is not None:
             config.augment = augment
+        config.articulations = articulations
+        if articulation_weight is not None:
+            config.articulation_weight = articulation_weight
 
     config.max_steps = epochs * (config.train_len // config.batch_size)
     logging.info(
@@ -797,7 +819,7 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
 
     similarities: list[float] = []
     for idx in tqdm(indices, desc="Evaluating"):
-        images, widths, gt_sequences, mask = dataset[idx]
+        images, widths, gt_sequences, _, mask = dataset[idx]
         valid = mask.nonzero(as_tuple=True)[0]
 
         device = module.device
@@ -854,7 +876,7 @@ def predict(ctx: ClickContext, name: str) -> None:
         if quit_:
             break
         score_id, page_number = dataset.items[idx][:2]
-        images, widths, gt_sequences, mask = dataset[idx]
+        images, widths, gt_sequences, _, mask = dataset[idx]
         valid = mask.nonzero(as_tuple=True)[0]
 
         device = module.device

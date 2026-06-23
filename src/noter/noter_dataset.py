@@ -8,6 +8,7 @@ from torchvision.transforms import v2
 from torchvision.transforms.functional import crop
 from tqdm import tqdm
 
+from kern import NUM_ARTICULATIONS, split_articulation
 from sheetmusic import (
     Box,
     LetterboxResize,
@@ -50,10 +51,25 @@ class SequenceLoader:
     def __call__(
         self, score_id: str, spine_number: int, first_bar: int, last_bar: int
     ) -> Tensor | None:
-        """One stave's sequence, shape (max_seqlen, max_chords).
+        """One stave's token sequence, shape (max_seqlen, max_chords).
 
         Returns SOS-prefixed, EOS-terminated tensor, or None if the bars are
-        missing, the sequence is too long, or any record can't be decoded.
+        missing, the sequence is too long, or any record can't be decoded. This
+        is the token-only view used by callers that don't need articulations
+        (the scorer, the kernsheet replay check).
+        """
+        result = self.load(score_id, spine_number, first_bar, last_bar)
+        return None if result is None else result[0]
+
+    def load(
+        self, score_id: str, spine_number: int, first_bar: int, last_bar: int
+    ) -> tuple[Tensor, Tensor] | None:
+        """One stave's (token sequence, articulation multi-hot).
+
+        Sequence is (max_seqlen, max_chords) token ids; articulations is
+        (max_seqlen, max_chords, NUM_ARTICULATIONS) floats, row-aligned to the
+        SOS-prefixed sequence (the SOS/EOS/PAD rows carry zeros). Returns None on
+        the same conditions as ``__call__``.
         """
         try:
             records = self.source.records(score_id, first_bar, last_bar)
@@ -70,20 +86,25 @@ class SequenceLoader:
             )
             return None
         body = torch.full((self.max_seqlen - 1, self.max_chords), self.vocab.PAD)
+        arts = torch.zeros((self.max_seqlen, self.max_chords, NUM_ARTICULATIONS))
         for idx, text in enumerate(records):
             try:
                 # Real KernSheet records occasionally have fewer spines than the
                 # system's staff count (malformed/misaligned bar range); skip the
                 # sample rather than letting the IndexError crash the worker.
                 str_tok = text.split("\t")[spine_number]
-                body[idx, :] = self.vocab.tok2i(
-                    str_tok.strip().split(), max_chords=self.max_chords
-                )
+                str_toks = str_tok.strip().split()
+                body[idx, :] = self.vocab.tok2i(str_toks, max_chords=self.max_chords)
+                for c, tok in enumerate(str_toks):
+                    # body row idx -> sequence row idx + 1 (SOS prefix).
+                    arts[idx + 1, c] = torch.tensor(
+                        split_articulation(tok)[1], dtype=torch.float
+                    )
             except Exception as e:
                 logging.error(f"{score_id}: {e}")
                 return None
         body[len(records), :] = self.vocab.EOS
-        return torch.cat([self.s_sos, body])
+        return torch.cat([self.s_sos, body]), arts
 
 
 class NoterDataset(Dataset):
@@ -271,28 +292,34 @@ class NoterDataset(Dataset):
         spine_number: int,
         first_bar: int,
         last_bar: int,
-    ) -> tuple[Tensor, int, Tensor] | None:
-        """One staff's (image, width, sequence), or None if either can't load."""
+    ) -> tuple[Tensor, int, Tensor, Tensor] | None:
+        """One staff's (image, width, sequence, articulations), or None if either
+        can't load."""
         if self.jitter and random.random() < self.jitter:
             box = self._jitter_box(box)
         if (result := self._load_image(score_id, page_number, box)) is None:
             return None
         if (
-            seq := self.load_sequence(score_id, spine_number, first_bar, last_bar)
+            seq := self.load_sequence.load(score_id, spine_number, first_bar, last_bar)
         ) is None:
             return None
         image, actual_width = result
-        return image, actual_width, seq
+        sequence, articulations = seq
+        return image, actual_width, sequence, articulations
 
     def _pad_staves(
-        self, images: list[Tensor], widths: list[int], sequences: list[Tensor]
-    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+        self,
+        images: list[Tensor],
+        widths: list[int],
+        sequences: list[Tensor],
+        articulations: list[Tensor],
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         """Stack a system's G staves and pad to ``max_staves`` with masked slots.
 
         A padding slot is a zero image (full-width so no encoder patch is masked →
-        no all-masked NaN) and an SOS-only sequence; the returned ``stave_mask``
-        is True for the G real staves, False for the pad, so the model excludes
-        the pad from loss and cross-stave attention.
+        no all-masked NaN), an SOS-only sequence, and zero articulations; the
+        returned ``stave_mask`` is True for the G real staves, False for the pad,
+        so the model excludes the pad from loss and cross-stave attention.
         """
         c = self.config
         g, s = len(images), c.max_staves
@@ -301,17 +328,21 @@ class NoterDataset(Dataset):
         pad_w = torch.full((s - g,), w)
         pad_seq = torch.full((s - g, c.max_seqlen, c.max_chords), self.vocab.PAD)
         pad_seq[:, 0, :] = self.vocab.SOS
+        pad_art = torch.zeros(s - g, c.max_seqlen, c.max_chords, NUM_ARTICULATIONS)
         out_img = torch.cat([torch.stack(images), pad_img], dim=0)
         out_w = torch.cat([torch.tensor(widths), pad_w], dim=0)
         out_seq = torch.cat([torch.stack(sequences), pad_seq], dim=0)
+        out_art = torch.cat([torch.stack(articulations), pad_art], dim=0)
         mask = torch.arange(s) < g
-        return out_img, out_w, out_seq, mask
+        return out_img, out_w, out_seq, out_art, mask
 
-    def __getitem__(self, idx: int) -> tuple[Tensor, Tensor, Tensor, Tensor]:
-        """A system: ``(images, widths, sequences, stave_mask)`` padded to max_staves.
+    def __getitem__(self, idx: int) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+        """A system: ``(images, widths, sequences, articulations, stave_mask)`` padded
+        to max_staves.
 
-        Shapes ``(S, 1, 64, 768)``, ``(S,)``, ``(S, max_seqlen, max_chords)``, ``(S,)``
-        with ``S = max_staves``. If any staff of the system fails to load the whole
+        Shapes ``(S, 1, 64, 768)``, ``(S,)``, ``(S, max_seqlen, max_chords)``,
+        ``(S, max_seqlen, max_chords, NUM_ARTICULATIONS)``, ``(S,)`` with
+        ``S = max_staves``. If any staff of the system fails to load the whole
         system is skipped (advance to the next item).
         """
         while True:
@@ -329,4 +360,5 @@ class NoterDataset(Dataset):
             images = [staff[0] for staff in loaded if staff is not None]
             widths = [staff[1] for staff in loaded if staff is not None]
             sequences = [staff[2] for staff in loaded if staff is not None]
-            return self._pad_staves(images, widths, sequences)
+            articulations = [staff[3] for staff in loaded if staff is not None]
+            return self._pad_staves(images, widths, sequences, articulations)

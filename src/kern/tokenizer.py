@@ -27,6 +27,46 @@ from kern.typing import (
 )
 
 
+# Articulation flags ride alongside a note token as an "@"-suffix of single-char
+# codes, in this fixed order. They are stripped before vocab lookup so the token id
+# is unchanged (pitch x duration only); the noter splits them off into a separate
+# multi-hot channel with its own head. The two tie bits are read as playback
+# semantics: ``[`` = tied to the next note, ``]`` = tied from the previous one. A
+# kern tie-middle (`_`) sets BOTH, so {none, start, middle, end} all fall out of the
+# two bits with no information lost.
+ARTICULATIONS = (
+    "[",
+    "]",
+    "s",
+    "f",
+    "a",
+)  # tie-to-next, tie-from-prev, stacc, ferm, acc
+NUM_ARTICULATIONS = len(ARTICULATIONS)
+ARTICULATION_SEP = "@"
+
+
+def _note_articulations(note: Note) -> str:
+    """The set codes for ``note`` in ``ARTICULATIONS`` order (e.g. ``"[f"``)."""
+    flags = (
+        note.starts_tie or note.continues_tie,  # tied to next
+        note.ends_tie or note.continues_tie,  # tied from previous
+        note.is_staccato,
+        note.is_fermata,
+        note.is_accent,
+    )
+    return "".join(code for code, on in zip(ARTICULATIONS, flags) if on)
+
+
+def split_articulation(token: str) -> tuple[str, list[bool]]:
+    """Split a note token into its base (vocab) token and its articulation bits.
+
+    ``"C/4@[f"`` -> ``("C/4", [True, False, False, True, False])``. A token with no
+    suffix yields all-False bits, so non-note tokens pass through unchanged.
+    """
+    base, _, codes = token.partition(ARTICULATION_SEP)
+    return base, [code in codes for code in ARTICULATIONS]
+
+
 class Spine:
     pass
 
@@ -129,6 +169,8 @@ class TokenFormatter:
             + accidentals
             + duration_text
         )
+        if codes := _note_articulations(note):
+            text += ARTICULATION_SEP + codes
         return text
 
     def format_chord(self, token: Token) -> str:
