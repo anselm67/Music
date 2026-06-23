@@ -64,7 +64,7 @@ def _staff_height(score: Score, _kern: KernReader | None) -> Iterator[Finding]:
     large spread means the detector merged or split a staff, or a box is wrong."""
     for page in score.pages:
         staves = [
-            (si, staff.box.height)
+            (si, staff.height)
             for si, sys in enumerate(page.systems)
             for staff in sys.staves
         ]

@@ -142,10 +142,10 @@ class ScorerDataset(Dataset[Sample]):
                     seq_tokens = seq  # (max_seqlen, max_chords) token ids
                     staff_boxes[staff_idx] = torch.tensor(
                         [
-                            staff.box.left * sx,
-                            staff.box.top * sy,
-                            staff.box.right * sx,
-                            staff.box.bottom * sy,
+                            system.box.left * sx,
+                            staff.top * sy,
+                            system.box.right * sx,
+                            staff.bottom * sy,
                         ]
                     )
                     assigns[staff_idx] = sys_idx

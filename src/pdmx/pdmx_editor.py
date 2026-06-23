@@ -76,8 +76,8 @@ class MxlEditor:
         # Converts the (x, y) into a system, staff and bar to highlight.
         for system_index, system in enumerate(page.systems):
             if system.box.contains(point):
-                for staff_index, staff in enumerate(system.staves):
-                    if staff.box.contains(point):
+                for staff_index, staff_box in enumerate(system.staff_boxes):
+                    if staff_box.contains(point):
                         bar_count = 0
                         while (
                             bar_count + 1 < len(system.bars)
@@ -116,9 +116,9 @@ class MxlEditor:
                     cv2.rectangle(
                         img, system.box.top_left, system.box.bot_right, system_color, 3
                     )
-                    for staff in system.staves:
+                    for staff_box in system.staff_boxes:
                         cv2.rectangle(
-                            img, staff.box.top_left, staff.box.bot_right, staff_color, 2
+                            img, staff_box.top_left, staff_box.bot_right, staff_color, 2
                         )
                     for bar in system.bars:
                         cv2.line(

@@ -285,11 +285,13 @@ class TestSystemBox:
         assert system.top == system.staves[0].top
         assert system.bottom == system.staves[-1].bottom
 
-    def test_system_left_right_from_first_staff(self, tmp_path: Path) -> None:
+    def test_system_left_right_from_bars(self, tmp_path: Path) -> None:
         svg = write_svg(tmp_path, make_svg(one_staff_system()))
         system = LayoutExtractor(svg).parse().systems[0]
-        assert system.left == system.staves[0].left
-        assert system.right == system.staves[0].right
+        # x is the barline span; staves inherit it (no per-staff x).
+        assert system.left == system.bars[0]
+        assert system.right == system.bars[-1]
+        assert system.staff_boxes[0].left == system.left
 
 
 # ---------------------------------------------------------------------------

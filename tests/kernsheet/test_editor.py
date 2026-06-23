@@ -123,8 +123,8 @@ class TestResizeSystem:
         assert editor.system.bottom == 251
         # Every offset below the top scales by (height+delta)/height, so the top
         # staff stays put and the gap below it widens proportionally.
-        assert rh.box.top == 100
-        assert lh.box.top - rh.box.bottom == 51
+        assert rh.top == 100
+        assert lh.top - rh.bottom == 51
 
     def test_spreads_across_all_staves(self) -> None:
         # A three-staff system: staff heights are preserved and the added height
@@ -149,7 +149,7 @@ class TestResizeSystem:
 
         editor.resize_system(2)
 
-        assert [s.box.height for s in editor.system.staves] == [40, 40, 40]
+        assert [s.height for s in editor.system.staves] == [40, 40, 40]
         gaps = [
             editor.system.staves[i + 1].top - editor.system.staves[i].bottom
             for i in range(2)
@@ -160,25 +160,21 @@ class TestResizeSystem:
 
     def test_shrink_up_is_inverse_of_extend(self) -> None:
         editor = _editor([_page([_sys(100, 250, [10, 500])])])
-        before = [(s.box.top, s.box.bottom) for s in editor.system.staves]
+        before = [(s.top, s.bottom) for s in editor.system.staves]
 
         editor.resize_system(1)  # 'e'
         editor.resize_system(-1)  # 'r'
 
-        after = [(s.box.top, s.box.bottom) for s in editor.system.staves]
+        after = [(s.top, s.bottom) for s in editor.system.staves]
         assert after == before
 
     def test_noop_when_no_system_selected(self) -> None:
         editor = _editor([_page([_sys(100, 250, [10, 500])])], system_index=-1)
-        before = [
-            (s.box.top, s.box.bottom) for s in editor.score.pages[0].systems[0].staves
-        ]
+        before = [(s.top, s.bottom) for s in editor.score.pages[0].systems[0].staves]
 
         editor.resize_system(1)  # must not raise
 
-        after = [
-            (s.box.top, s.box.bottom) for s in editor.score.pages[0].systems[0].staves
-        ]
+        after = [(s.top, s.bottom) for s in editor.score.pages[0].systems[0].staves]
         assert after == before
 
 
@@ -203,8 +199,8 @@ class TestResizeStaves:
         editor.resize_staves(2)  # 'g'
 
         s0, s1 = editor.system.staves
-        assert (s0.box.top, s0.box.bottom) == (100, 152)
-        assert (s1.box.top, s1.box.bottom) == (208, 260)
+        assert (s0.top, s0.bottom) == (100, 152)
+        assert (s1.top, s1.bottom) == (208, 260)
         # the outer system box (set by e/r) is untouched
         assert (editor.system.top, editor.system.bottom) == (100, 260)
 
@@ -214,27 +210,27 @@ class TestResizeStaves:
         editor.resize_staves(-2)  # 'h' — height 48 each within [100, 260]
 
         s0, s1 = editor.system.staves
-        assert [s.box.height for s in (s0, s1)] == [48, 48]
-        assert (s0.box.bottom, s1.box.top) == (148, 212)  # gap widened, box fixed
+        assert [s.height for s in (s0, s1)] == [48, 48]
+        assert (s0.bottom, s1.top) == (148, 212)  # gap widened, box fixed
         assert (editor.system.top, editor.system.bottom) == (100, 260)
 
     def test_does_not_exceed_outer_box(self) -> None:
         # asking for more total stave height than the box holds is a no-op.
         editor = _editor([_page([self._uneven()])])
-        before = [(s.box.top, s.box.bottom) for s in editor.system.staves]
+        before = [(s.top, s.bottom) for s in editor.system.staves]
 
         editor.resize_staves(100)
 
-        after = [(s.box.top, s.box.bottom) for s in editor.system.staves]
+        after = [(s.top, s.bottom) for s in editor.system.staves]
         assert after == before
 
     def test_noop_when_no_system_selected(self) -> None:
         editor = _editor([_page([self._uneven()])], system_index=-1)
-        before = [s.box.height for s in editor.score.pages[0].systems[0].staves]
+        before = [s.height for s in editor.score.pages[0].systems[0].staves]
 
         editor.resize_staves(2)  # must not raise
 
-        after = [s.box.height for s in editor.score.pages[0].systems[0].staves]
+        after = [s.height for s in editor.score.pages[0].systems[0].staves]
         assert after == before
 
 
@@ -262,22 +258,12 @@ class TestApplySystemRatio:
 
         editor.apply_system_ratio()  # 'u'
 
-        s0, s1 = editor.page.systems[1].staves
+        b0, b1 = editor.page.systems[1].staff_boxes
         # height 40, gap 20, top 300 and sides 20..400 preserved
-        assert (s0.box.left, s0.box.top, s0.box.right, s0.box.bottom) == (
-            20,
-            300,
-            400,
-            340,
-        )
-        assert (s1.box.left, s1.box.top, s1.box.right, s1.box.bottom) == (
-            20,
-            360,
-            400,
-            400,
-        )
+        assert (b0.left, b0.top, b0.right, b0.bottom) == (20, 300, 400, 340)
+        assert (b1.left, b1.top, b1.right, b1.bottom) == (20, 360, 400, 400)
         # the selected reference system is untouched
-        assert [s.box.height for s in editor.page.systems[0].staves] == [40, 40]
+        assert [s.height for s in editor.page.systems[0].staves] == [40, 40]
 
     def test_single_staff_target_adopts_height(self) -> None:
         # reference is 2-staff (height 40); a 1-staff target adopts the height,
@@ -299,22 +285,17 @@ class TestApplySystemRatio:
 
         editor.apply_system_ratio()  # 'u'
 
-        (s,) = editor.page.systems[1].staves
-        assert (s.box.left, s.box.top, s.box.right, s.box.bottom) == (20, 300, 400, 340)
+        (b,) = editor.page.systems[1].staff_boxes
+        assert (b.left, b.top, b.right, b.bottom) == (20, 300, 400, 340)
 
     def test_noop_when_no_system_selected(self) -> None:
         page = _page(_two_systems())
         editor = _editor([page], system_index=-1)
-        before = [
-            [(s.box.top, s.box.bottom) for s in sys.staves] for sys in page.systems
-        ]
+        before = [[(s.top, s.bottom) for s in sys.staves] for sys in page.systems]
 
         editor.apply_system_ratio()  # must not raise
 
-        after = [
-            [(s.box.top, s.box.bottom) for s in sys.staves]
-            for sys in editor.page.systems
-        ]
+        after = [[(s.top, s.bottom) for s in sys.staves] for sys in editor.page.systems]
         assert after == before
 
 

@@ -150,9 +150,8 @@ class StaffEditor:
         factor = (height + delta) / height
         staves = []
         for staff in self.system.staves:
-            box = staff.box
-            new_top = top + round((box.top - top) * factor)
-            new_bottom = top + round((box.bottom - top) * factor)
+            new_top = top + round((staff.top - top) * factor)
+            new_bottom = top + round((staff.bottom - top) * factor)
             staves.append(replace(staff, top=new_top, bottom=new_bottom))
         self.replace_system(staves=staves)
 
@@ -166,9 +165,9 @@ class StaffEditor:
         if self.system_index < 0 or self.system.staff_count < 2:
             return
         staves = self.system.staves
-        sys_top, sys_bottom = staves[0].box.top, staves[-1].box.bottom
+        sys_top, sys_bottom = staves[0].top, staves[-1].bottom
         n = len(staves)
-        height = round(sum(s.box.height for s in staves) / n) + delta
+        height = round(sum(s.height for s in staves) / n) + delta
         if height <= 0 or n * height > sys_bottom - sys_top:
             return
         gap = (sys_bottom - sys_top - n * height) / (n - 1)
@@ -194,12 +193,12 @@ class StaffEditor:
         if self.system_index < 0 or self.system.staff_count == 0:
             return
         ref = self.system.staves
-        height = max(staff.box.height for staff in ref)
-        gap = ref[1].box.top - ref[0].box.bottom if len(ref) > 1 else 0
+        height = max(staff.height for staff in ref)
+        gap = ref[1].top - ref[0].bottom if len(ref) > 1 else 0
         for i, system in enumerate(self.page.systems):
             if i == self.system_index or system.staff_count == 0:
                 continue
-            top = system.staves[0].box.top
+            top = system.staves[0].top
             staves = [
                 replace(
                     staff,

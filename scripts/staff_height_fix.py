@@ -24,7 +24,6 @@ Usage:
 """
 
 import argparse
-from dataclasses import replace
 from pathlib import Path
 
 import cv2
@@ -41,15 +40,15 @@ MAX_MOVE_PX = 20
 
 
 def fix_staff(
-    gray: np.ndarray, staff: Staff, fix_top: bool, fix_bottom: bool
+    gray: np.ndarray, box: Box, fix_top: bool, fix_bottom: bool
 ) -> Staff | None:
     """A staff with its inner edge(s) snapped to the measured staff lines, or None
-    if nothing was changed (unmeasurable, within noise, or beyond MAX_MOVE)."""
-    edges = measure_staff_edges(gray, staff.box)
+    if nothing was changed (unmeasurable, within noise, or beyond MAX_MOVE). ``box``
+    is the staff's full box (x from the system; see ``System.staff_boxes``)."""
+    edges = measure_staff_edges(gray, box)
     if edges is None:
         return None
     m_top, m_bot = edges
-    box = staff.box
     new_top, new_bottom = box.top, box.bottom
     # Inner top edge bleeds *up* into the gap: pull it down to the first line.
     if fix_top:
@@ -63,7 +62,7 @@ def fix_staff(
             new_bottom = m_bot
     if new_top == box.top and new_bottom == box.bottom:
         return None
-    return replace(staff, box=Box(box.left, new_top, box.right, new_bottom))
+    return Staff(top=new_top, bottom=new_bottom)
 
 
 def main() -> None:
@@ -95,10 +94,10 @@ def main() -> None:
                 continue
             for system in page.systems:
                 last = len(system.staves) - 1
-                for i, staff in enumerate(system.staves):
+                for i, box in enumerate(system.staff_boxes):
                     # An edge is "inner" (gap-facing, possibly inflated) when another
                     # staff sits on that side within the system.
-                    fixed = fix_staff(gray, staff, fix_top=i > 0, fix_bottom=i < last)
+                    fixed = fix_staff(gray, box, fix_top=i > 0, fix_bottom=i < last)
                     if fixed is not None:
                         system.staves[i] = fixed
                         n_staves_fixed += 1

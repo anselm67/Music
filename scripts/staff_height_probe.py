@@ -97,23 +97,23 @@ def main() -> None:
             if gray is None:
                 continue
             for system in page.systems:
-                for staff in system.staves:
+                for box in system.staff_boxes:
                     n_staves += 1
-                    edges = measure_staff_edges(gray, staff.box)
+                    edges = measure_staff_edges(gray, box)
                     if edges is None:
                         n_unmeasured += 1
                         continue
                     n_measured += 1
                     m_top, m_bot = edges
-                    dt = m_top - staff.box.top
-                    db = staff.box.bottom - m_bot
+                    dt = m_top - box.top
+                    db = box.bottom - m_bot
                     top_over[dt] += 1
                     bot_over[db] += 1
                     worst = max(worst, dt, db)
                     if args.verbose and (dt > 2 or db > 2):
                         print(
                             f"  {kern_score.id} p{page.page_number}: "
-                            f"box {staff.box.top}-{staff.box.bottom} "
+                            f"box {box.top}-{box.bottom} "
                             f"line {m_top}-{m_bot}  top+{dt} bot+{db}"
                         )
         if worst > 2:
