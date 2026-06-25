@@ -25,6 +25,7 @@ from torch import Tensor
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from kernsheet import KernSheet, KernSheetSource
 from noter import (
     NoterConfig,
     NoterDataModule,
@@ -34,7 +35,6 @@ from noter import (
     Vocab,
     grow_state_dict,
 )
-from kernsheet import KernSheet, KernSheetSource
 from pdmx import PDMX, PdmxSource
 from sheetmusic import Source, to_display
 from utils import (
