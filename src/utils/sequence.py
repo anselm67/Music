@@ -81,6 +81,51 @@ def sequence_edit_distance(seq1: Tensor, seq2: Tensor, pad_id: int) -> int:
     return int(dp[len1][len2])
 
 
+def align_sequences(
+    seq1: Tensor, seq2: Tensor, pad_id: int
+) -> list[tuple[int | None, int | None]]:
+    """Backtrace the chord-level edit distance into a row alignment.
+
+    Returns ordered ``(i, j)`` pairs over ``seq1``/``seq2`` row indices:
+    ``(i, j)`` is a substitution/match, ``(i, None)`` a deletion (seq1-only row),
+    ``(None, j)`` an insertion (seq2-only row). Same DP/costs as
+    ``sequence_edit_distance`` so the alignment is consistent with that metric.
+    """
+    len1, len2 = seq1.size(0), seq2.size(0)
+    max_chords = seq1.size(1)
+    dp = np.zeros((len1 + 1, len2 + 1), dtype=int)
+    for i in range(len1 + 1):
+        dp[i][0] = i * max_chords
+    for j in range(len2 + 1):
+        dp[0][j] = j * max_chords
+    for i in range(1, len1 + 1):
+        for j in range(1, len2 + 1):
+            cost = chord_distance(seq1[i - 1], seq2[j - 1], pad_id)
+            dp[i][j] = min(
+                dp[i - 1][j] + max_chords,
+                dp[i][j - 1] + max_chords,
+                dp[i - 1][j - 1] + cost,
+            )
+
+    pairs: list[tuple[int | None, int | None]] = []
+    i, j = len1, len2
+    while i > 0 or j > 0:
+        if i > 0 and j > 0:
+            cost = chord_distance(seq1[i - 1], seq2[j - 1], pad_id)
+            if dp[i][j] == dp[i - 1][j - 1] + cost:
+                pairs.append((i - 1, j - 1))
+                i, j = i - 1, j - 1
+                continue
+        if i > 0 and dp[i][j] == dp[i - 1][j] + max_chords:
+            pairs.append((i - 1, None))
+            i -= 1
+        else:
+            pairs.append((None, j - 1))
+            j -= 1
+    pairs.reverse()
+    return pairs
+
+
 def strip_eos(seq: Tensor, eos_id: int) -> Tensor:
     """Return seq sliced up to (not including) the first EOS timestep."""
     eos_pos = (seq[:, 0] == eos_id).nonzero(as_tuple=False)

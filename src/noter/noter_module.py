@@ -116,13 +116,21 @@ class NoterModule(L.LightningModule):
 
     @torch.no_grad()
     def predict(
-        self, source: Tensor, source_widths: Tensor, stave_mask: Tensor
-    ) -> Tensor:
+        self,
+        source: Tensor,
+        source_widths: Tensor,
+        stave_mask: Tensor,
+        return_articulations: bool = False,
+    ) -> Tensor | tuple[Tensor, Tensor]:
         """Lockstep decode of a batch of systems → ``(B, S, T-1, max_chords)``.
 
         Each row ``t`` is generated for all ``S`` staves at once, so a staff sees its
         siblings' rows ``< t`` through the cross-stave attention. A staff finishes at
         its own EOS; padded staves start finished.
+
+        With ``return_articulations`` (requires ``config.articulations``), also
+        returns the row-aligned generated articulation multi-hot
+        ``(B, S, T-1, max_chords, NUM_ARTICULATIONS)``.
         """
         B, S, c = source.shape[0], source.shape[1], self.config
         flat_src = source.reshape(B * S, *source.shape[2:])
@@ -160,6 +168,9 @@ class NoterModule(L.LightningModule):
                 art = torch.cat([art, next_art.unsqueeze(2)], dim=2)
             if done.all():
                 break
+        if return_articulations:
+            assert art is not None, "return_articulations needs config.articulations"
+            return generated[:, :, 1:], art[:, :, 1:]  # strip SOS
         return generated[:, :, 1:]  # strip SOS
 
     def training_step(self, batch: tuple, batch_idx: int) -> Tensor:

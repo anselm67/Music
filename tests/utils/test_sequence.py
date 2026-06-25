@@ -1,4 +1,6 @@
-from utils.sequence import format_sequence_columns
+import torch
+
+from utils.sequence import align_sequences, format_sequence_columns
 
 _RED = "\033[31m"
 _RESET = "\033[0m"
@@ -6,6 +8,28 @@ _RESET = "\033[0m"
 
 def lines(result: str) -> list[str]:
     return result.split("\n")
+
+
+def _seq(rows: list[list[int]]) -> torch.Tensor:
+    return torch.tensor(rows)
+
+
+def test_align_identical_sequences_all_substitutions() -> None:
+    s = _seq([[1, 0], [2, 0], [3, 0]])
+    assert align_sequences(s, s, pad_id=0) == [(0, 0), (1, 1), (2, 2)]
+
+
+def test_align_insertion_in_pred() -> None:
+    gt = _seq([[1, 0], [3, 0]])
+    pred = _seq([[1, 0], [2, 0], [3, 0]])
+    # The extra pred row 1 (token 2) has no GT counterpart.
+    assert align_sequences(gt, pred, pad_id=0) == [(0, 0), (None, 1), (1, 2)]
+
+
+def test_align_deletion_in_pred() -> None:
+    gt = _seq([[1, 0], [2, 0], [3, 0]])
+    pred = _seq([[1, 0], [3, 0]])
+    assert align_sequences(gt, pred, pad_id=0) == [(0, 0), (1, None), (2, 1)]
 
 
 def test_header_and_separator_always_present() -> None:

@@ -85,4 +85,9 @@ def test_module_step_and_predict() -> None:
     assert torch.isfinite(loss)
     source, widths, _, _, stave_mask = batch
     preds = module.predict(source, widths, stave_mask)
+    assert isinstance(preds, torch.Tensor)
     assert preds.shape[:2] == (source.shape[0], cfg.max_staves)
+
+    tokens, arts = module.predict(source, widths, stave_mask, return_articulations=True)
+    assert tokens.shape[:2] == (source.shape[0], cfg.max_staves)
+    assert arts.shape == (*tokens.shape, NUM_ARTICULATIONS)

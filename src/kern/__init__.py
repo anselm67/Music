@@ -2,7 +2,12 @@ from .empty import EmptyHandler, EmptySpine
 from .kern_reader import KernReader
 from .parser import Handler, Parser
 from .to_midi import to_midi
-from .tokenizer import NUM_ARTICULATIONS, split_articulation, tokenize
+from .tokenizer import (
+    ARTICULATIONS,
+    NUM_ARTICULATIONS,
+    split_articulation,
+    tokenize,
+)
 from .typing import (
     Bar,
     Chord,
@@ -43,5 +48,6 @@ __all__ = [
     "to_midi",
     "tokenize",
     "split_articulation",
+    "ARTICULATIONS",
     "NUM_ARTICULATIONS",
 ]
