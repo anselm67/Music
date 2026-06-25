@@ -26,7 +26,7 @@ from tqdm import tqdm
 from kernsheet import KernSheet, KernSheetSource
 from pdmx import PDMX, PdmxSource
 from sheetmusic import LetterboxResize, PerImageNormalize, Source, letterbox_scale
-from staffer import StafferConfig, StafferDataset, StafferModule
+from staffer import StafferConfig, StafferDataset, StafferModel, StafferModule
 
 
 def _make_transform(cfg: StafferConfig) -> v2.Transform:
@@ -50,6 +50,28 @@ def _config_from_ckpt(path: Path) -> StafferConfig:
     hp = torch.load(path, weights_only=False)["hyper_parameters"]
     known = {f.name for f in fields(StafferConfig)}
     return StafferConfig(**{k: v for k, v in hp.items() if k in known})
+
+
+def _staffer_from_scorer(path: Path, device: torch.device) -> StafferModel:
+    """The intact StafferModel embedded in a scorer checkpoint.
+
+    Lets us run the joint-fine-tuned detector through the identical box-delta
+    pipeline as a standalone staffer — isolating whether end-to-end training
+    moved the detector's boxes.
+    """
+    ck = torch.load(path, weights_only=False, map_location="cpu")
+    known = {f.name for f in fields(StafferConfig)}
+    hp = ck["hyper_parameters"]["staffer"]
+    cfg = StafferConfig(**{k: v for k, v in hp.items() if k in known})
+    prefix = "model.staffer."
+    sd = {
+        k[len(prefix) :]: v
+        for k, v in ck["state_dict"].items()
+        if k.startswith(prefix)
+    }
+    model = StafferModel(cfg)
+    model.load_state_dict(sd)
+    return model.to(device).eval()
 
 
 @torch.no_grad()
@@ -98,6 +120,12 @@ def _abs_stats(xs: list[float]) -> str:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--staffer", default="stave-primary-grid-full")
+    ap.add_argument(
+        "--scorer",
+        default=None,
+        help="evaluate the StafferModel embedded in this scorer checkpoint "
+        "instead of a standalone --staffer",
+    )
     ap.add_argument("--home", type=Path, default=Path("/home/anselm/datasets/PDMX"))
     ap.add_argument("--kern-home", type=Path, default=None)
     ap.add_argument("--csv", default="System2.csv")
@@ -113,8 +141,22 @@ def main() -> None:
         args.device if (args.device != "cuda" or torch.cuda.is_available()) else "cpu"
     )
 
-    ckpt = Path("checkpoints") / "staffer" / args.staffer / "last.ckpt"
-    cfg = _config_from_ckpt(ckpt)
+    if args.scorer is not None:
+        ckpt = Path("checkpoints") / "scorer" / args.scorer / "last.ckpt"
+        model: StafferModel | StafferModule = _staffer_from_scorer(ckpt, device)
+        cfg = model.config
+        tag = f"scorer:{args.scorer}"
+    else:
+        ckpt = Path("checkpoints") / "staffer" / args.staffer / "last.ckpt"
+        cfg = _config_from_ckpt(ckpt)
+        model = (
+            StafferModule.load_from_checkpoint(
+                ckpt, config=cfg, weights_only=False, map_location=device
+            )
+            .to(device)
+            .eval()
+        )
+        tag = args.staffer
 
     source: Source
     if args.kern_home is not None:
@@ -123,13 +165,6 @@ def main() -> None:
         source = PdmxSource(PDMX(args.home, args.csv, -1, args.limit))
 
     dataset = StafferDataset(cfg, source)
-    model = (
-        StafferModule.load_from_checkpoint(
-            ckpt, config=cfg, weights_only=False, map_location=device
-        )
-        .to(device)
-        .eval()
-    )
     transform = _make_transform(cfg)
 
     pages = list({(sid, pno) for sid, pno, _, _ in dataset.items})
@@ -201,7 +236,7 @@ def main() -> None:
             dhgt_by_pos.append((gi, pred_h - gt_h))
             gth_by_pos.append((gi, gt_h))
 
-    print(f"\nBox deltas (pred − GT, px)  staffer={args.staffer}")
+    print(f"\nBox deltas (pred − GT, px)  model={tag}")
     print(
         f"{len(pages)} pages · {n_gt} GT staves · "
         f"miss {n_missed} ({100 * n_missed / max(n_gt, 1):.1f}%) · extra {n_extra}\n"
