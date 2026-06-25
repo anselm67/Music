@@ -140,6 +140,9 @@ def main() -> None:
     dright: list[float] = []
     dtop: list[float] = []
     dbot: list[float] = []
+    dtop_by_pos: list[tuple[int, float]] = []  # (within-page stave index, Δtop)
+    dhgt_by_pos: list[tuple[int, float]] = []  # (within-page stave index, Δheight)
+    gth_by_pos: list[tuple[int, float]] = []  # (within-page stave index, GT height)
     n_gt = n_missed = n_extra = 0
 
     for score_id, page_number in tqdm(pages, desc="pages"):
@@ -193,6 +196,10 @@ def main() -> None:
             dright.append(pr / sx - gt.right)
             dtop.append(pt / sy - gt.top)
             dbot.append(pb / sy - gt.bottom)
+            dtop_by_pos.append((gi, pt / sy - gt.top))
+            pred_h, gt_h = (pb - pt) / sy, gt.bottom - gt.top
+            dhgt_by_pos.append((gi, pred_h - gt_h))
+            gth_by_pos.append((gi, gt_h))
 
     print(f"\nBox deltas (pred − GT, px)  staffer={args.staffer}")
     print(
@@ -211,6 +218,27 @@ def main() -> None:
             continue
         print(f"  {label:<6}  signed: {_stats(xs)}")
         print(f"  {'':6}  absol.: {_abs_stats(xs)}")
+
+    # Δtop broken out by within-page stave index: is the topmost stave (pos 0)
+    # systematically shorter on top than the rest?  Buckets: 0, 1, 2, 3+.
+    def _by_pos(data: list[tuple[int, float]], title: str) -> None:
+        print(f"\n{title} by within-page stave index")
+        print(f"{'':>7}  {'n':>5}  {'mean':>7}  {'p50':>7}  {'p10':>7}  {'p90':>7}")
+        for key, label in ((0, "pos 0"), (1, "pos 1"), (2, "pos 2"), (3, "pos 3+")):
+            sel = [d for (p, d) in data if (p == key if key < 3 else p >= 3)]
+            if not sel:
+                print(f"  {label:<6}  n=0")
+                continue
+            s = sorted(sel)
+            n = len(s)
+            print(
+                f"  {label:<6}  {n:>5}  mean={sum(s) / n:+6.2f}  p50={s[n // 2]:+6.2f}"
+                f"  p10={s[int(0.10 * n)]:+6.2f}  p90={s[int(0.90 * n)]:+6.2f}"
+            )
+
+    _by_pos(dtop_by_pos, "Δtop (pred − GT, px)")
+    _by_pos(dhgt_by_pos, "Δheight (pred − GT, px; − = box too short)")
+    _by_pos(gth_by_pos, "GT box height (px)")
 
 
 if __name__ == "__main__":
