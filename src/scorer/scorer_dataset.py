@@ -71,89 +71,106 @@ class ScorerDataset(Dataset[Sample]):
         return len(self.items)
 
     def __getitem__(self, idx: int) -> Sample:
+        return self.resolve(idx)[1]
+
+    def resolve(self, idx: int) -> tuple[int, Sample]:
+        """Build a sample, skipping pages whose full GT can't be assembled.
+
+        Returns the index actually used together with its sample: a page may be
+        un-buildable (transform error, a system that isn't 1–2 staves, a missing
+        token sequence, too many staves), in which case the next page is tried.
+        Callers that report a page identity must use the returned index, not the
+        requested one, or the printed path will drift from the sample shown.
+        """
+        for _ in range(len(self)):
+            sample = self._build(idx)
+            if sample is not None:
+                return idx, sample
+            idx = (idx + 1) % len(self)
+        raise IndexError("ScorerDataset: no buildable samples")
+
+    def _build(self, idx: int) -> Sample | None:
         c = self.config.staffer
-        while True:
-            score_id, page_number = self.items[idx]
-            try:
-                image = self.transform(self.source.image(score_id, page_number))
-            except Exception as e:
-                logging.error(f"{score_id}: {e}")
-                idx = (idx + 1) % len(self)
-                continue
+        score_id, page_number = self.items[idx]
+        try:
+            image = self.transform(self.source.image(score_id, page_number))
+        except Exception as e:
+            logging.error(f"{score_id}: {e}")
+            return None
 
-            score = self.source.score(score_id)
-            # items() enrols only source.pages() (validated, for KernSheet) by their
-            # page_number; the lookup below relies on pages being dense 1-based.
-            page = score.pages[page_number - 1]
-            assert page.page_number == page_number
-            W, H = page.image_width, page.image_height
-            # Letterboxed-canvas normalisation (see StafferDataset): scale by the
-            # aspect-preserving factor, then by the canvas dims (content top-left).
-            target_h, target_w = c.image_shape
-            scale = letterbox_scale(H, W, target_h, target_w)
-            sx, sy = scale / target_w, scale / target_h
+        score = self.source.score(score_id)
+        # items() enrols only source.pages() (validated, for KernSheet) by their
+        # page_number; the lookup below relies on pages being dense 1-based.
+        page = score.pages[page_number - 1]
+        assert page.page_number == page_number
+        W, H = page.image_width, page.image_height
+        # Letterboxed-canvas normalisation (see StafferDataset): scale by the
+        # aspect-preserving factor, then by the canvas dims (content top-left).
+        target_h, target_w = c.image_shape
+        scale = letterbox_scale(H, W, target_h, target_w)
+        sx, sy = scale / target_w, scale / target_h
 
-            sys_boxes = torch.zeros(c.num_system_queries, 4)
-            staff_boxes = torch.zeros(c.num_stave_queries, 4)
-            assigns = torch.full((c.num_stave_queries,), -1, dtype=torch.long)
-            tokens = torch.full(
-                (
-                    c.num_stave_queries,
-                    self.config.noter.max_seqlen,
-                    self.config.noter.max_chords,
-                ),
-                self.vocab.PAD,
+        sys_boxes = torch.zeros(c.num_system_queries, 4)
+        staff_boxes = torch.zeros(c.num_stave_queries, 4)
+        assigns = torch.full((c.num_stave_queries,), -1, dtype=torch.long)
+        tokens = torch.full(
+            (
+                c.num_stave_queries,
+                self.config.noter.max_seqlen,
+                self.config.noter.max_chords,
+            ),
+            self.vocab.PAD,
+        )
+
+        is_ok = True
+        staff_idx = 0
+        for sys_idx, system in enumerate(page.systems):
+            if (
+                sys_idx >= c.num_system_queries
+                or system.staff_count not in (1, 2)
+                or not system.bar_numbers
+            ):
+                is_ok = False
+                break
+            spine_numbers = [0] if system.staff_count == 1 else [1, 0]
+            sys_boxes[sys_idx] = torch.tensor(
+                [
+                    system.box.left * sx,
+                    system.box.top * sy,
+                    system.box.right * sx,
+                    system.box.bottom * sy,
+                ]
             )
-
-            is_ok = True
-            staff_idx = 0
-            for sys_idx, system in enumerate(page.systems):
-                if (
-                    sys_idx >= c.num_system_queries
-                    or system.staff_count not in (1, 2)
-                    or not system.bar_numbers
-                ):
+            for i, staff in enumerate(system.staves):
+                # System2.csv only bounds the first system's staff count, so a
+                # page of many 2-staff systems can exceed num_stave_queries.
+                if staff_idx >= c.num_stave_queries:
                     is_ok = False
                     break
-                spine_numbers = [0] if system.staff_count == 1 else [1, 0]
-                sys_boxes[sys_idx] = torch.tensor(
+                seq = self.load_sequence(
+                    score_id,
+                    spine_numbers[i],
+                    system.first_bar_number,
+                    system.last_bar_number,
+                )
+                if seq is None:
+                    is_ok = False
+                    break
+                seq_tokens = seq  # (max_seqlen, max_chords) token ids
+                staff_boxes[staff_idx] = torch.tensor(
                     [
                         system.box.left * sx,
-                        system.box.top * sy,
+                        staff.top * sy,
                         system.box.right * sx,
-                        system.box.bottom * sy,
+                        staff.bottom * sy,
                     ]
                 )
-                for i, staff in enumerate(system.staves):
-                    # System2.csv only bounds the first system's staff count, so a
-                    # page of many 2-staff systems can exceed num_stave_queries.
-                    if staff_idx >= c.num_stave_queries:
-                        is_ok = False
-                        break
-                    seq = self.load_sequence(
-                        score_id,
-                        spine_numbers[i],
-                        system.first_bar_number,
-                        system.last_bar_number,
-                    )
-                    if seq is None:
-                        is_ok = False
-                        break
-                    seq_tokens = seq  # (max_seqlen, max_chords) token ids
-                    staff_boxes[staff_idx] = torch.tensor(
-                        [
-                            system.box.left * sx,
-                            staff.top * sy,
-                            system.box.right * sx,
-                            staff.bottom * sy,
-                        ]
-                    )
-                    assigns[staff_idx] = sys_idx
-                    tokens[staff_idx] = seq_tokens
-                    staff_idx += 1
-                if not is_ok:
-                    break
+                assigns[staff_idx] = sys_idx
+                tokens[staff_idx] = seq_tokens
+                staff_idx += 1
+            if not is_ok:
+                break
 
-            if is_ok and staff_idx > 0:
-                return image, sys_boxes, staff_boxes, assigns, tokens
-            idx = (idx + 1) % len(self)
+        if is_ok and staff_idx > 0:
+            return image, sys_boxes, staff_boxes, assigns, tokens
+        return None

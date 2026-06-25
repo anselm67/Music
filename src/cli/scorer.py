@@ -717,7 +717,10 @@ def predict_from_dataset(
     indices = list(range(len(dataset)))
     random.shuffle(indices)
     for idx in indices:
-        image, _gt_sys, _gt_stave, gt_assign, stave_tokens = dataset[idx]
+        # resolve() reports the page actually built: __getitem__ skips pages whose
+        # GT can't be assembled, so dataset.items[idx] can name a different page
+        # than the sample returned. Use the resolved index for the printed path.
+        idx, (image, _gt_sys, _gt_stave, gt_assign, stave_tokens) = dataset.resolve(idx)
         boxes, tokens, owners = module.predict(image.unsqueeze(0).to(module.device))
         num_gt = int((gt_assign != -1).sum())
         img = to_display(image)
