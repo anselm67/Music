@@ -186,7 +186,10 @@ class ScorerModule(L.LightningModule):
         tr = torch.zeros((), device=image.device)
         accuracy = torch.zeros((), device=image.device)
         if targets.shape[0] > 0:
-            crops, widths = self.model.crop(image, boxes)
+            # Optionally cut the transcription gradient to the box coords so it
+            # can't shrink the detector's boxes; det loss alone trains geometry.
+            crop_boxes = boxes.detach() if self.config.detach_crop_box else boxes
+            crops, widths = self.model.crop(image, crop_boxes)
             memory, mem_pad = self.model.noter.encode(crops, widths)  # (K,P,D),(K,P)
             # Group the flat staves into systems so the noter couples each system's
             # staves in the cross-stave decode (shared barline grid).
