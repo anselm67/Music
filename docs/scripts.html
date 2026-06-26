@@ -269,6 +269,30 @@
     --write --worklist staff_height_fixed.txt</pre>
   </div>
 
+  <!-- ──────────────────────────────────────────────── bridge_benefit -->
+  <div class="script">
+    <div class="script-header">
+      <span class="script-name">bridge_benefit.py</span>
+      <span class="badge badge-blue">diagnostic</span>
+      <span class="badge badge-blue">scorer</span>
+    </div>
+    <p class="script-desc">
+      Does the scorer's joint fine-tune (the differentiable crop bridge) actually buy
+      transcription accuracy over a plain two-stage staffer→crop→noter pipeline? Runs the
+      identical end-to-end eval on the same seeded pages for two models: the trained
+      scorer checkpoint vs. a zero-shot MERGE of the same run's standalone staffer + noter
+      branches (<code>ScorerModule.load_from_checkpoints</code>, no joint training). At
+      inference the bridge crops the same pixels a plain crop would, so the merge is the
+      plain-crop baseline; the gap is the joint fine-tune's contribution. First run
+      (sibelius, 500 KS pages): scorer 94.8% vs merge 90.2% = +4.7pp, and the merge
+      over-segments (41 vs 7 miscount pages).
+    </p>
+    <div class="label">Usage</div>
+<pre>uv run python scripts/bridge_benefit.py \
+    --scorer sibelius --staffer sibelius-mixed --noter sibelius-mixed \
+    --kern-home /home/anselm/datasets/KernSheet --size 500</pre>
+  </div>
+
   <!-- ──────────────────────────────────────────── staffer_box_deltas -->
   <div class="script">
     <div class="script-header">
