@@ -291,6 +291,21 @@
         <td><strong>Rehearsal-mix FT of the from-scratch <span class="tag">bartok-duration-logits-w1</span> base</strong> — the decisive real-scan test the <code>w=2.0</code>-tained <span class="tag">logits-mixed</span> failed. Free-running <strong>KS 94.2% full / 94.4% pitch-only</strong> (1024 samples). <strong>Recovers the failure</strong> (+1.3 pp over <span class="tag">logits-mixed</span>'s 92.9) and <strong>ties the regression base <span class="tag">bartok-duration-mixed</span></strong> (94.3, within noise) while keeping the classification duration head: <strong>duration solved on real scans</strong> (KS full−pitch gap just 0.2 pp). Confirms the deficit was the <code>dur_loss_weight</code>=2.0 pitch tax, not the head. Caveat: scorer is token-only, so this duration capability is gated on a scorer duration path before it reaches end-to-end. *blended stream &dagger;pitch-only + dur-classification</td>
         <td><span class="badge badge-green">pilot · KS tie, duration solved</span></td>
       </tr>
+      <tr>
+        <td colspan="7" style="background:var(--surface,#f6f6f6);color:var(--muted);font-size:0.82rem;padding:0.5rem 0.8rem;border-left:3px solid var(--muted)"><strong>Articulation thread (2026-06-23+).</strong> A <strong>separate multi-hot articulation flow</strong> rides alongside the unchanged pitch&times;dur token: a 5-bit head <code>[tie-to-next, tie-from-prev, staccato, fermata, accent]</code> with its own input feedback, masked-BCE at <code>articulation_weight</code>=1.0. Token vocab is unchanged (the <code>@</code>-suffix is stripped before id lookup). <code>noter eval</code> now reports a <strong>free-running per-flag</strong> precision/recall/F1 table (align GT&harr;pred rows by token edit-distance, score art bits on aligned note slots). val acc/loss below are the pitch&times;dur token (comparable to the rows above); art quality is in the description.</td>
+      </tr>
+      <tr>
+        <td><a class="run-link" href="#run-tatum"><span class="tag">tatum</span></a></td><td>2026-06-23</td><td>12</td>
+        <td>99.72%</td><td>0.0120</td>
+        <td><strong>From-scratch articulation base</strong> (PDMX-only, KS-extended vocab 5496). Token transcription matches the non-articulation base (<strong>no pitch tax</strong> at weight 1.0 &mdash; the separate-flow approach the duration pilot rejected works here). Teacher-forced val <strong>art_recall 0.758</strong> (climbs 0.18&rarr;0.76). Free-running <strong>PDMX</strong> token 98.3%, art F1 ties&nbsp;~85 / fermata&nbsp;62 / <strong>staccato&nbsp;0 / accent&nbsp;0</strong>; <strong>KS</strong> (raw domain gap) token 84.5%, art micro-F1 18.9%. <code>art_acc</code> (~1.000) is meaningless on the sparse multi-hot; watch <code>art_recall</code>.</td>
+        <td><span class="badge badge-slate">base · articulation flow</span></td>
+      </tr>
+      <tr>
+        <td><a class="run-link" href="#run-tatum"><span class="tag">tatum-mixed</span></a></td><td>2026-06-26</td><td>12</td>
+        <td>98.79%*</td><td>0.0535*</td>
+        <td>Rehearsal mix (0.67 KS / 0.33 PDMX) on the <span class="tag">tatum</span> base. <strong>KS token 84.5&rarr;95.6%</strong>, KS tie F1 ~27&rarr;~56 (doubled), KS fermata 10.5&rarr;36.6, <strong>KS micro-F1 18.9&rarr;30.9</strong>; PDMX softens with the usual rehearsal trade (token 98.3&rarr;97.8, micro 62.3&rarr;53.0). <strong>But the staccato/accent free-running collapse PERSISTS</strong> &mdash; KS staccato recall 3.9% / accent 0.2%, PDMX both exactly 0.0%. Ties self-reinforce through the autoregressive art-feedback and improve everywhere; per-note-independent flags lean on feedback that is empty at inference and collapse. <strong>Structural, not data-coverage</strong> &mdash; points at the feedback design, not more KS. *val is the blended stream</td>
+        <td><span class="badge badge-rose">FT · token win, art collapse persists</span></td>
+      </tr>
     </tbody>
   </table>
 
@@ -987,6 +1002,29 @@
     </table>
     <p style="font-size:0.78rem;color:var(--muted)">Eval'd 2026-06-21; PDMX baselines from the rows above (not re-run). KS 79.8 is the expected catastrophic-forgetting gap of a PDMX-only base (no real scans seen) — meaningful only after the rehearsal FT, NOT comparable to the mixed rows.</p>
     <div class="result-box positive"><strong>Training w=1.0 in from scratch recovers the pitch tax the FT shortcut couldn't — best base yet, with the duration head still solved.</strong> Free-running PDMX jumps 97.3&rarr;<strong>98.2</strong> full vs the w2 base (+0.9 pp), matching the regression base's 98.3 while keeping classification-grade duration (full≈pitch-only, 0.1 pp gap vs the regression base's 0.4). So the −1.3 pp pitch deficit really was the <code>dur_loss_weight</code>=2.0 weight, not the head/embedding design, and it's reachable from a cold start though not by fine-tuning a taxed base. <strong>Next:</strong> rehearsal-mix FT (<span class="tag">bartok-duration-logits-w1-mixed</span>) for the decisive KS test vs <span class="tag">bartok-duration-mixed</span> (94.3) and the failed <span class="tag">bartok-duration-logits-mixed</span> (92.9).</div>
+  </div>
+
+  <div class="run">
+    <div class="run-header">
+      <h2 id="run-tatum"><span class="tag">tatum</span> / <span id="run-tatum-mixed" class="tag">tatum-mixed</span> — separate articulation flow</h2>
+      <span class="session-meta">2026-06-23 / 2026-06-26 · tags <code>train/tatum</code>, <code>train/tatum-mixed</code> · 12 ep each · 5-bit articulation head + input feedback, <code>articulation_weight</code>=1.0</span>
+      <span class="badge badge-rose">FT · token win, art collapse persists</span>
+    </div>
+    <p>A <strong>separate multi-hot articulation flow</strong> alongside the unchanged pitch&times;dur token — re-testing the separate-attribute-head approach the <a href="#run-bartok-duration">duration pilot</a> rejected, this time for articulations. The note token gets a <code>@</code>-suffix of set codes <code>(["[", "]", "s", "f", "a"])</code> = <code>[tie-to-next, tie-from-prev, staccato, fermata, accent]</code>; <code>Vocab._strip</code> removes it before id lookup so <strong>token ids are unchanged</strong> (articulation rides a side channel, not the vocab). The decoder gains a zero-init <code>art_proj</code> feedback into the slot embedding (identity at init) and a separate <code>art_head</code> producing per-slot multi-hot logits under masked BCE at weight 1.0. <code>tatum</code> is PDMX-only from scratch on the KS-extended vocab (5496); <code>tatum-mixed</code> is the 0.67-KS rehearsal FT.</p>
+    <p style="font-size:0.78rem;color:var(--muted)"><code>art_acc</code> (~1.000) is meaningless on the sparse multi-hot (dominated by absent flags) — the meaningful aggregate is teacher-forced <code>art_recall</code> (0.758 on <code>tatum</code>). <code>noter eval</code> now prints a <strong>free-running per-flag</strong> precision/recall/F1 table: it generates tokens+arts, aligns GT&harr;pred rows by token edit-distance backtrace (<code>utils.align_sequences</code>), then scores the art bits only on aligned note slots (unmatched GT row&rarr;FN, unmatched pred row&rarr;FP).</p>
+    <table class="summary-table">
+      <thead><tr><th>Free-running per-flag F1 (<code>eval --size 500</code>)</th><th><span class="tag">tatum</span> PDMX</th><th><span class="tag">tatum-mixed</span> PDMX</th><th><span class="tag">tatum</span> KS</th><th><span class="tag">tatum-mixed</span> KS</th></tr></thead>
+      <tbody>
+        <tr><td>token similarity</td><td>98.3%</td><td>97.8%</td><td>84.5%</td><td><strong>95.6%</strong></td></tr>
+        <tr><td><code>[</code> tie-to-next</td><td>~85</td><td>76.3</td><td>~27</td><td><strong>56.8</strong></td></tr>
+        <tr><td><code>]</code> tie-from-prev</td><td>~85</td><td>79.3</td><td>~27</td><td><strong>55.8</strong></td></tr>
+        <tr><td><code>f</code> fermata</td><td>62</td><td>20.0</td><td>10.5</td><td><strong>36.6</strong></td></tr>
+        <tr><td><code>s</code> staccato</td><td>0.0</td><td>0.0</td><td>6.1</td><td>7.3 <span style="color:var(--muted)">(rec 3.9%)</span></td></tr>
+        <tr><td><code>a</code> accent</td><td>0.0</td><td>0.0</td><td>2.4</td><td>0.5 <span style="color:var(--muted)">(rec 0.2%)</span></td></tr>
+        <tr><td>micro avg</td><td>62.3</td><td>53.0</td><td>18.9</td><td><strong>30.9</strong></td></tr>
+      </tbody>
+    </table>
+    <div class="result-box"><strong>The separate flow vindicates at weight 1.0 (no pitch tax), and the rehearsal FT is a clear token + tie win on real scans — but the staccato/accent free-running collapse is structural and persists.</strong> <code>tatum</code> reaches token parity with the non-articulation base and teacher-forced art_recall 0.758, so the head <em>learns</em> staccato (arithmetically it must: 0.758 aggregate is impossible if staccato's ~2.0M positives scored 0). Yet free-running it predicts staccato/accent at near-zero recall. The mixed FT lifts KS token 84.5&rarr;95.6, doubles KS ties, and 3.5&times;'s fermata — but staccato recall is still 3.9% (accent 0.2%), and on PDMX both are <em>exactly</em> 0.0%. Diagnosis: <strong>ties self-reinforce through the autoregressive art-feedback</strong> (a <code>[</code> on one note makes <code>]</code> on the next near-certain), so they survive and improve everywhere; <strong>per-note-independent flags (staccato/accent) have no such chain</strong> and lean on feedback that is empty at inference, so they collapse. This is a <strong>feedback-design</strong> problem, not a data-coverage one — more KS won't fix it. Caveat: the scorer is token-only, so none of this reaches end-to-end until a scorer articulation path is built.</div>
   </div>
 
 </main>
