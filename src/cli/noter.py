@@ -35,11 +35,12 @@ from noter import (
     NoterModule,
     Vocab,
     grow_state_dict,
+    report_articulations,
+    tally_articulations,
 )
 from pdmx import PDMX, PdmxSource
 from sheetmusic import Source, to_display
 from utils import (
-    align_sequences,
     format_sequence_columns,
     log_uncaught_exceptions,
     print_histogram,
@@ -645,6 +646,9 @@ LOG_VARIABLES = [
     "loss",
     "lr",
     "accuracy",
+    "art_loss",
+    "art_acc",  # ~1.0 and ~meaningless on the sparse multi-hot; watch art_recall
+    "art_recall",
 ]
 
 
@@ -713,7 +717,7 @@ def logs(
 
     \b
     The following METRIC are available:
-    - loss, lr (training only), accuracy
+    - loss, lr (training only), accuracy, art_loss, art_acc, art_recall
     """
     train_columns = tuple(i for c in train_columns for i in c.split(","))
     valid_columns = tuple(i for c in valid_columns for i in c.split(","))
@@ -767,46 +771,6 @@ def logs(
 
         plt.pause(5.0)
     print("Bye!")
-
-
-_ARTICULATION_NAMES = ("tie-to-next", "tie-from-prev", "staccato", "fermata", "accent")
-
-
-def _tally_articulations(
-    gt_tokens: Tensor,  # (Lg, max_chords)
-    gt_arts: Tensor,  # (Lg, max_chords, A)
-    pred_tokens: Tensor,  # (Lp, max_chords)
-    pred_arts: Tensor,  # (Lp, max_chords, A)
-    tp: np.ndarray,  # type: ignore[type-arg]
-    fp: np.ndarray,  # type: ignore[type-arg]
-    fn: np.ndarray,  # type: ignore[type-arg]
-) -> None:
-    """Accumulate per-flag TP/FP/FN of free-running articulation bits.
-
-    Rows are paired by the token edit-distance alignment; bits are scored only on
-    real note slots (token != PAD). An unmatched GT row contributes its set bits
-    as false negatives, an unmatched predicted row as false positives.
-
-    Within a paired chord, GT and predicted bits are compared positionally
-    (slot k vs slot k), relying on the canonical low->high pitch sort the
-    tokenizer bakes into both. Row pairing itself is order-blind (chord_distance
-    sorts), so a chord predicted with a swapped/extra slot can misattribute that
-    one row's bits — rare given canonical targets, and it only perturbs that row.
-    """
-    mc, num = gt_arts.shape[1], gt_arts.shape[2]
-    zeros = torch.zeros(mc, num, dtype=torch.bool)
-    for i, j in align_sequences(gt_tokens, pred_tokens, Vocab.PAD):
-        if i is not None:
-            g = (gt_arts[i] > 0.5) & (gt_tokens[i] != Vocab.PAD).unsqueeze(-1)
-        else:
-            g = zeros
-        if j is not None:
-            p = (pred_arts[j] > 0.5) & (pred_tokens[j] != Vocab.PAD).unsqueeze(-1)
-        else:
-            p = zeros
-        tp += (g & p).sum(0).numpy()
-        fp += (p & ~g).sum(0).numpy()
-        fn += (g & ~p).sum(0).numpy()
 
 
 @click.command()
@@ -869,7 +833,7 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
             # matches; gt/pred arts are row-aligned with their token rows.
             gt_a = gt_articulations[g][1 : 1 + len(gt_tokens)]
             pred_a = pred_arts[g][: len(pred_tokens)]
-            _tally_articulations(gt_tokens, gt_a, pred_tokens, pred_a, tp, fp, fn)
+            tally_articulations(gt_tokens, gt_a, pred_tokens, pred_a, tp, fp, fn)
 
     if not similarities:
         print("No samples to evaluate.")
@@ -879,20 +843,7 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
     print(f"  avg: {sum(similarities) / len(similarities):.1%}")
     print(f"  max: {max(similarities):.1%}")
 
-    print("\nArticulations (free-running, per flag):")
-    print(f"  {'flag':<16}{'prec':>7}{'rec':>7}{'F1':>7}{'support':>9}")
-    for k, code in enumerate(ARTICULATIONS):
-        support = int(tp[k] + fn[k])
-        prec = tp[k] / (tp[k] + fp[k]) if tp[k] + fp[k] else 0.0
-        rec = tp[k] / support if support else 0.0
-        f1 = 2 * prec * rec / (prec + rec) if prec + rec else 0.0
-        label = f"{code} {_ARTICULATION_NAMES[k]}"
-        print(f"  {label:<16}{prec:>7.1%}{rec:>7.1%}{f1:>7.1%}{support:>9}")
-    t, f_, n_ = int(tp.sum()), int(fp.sum()), int(fn.sum())
-    prec = t / (t + f_) if t + f_ else 0.0
-    rec = t / (t + n_) if t + n_ else 0.0
-    f1 = 2 * prec * rec / (prec + rec) if prec + rec else 0.0
-    print(f"  {'(micro avg)':<16}{prec:>7.1%}{rec:>7.1%}{f1:>7.1%}{t + n_:>9}")
+    report_articulations(tp, fp, fn)
 
 
 @click.command()

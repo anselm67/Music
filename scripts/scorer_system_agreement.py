@@ -202,7 +202,7 @@ def main() -> None:
     argmax_correct = agree_but_wrong = correct_reachable = rerank_correct = 0
 
     for idx in tqdm(indices, desc="pages"):
-        image, _gt_sys, gt_stave, gt_assign, stave_tokens = dataset[idx]
+        image, _gt_sys, gt_stave, gt_assign, stave_tokens, _arts = dataset[idx]
         image = image.unsqueeze(0).to(device)
         num_gt = int((gt_assign != -1).sum())
         boxes, owners, sig_scores, argmax_sigs = detect_and_decode(

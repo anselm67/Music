@@ -13,7 +13,8 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
 from torchvision.transforms.functional import InterpolationMode
 
-from noter import NoterModel, Vocab
+from kern import NUM_ARTICULATIONS
+from noter import NoterModel, Vocab, articulation_loss
 from staffer import StafferLoss, assign_staves
 from staffer.staffer_loss import generalized_iou
 
@@ -147,7 +148,7 @@ class ScorerModule(L.LightningModule):
         return self._causal_mask_buf[:size, :size]
 
     def _step(self, batch: tuple, stage: str) -> Tensor:
-        image, gt_sys, gt_stave, gt_assign, stave_tokens = batch
+        image, gt_sys, gt_stave, gt_assign, stave_tokens, stave_arts = batch
         B = image.shape[0]
 
         # --- Detection (staffer) ---
@@ -182,9 +183,15 @@ class ScorerModule(L.LightningModule):
         targets = torch.cat(
             [stave_tokens[i, : assign_q[i].shape[0]] for i in range(B)], dim=0
         )  # (K, T, max_chords)
+        arts = torch.cat(
+            [stave_arts[i, : assign_q[i].shape[0]] for i in range(B)], dim=0
+        )  # (K, T, max_chords, A)
 
         tr = torch.zeros((), device=image.device)
         accuracy = torch.zeros((), device=image.device)
+        art_loss = torch.zeros((), device=image.device)
+        art_acc = torch.zeros((), device=image.device)
+        art_recall = torch.zeros((), device=image.device)
         if targets.shape[0] > 0:
             # Cut the transcription gradient to the box coords so it can't shrink
             # the detector's boxes; det loss alone trains geometry.
@@ -200,24 +207,38 @@ class ScorerModule(L.LightningModule):
             mem_g = memory[grouped_idx].reshape(ng * max_staves, *memory.shape[1:])
             pad_g = mem_pad[grouped_idx].reshape(ng * max_staves, -1)
             tgt = targets[grouped_idx]  # (ng, max_staves, T, max_chords)
+            art = arts[grouped_idx]  # (ng, max_staves, T, max_chords, A)
             tgt_in = tgt[:, :, :-1]
             labels = tgt[:, :, 1:].clone()
             labels[~stave_mask] = Vocab.PAD  # exclude padded staves from the loss
-            logits = self.model.noter.decode(
-                tgt_in, mem_g, pad_g, stave_mask, self._causal_mask(tgt_in.shape[2])
-            )  # (ng, max_staves, T-1, max_chords, V)
+            # Decode tokens + articulations together; the input note's articulation
+            # is fed back alongside its token (shifted, like the teacher-forced tokens).
+            logits, art_logits = self.model.noter.decode_both(
+                tgt_in,
+                mem_g,
+                pad_g,
+                stave_mask,
+                self._causal_mask(tgt_in.shape[2]),
+                art[:, :, :-1],
+            )  # (ng, max_staves, T-1, max_chords, V/A)
             V = logits.shape[-1]
             tr = F.cross_entropy(
                 logits.reshape(-1, V), labels.reshape(-1), ignore_index=Vocab.PAD
             )
+            slot_mask = labels != Vocab.PAD
             with torch.no_grad():
-                mask = labels != Vocab.PAD
                 accuracy = (
-                    (logits.argmax(-1) == labels) & mask
-                ).sum() / mask.sum().clamp(min=1)
+                    (logits.argmax(-1) == labels) & slot_mask
+                ).sum() / slot_mask.sum().clamp(min=1)
+            art_loss, art_acc, art_recall = articulation_loss(
+                art_logits, art[:, :, 1:], slot_mask
+            )
 
         det_loss = det.total()
-        total = self.config.lambda_det * det_loss + self.config.lambda_tr * tr
+        # tr is the pure token CE (logged as tr_loss); the articulation loss is folded
+        # into the transcription term for the total, weighted but logged separately.
+        tr_total = tr + self.config.noter.articulation_weight * art_loss
+        total = self.config.lambda_det * det_loss + self.config.lambda_tr * tr_total
 
         # Detection-quality metrics — watch these for drift while the
         # transcription loss tugs on the boxes during joint fine-tuning.
@@ -232,6 +253,9 @@ class ScorerModule(L.LightningModule):
         self.log(f"{stage}/det_loss", det_loss, prog_bar=True)
         self.log(f"{stage}/tr_loss", tr, prog_bar=True)
         self.log(f"{stage}/accuracy", accuracy, prog_bar=True)
+        self.log(f"{stage}/art_loss", art_loss)
+        self.log(f"{stage}/art_acc", art_acc)
+        self.log(f"{stage}/art_recall", art_recall, prog_bar=True)
         self.log(f"{stage}/sys_iou", sys_iou)
         self.log(f"{stage}/stave_err_px", stave_err_px)
         for f in fields(det):
@@ -257,13 +281,14 @@ class ScorerModule(L.LightningModule):
         self._step(batch, "val")
 
     @torch.no_grad()
-    def predict(self, image: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+    def predict(self, image: Tensor) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         """End-to-end inference for a single page: detect → crop → transcribe.
 
-        ``image``: ``(1, 1, H, W)``. Returns ``(boxes, tokens, owners)``:
+        ``image``: ``(1, 1, H, W)``. Returns ``(boxes, tokens, articulations, owners)``:
           ``boxes`` ``(K, 5)`` — ``[batch_idx, left, top, right, bot]`` px, active
           staves top-to-bottom; ``tokens`` ``(K, T, max_chords)`` — generated ids,
-          SOS stripped; ``owners`` ``(K,)`` — system index per stave.
+          SOS stripped; ``articulations`` ``(K, T, max_chords, A)`` — the row-aligned
+          per-note multi-hot; ``owners`` ``(K,)`` — system index per stave.
           ``K`` is the detected stave count (0 if none fired).
 
         Each detected system's staves are decoded together in lockstep (the cross-stave
@@ -277,24 +302,25 @@ class ScorerModule(L.LightningModule):
         hw = (int(image.shape[-2]), int(image.shape[-1]))
         boxes = build_stave_boxes(stave_tb, sys_lr, [sel], [owners], hw)
         if boxes.shape[0] == 0:
-            tokens = image.new_zeros(
-                (0, self.config.noter.max_seqlen - 1, self.config.noter.max_chords),
-                dtype=torch.long,
-            )
-            return boxes, tokens, torch.empty(0, dtype=torch.long, device=image.device)
+            t, mc = self.config.noter.max_seqlen - 1, self.config.noter.max_chords
+            tokens = image.new_zeros((0, t, mc), dtype=torch.long)
+            arts = image.new_zeros((0, t, mc, NUM_ARTICULATIONS))
+            owners = torch.empty(0, dtype=torch.long, device=image.device)
+            return boxes, tokens, arts, owners
         crops, widths = self.model.crop(image, boxes)
-        tokens = self._generate_grouped(crops, widths, owners)
-        return boxes, tokens, owners
+        tokens, arts = self._generate_grouped(crops, widths, owners)
+        return boxes, tokens, arts, owners
 
     @torch.no_grad()
     def _generate_grouped(
         self, crops: Tensor, widths: Tensor, owners: Tensor
-    ) -> Tensor:
-        """Lockstep-decode each system's staves together → ``(K, T-1, max_chords)``.
+    ) -> tuple[Tensor, Tensor]:
+        """Lockstep-decode each system's staves together → ``(tokens, articulations)``,
+        shapes ``(K, T-1, max_chords)`` and ``(K, T-1, max_chords, A)``.
 
         Staves sharing an ``owners`` index are decoded as one system: row ``t`` is
         generated for all its staves at once, each seeing its siblings' rows ``< t``
-        through the cross-stave attention. Returns the tokens in the original (K) stave
+        through the cross-stave attention. Returns them in the original (K) stave
         order, SOS stripped.
         """
         c = self.config.noter
@@ -320,25 +346,33 @@ class ScorerModule(L.LightningModule):
         generated = torch.full(
             (ng, smax, 1, c.max_chords), Vocab.SOS, dtype=torch.long, device=device
         )
+        # Parallel articulation buffer (SOS row = zeros), fed back like the tokens.
+        art = torch.zeros(ng, smax, 1, c.max_chords, NUM_ARTICULATIONS, device=device)
         done = ~stave_mask.clone()  # padded staves emit EOS immediately
         for _ in range(c.max_seqlen - 1):
             T = generated.shape[2]
-            logits = self.model.noter.decode(
-                generated, mem_g, pad_g, stave_mask, self._causal_mask(T)
+            logits, art_logits = self.model.noter.decode_both(
+                generated, mem_g, pad_g, stave_mask, self._causal_mask(T), art
             )
             next_tokens = logits[:, :, -1, :, :].argmax(dim=-1)  # (ng, smax, mc)
             next_tokens[done] = Vocab.EOS
             done = done | (next_tokens[..., 0] == Vocab.EOS)
             generated = torch.cat([generated, next_tokens.unsqueeze(2)], dim=2)
+            next_art = (art_logits[:, :, -1] > 0).float()  # (ng, smax, mc, A)
+            next_art[done] = 0.0  # finished staves carry no articulation
+            art = torch.cat([art, next_art.unsqueeze(2)], dim=2)
             if bool(done.all()):
                 break
 
         gen = generated[:, :, 1:]  # (ng, smax, T-1, mc); strip SOS
+        gen_art = art[:, :, 1:]  # (ng, smax, T-1, mc, A); strip SOS
         out = gen.new_full((K, gen.shape[2], c.max_chords), Vocab.PAD)
+        out_art = gen_art.new_zeros((K, gen.shape[2], c.max_chords, NUM_ARTICULATIONS))
         for g, members in enumerate(groups):
             for slot, k in enumerate(members):
                 out[k] = gen[g, slot]
-        return out
+                out_art[k] = gen_art[g, slot]
+        return out, out_art
 
     @classmethod
     def load_from_checkpoints(

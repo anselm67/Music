@@ -10,6 +10,7 @@ from torch.optim.lr_scheduler import LambdaLR
 
 from kern import NUM_ARTICULATIONS
 
+from .articulation import articulation_loss
 from .noter_model import NoterConfig, NoterModel
 from .noter_vocab import Vocab
 
@@ -88,23 +89,12 @@ class NoterModule(L.LightningModule):
     def _articulation_loss(
         self, art_logits: Tensor, art_labels: Tensor, slot_mask: Tensor, stage: str
     ) -> Tensor:
-        """Masked multi-label BCE over the articulation head.
+        """Weighted, logged articulation loss over the head (see ``articulation_loss``).
 
         ``art_logits``/``art_labels``: (B, S, T-1, max_chords, NUM_ARTICULATIONS);
         ``slot_mask``: (B, S, T-1, max_chords) — the same non-PAD note slots the
-        token loss covers (padded staves already folded in). Logs per-flag accuracy
-        and positive recall (the latter catches an all-negatives collapse, since
-        most notes carry no articulation)."""
-        if not slot_mask.any():
-            return art_logits.sum() * 0.0
-        logits = art_logits[slot_mask]  # (N, A)
-        labels = art_labels[slot_mask]  # (N, A)
-        loss = F.binary_cross_entropy_with_logits(logits, labels)
-        with torch.no_grad():
-            preds = logits > 0  # logit > 0 <=> prob > 0.5
-            pos = labels > 0.5
-            acc = (preds == pos).float().mean()
-            recall = (preds & pos).sum() / pos.sum().clamp(min=1)
+        token loss covers (padded staves already folded in)."""
+        loss, acc, recall = articulation_loss(art_logits, art_labels, slot_mask)
         self.log(f"{stage}/art_loss", loss, prog_bar=True)
         self.log(f"{stage}/art_acc", acc)
         self.log(f"{stage}/art_recall", recall, prog_bar=True)

@@ -22,8 +22,9 @@ from matplotlib.backend_bases import Event, KeyEvent
 from torchvision.io import decode_image
 from tqdm import tqdm
 
+from kern import ARTICULATIONS
 from kernsheet import KernSheet, KernSheetSource
-from noter import NoterConfig, Vocab
+from noter import NoterConfig, Vocab, report_articulations, tally_articulations
 from pdmx import PDMX, PdmxSource
 from scorer import (
     ScorerConfig,
@@ -459,6 +460,9 @@ LOG_VARIABLES = [
     "det_loss",
     "tr_loss",
     "accuracy",  # transcription token accuracy
+    "art_loss",  # articulation head (BCE)
+    "art_acc",  # ~1.0 and ~meaningless on the sparse multi-hot; watch art_recall
+    "art_recall",
     "sys_iou",  # detection quality (1 − IoU; lower is better)
     "stave_err_px",  # clean mean stave-edge error (px)
     "lr",  # Training only.
@@ -537,7 +541,8 @@ def logs(
 
     \b
     The following METRIC are available:
-    - loss, det_loss, tr_loss, accuracy, sys_iou, stave_err_px, lr (training only),
+    - loss, det_loss, tr_loss, accuracy, art_loss, art_acc, art_recall,
+    - sys_iou, stave_err_px, lr (training only),
     - stave_l1, stave_obj, boundary, sys_lr, sys_obj, sys_giou,
     """
     train_columns = tuple(i for c in train_columns for i in c.split(","))
@@ -702,7 +707,7 @@ def predict_from_images(
 ) -> None:
     for path in img_paths:
         image = dataset.transform(decode_image(path.as_posix())).to(module.device)
-        boxes, tokens, owners = module.predict(image.unsqueeze(0))
+        boxes, tokens, _arts, owners = module.predict(image.unsqueeze(0))
         img = to_display(image)
         _draw_boxes(img, boxes, owners)
         pred_by_sys = _group_by_system(owners, boxes.shape[0])
@@ -730,8 +735,12 @@ def predict_from_dataset(
         # resolve() reports the page actually built: __getitem__ skips pages whose
         # GT can't be assembled, so dataset.items[idx] can name a different page
         # than the sample returned. Use the resolved index for the printed path.
-        idx, (image, _gt_sys, _gt_stave, gt_assign, stave_tokens) = dataset.resolve(idx)
-        boxes, tokens, owners = module.predict(image.unsqueeze(0).to(module.device))
+        idx, (image, _gt_sys, _gt_stave, gt_assign, stave_tokens, _arts) = (
+            dataset.resolve(idx)
+        )
+        boxes, tokens, _pred_arts, owners = module.predict(
+            image.unsqueeze(0).to(module.device)
+        )
         num_gt = int((gt_assign != -1).sum())
         img = to_display(image)
         _draw_boxes(img, boxes, owners)
@@ -824,10 +833,17 @@ def run_eval(ctx: ClickContext, name: str, size: int, seed: int) -> None:
 
     similarities: list[float] = []
     total_gt, total_pred, pages_miscount = 0, 0, 0
+    # Free-running articulation tallies, per flag in ARTICULATIONS order.
+    tp = np.zeros(len(ARTICULATIONS), dtype=np.int64)
+    fp = np.zeros(len(ARTICULATIONS), dtype=np.int64)
+    fn = np.zeros(len(ARTICULATIONS), dtype=np.int64)
+    mc = config.noter.max_chords
     for idx in tqdm(indices, desc="Evaluating"):
-        image, _gt_sys, gt_stave, gt_assign, stave_tokens = dataset[idx]
+        image, _gt_sys, gt_stave, gt_assign, stave_tokens, stave_arts = dataset[idx]
         num_gt = int((gt_assign != -1).sum())
-        boxes, tokens, _owners = module.predict(image.unsqueeze(0).to(module.device))
+        boxes, tokens, pred_arts, _owners = module.predict(
+            image.unsqueeze(0).to(module.device)
+        )
         num_pred = tokens.shape[0]
         total_gt += num_gt
         total_pred += num_pred
@@ -838,9 +854,13 @@ def run_eval(ctx: ClickContext, name: str, size: int, seed: int) -> None:
         gt_cy = ((gt_stave[:num_gt, 1] + gt_stave[:num_gt, 3]) / 2).numpy()
         pred_cy = (((boxes[:, 2] + boxes[:, 4]) / 2) / H).cpu().numpy()
         for g, p in _match_staves(gt_cy, pred_cy):
-            similarities.append(
-                _similarity(stave_tokens[g], tokens[p].cpu(), config.noter.max_chords)
-            )
+            similarities.append(_similarity(stave_tokens[g], tokens[p].cpu(), mc))
+            # Articulation tally on the matched stave (token rows align gt↔pred).
+            gt_tok = strip_eos(stave_tokens[g][1:], Vocab.EOS)  # drop SOS, cut at EOS
+            pred_tok = strip_eos(tokens[p].cpu(), Vocab.EOS)
+            gt_a = stave_arts[g][1 : 1 + len(gt_tok)]
+            pred_a = pred_arts[p][: len(pred_tok)].cpu()
+            tally_articulations(gt_tok, gt_a, pred_tok, pred_a, tp, fp, fn)
 
     if not similarities:
         print("No matched staves to evaluate.")
@@ -853,6 +873,7 @@ def run_eval(ctx: ClickContext, name: str, size: int, seed: int) -> None:
         f"                            avg {sum(similarities) / len(similarities):.1%}"
     )
     print(f"                            max {max(similarities):.1%}")
+    report_articulations(tp, fp, fn)
 
 
 cli.add_command(check)

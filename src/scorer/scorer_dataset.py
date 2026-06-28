@@ -16,11 +16,13 @@ from tqdm import tqdm
 
 from sheetmusic import LetterboxResize, PerImageNormalize, Source, letterbox_scale
 
+from kern import NUM_ARTICULATIONS
 from noter import SequenceLoader, Vocab
 
 from .scorer_model import ScorerConfig
 
-Sample = tuple[Tensor, Tensor, Tensor, Tensor, Tensor]
+# image, sys_boxes, staff_boxes, assigns, tokens, articulations
+Sample = tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]
 
 
 class ScorerDataset(Dataset[Sample]):
@@ -121,6 +123,14 @@ class ScorerDataset(Dataset[Sample]):
             ),
             self.vocab.PAD,
         )
+        arts = torch.zeros(
+            (
+                c.num_stave_queries,
+                self.config.noter.max_seqlen,
+                self.config.noter.max_chords,
+                NUM_ARTICULATIONS,
+            )
+        )
 
         is_ok = True
         staff_idx = 0
@@ -147,7 +157,7 @@ class ScorerDataset(Dataset[Sample]):
                 if staff_idx >= c.num_stave_queries:
                     is_ok = False
                     break
-                seq = self.load_sequence(
+                seq = self.load_sequence.load(
                     score_id,
                     spine_numbers[i],
                     system.first_bar_number,
@@ -156,7 +166,7 @@ class ScorerDataset(Dataset[Sample]):
                 if seq is None:
                     is_ok = False
                     break
-                seq_tokens = seq  # (max_seqlen, max_chords) token ids
+                seq_tokens, seq_arts = seq  # (max_seqlen, mc), (max_seqlen, mc, A)
                 staff_boxes[staff_idx] = torch.tensor(
                     [
                         system.box.left * sx,
@@ -167,10 +177,11 @@ class ScorerDataset(Dataset[Sample]):
                 )
                 assigns[staff_idx] = sys_idx
                 tokens[staff_idx] = seq_tokens
+                arts[staff_idx] = seq_arts
                 staff_idx += 1
             if not is_ok:
                 break
 
         if is_ok and staff_idx > 0:
-            return image, sys_boxes, staff_boxes, assigns, tokens
+            return image, sys_boxes, staff_boxes, assigns, tokens, arts
         return None

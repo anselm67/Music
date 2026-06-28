@@ -58,9 +58,11 @@ def evaluate(
     sims: list[float] = []
     total_gt = total_pred = miscount = 0
     for idx in tqdm(indices, desc="eval", leave=False):
-        image, _gt_sys, gt_stave, gt_assign, stave_tokens = dataset[idx]
+        image, _gt_sys, gt_stave, gt_assign, stave_tokens, _arts = dataset[idx]
         num_gt = int((gt_assign != -1).sum())
-        boxes, tokens, _owners = module.predict(image.unsqueeze(0).to(device))
+        boxes, tokens, _pred_arts, _owners = module.predict(
+            image.unsqueeze(0).to(device)
+        )
         num_pred = tokens.shape[0]
         total_gt += num_gt
         total_pred += num_pred

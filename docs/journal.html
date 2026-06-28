@@ -93,6 +93,60 @@
      following the format of the entries that follow. Keep newest-first order.
      ════════════════════════════════════════════════════════════════════════ -->
 
+<!-- ── Articulations always-on, end-to-end ── -->
+<article class="entry">
+  <h2>Make the articulation flow always-on and wire it end-to-end through the scorer</h2>
+  <div class="entry-meta">
+    <span>2026-06-28</span>
+    <span class="badge accepted">Accepted — permanent, noter + scorer</span>
+    <span class="ref">noter (<code>de0b24c</code>) + scorer · <code>noter/articulation.py</code> · drops <code>--articulations</code> (keeps <code>--articulation-weight</code>)</span>
+  </div>
+
+  <h3>Context</h3>
+  <p>
+    The <a href="noter-training.html#run-tatum">articulation flow</a> (a per-note multi-hot
+    <code>[tie-to-next, tie-from-prev, staccato, fermata, accent]</code> with its own head + zero-init input
+    feedback, masked-BCE at <code>articulation_weight</code>) shipped as an opt-in <code>--articulations</code>
+    flag / <code>config.articulations</code> bool, gating whether the model even built <code>art_proj</code> /
+    <code>art_head</code>. It earned its place on the noter (token parity at weight 1.0, ties learned well),
+    but two things were unfinished: it was still a flag nobody would sensibly turn off, and — as the
+    <code>tatum</code> card flagged — <strong>the scorer was token-only, so articulations never reached
+    end-to-end</strong>.
+  </p>
+
+  <h3>Decision</h3>
+  <p>
+    Make articulations permanent and end-to-end, in two commits.
+  </p>
+  <ul>
+    <li><strong>Noter always-on</strong> (Option 2, the aggressive cut): removed the
+      <code>config.articulations</code> field and the <code>--articulations</code> flag; the model
+      unconditionally builds the heads, <code>_step</code> always trains via <code>forward_both</code> + the
+      articulation loss, and <code>predict</code> always decodes with <code>decode_both</code>
+      (<code>return_articulations</code> gates only the return). Accepted consequence: <strong>non-articulation
+      checkpoints (bartok/bruckner and the whole pre-<code>tatum</code> lineage) no longer load standalone</strong>
+      — they fail with a clear missing <code>art_proj</code>/<code>art_head</code> key error. <code>--articulation-weight</code>
+      stays.</li>
+    <li><strong>Scorer end-to-end</strong>: <code>ScorerDataset</code> now yields the per-stave articulation
+      multi-hot (via <code>SequenceLoader.load</code>, already available); <code>ScorerModule._step</code>
+      groups it like the tokens and trains the head through <code>decode_both</code> (art loss folded into the
+      transcription term, scaled by <code>articulation_weight</code>); <code>predict</code>/<code>_generate_grouped</code>
+      carry a parallel articulation buffer and return it; <code>scorer eval</code> reports the same free-running
+      per-flag precision/recall/F1 table as <code>noter eval</code>.</li>
+    <li><strong>Shared helper</strong>: the loss, the free-running tally, and the report table moved to
+      <code>noter/articulation.py</code> so the noter and scorer score articulations identically and never drift.</li>
+  </ul>
+
+  <div class="outcome">
+    <strong>Outcome.</strong> Articulations are now a structural part of both models. ruff + mypy clean, 365
+    tests green (new <code>tests/scorer/test_scorer_articulations.py</code> covers the <code>_step</code> + grouped
+    generation paths); <code>tatum</code> loads with its heads, bartok fails cleanly as expected. The scorer
+    must be retrained from articulation-trained branches before its eval is meaningful — its art head is fresh
+    until then. Note the <code>tatum</code> finding still stands: the free-running staccato/accent collapse is a
+    feedback-design problem the scorer inherits, to be tackled separately.
+  </div>
+</article>
+
 <!-- ── Remove all train-time data augmentation ── -->
 <article class="entry">
   <h2>Remove all train-time data augmentation — <code>ScanAugment</code> and box-jitter</h2>
