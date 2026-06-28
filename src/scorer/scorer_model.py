@@ -36,13 +36,6 @@ class ScorerConfig:
     lambda_det: float = 1.0
     lambda_tr: float = 1.0
 
-    # Stop-gradient on the crop-window box coords so the transcription loss can't
-    # pull the detector's boxes inward (the box-shrink). With this on, detection
-    # geometry is supervised by the det loss alone; the noter still adapts to
-    # predicted crops (its own weights) and objectness/count still train — so it
-    # removes the shrink without the freeze's loss of the joint-FT count gain.
-    detach_crop_box: bool = False
-
     # Joint training.
     batch_size: int = 8
     train_len: int = -1
@@ -184,8 +177,8 @@ class ScorerModel(nn.Module):
         decoder (it owns the causal mask and the teacher-forced / autoregressive split).
 
         NB: this is NOT the training path — ``ScorerModule._step`` drives ``detect`` and
-        ``crop`` directly and is where ``config.detach_crop_box`` is honoured. This
-        convenience forward always crops through the live boxes.
+        ``crop`` directly (stop-gradient on the box coords). This convenience forward
+        always crops through the live boxes.
         """
         staffer_out = self.detect(image)
         stave_tb, _stave_logits, _boundary, sys_lr, _sys_logits = staffer_out

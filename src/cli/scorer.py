@@ -273,14 +273,6 @@ def check(ctx: ClickContext) -> None:
     "larger KernSheet vocab so the merge matches its KernSheet-fine-tuned branches.",
 )
 @click.option(
-    "--detach-crop-box",
-    is_flag=True,
-    default=False,
-    help="Stop-gradient on the crop-window box coords so the transcription loss "
-    "can't shrink the detector's boxes (det loss supervises geometry alone). Fixes "
-    "the scorer box-shrink without freezing the detector. Fresh runs only.",
-)
-@click.option(
     "--kern-sheet",
     "kern_sheet",
     type=(click.Path(exists=True, file_okay=False, path_type=Path), float),
@@ -306,7 +298,6 @@ def train(
     warmup_steps: int,
     freeze_staffer_steps: int,
     vocab_path: Path | None,
-    detach_crop_box: bool,
     kern_sheet: tuple[Path, float] | None,
 ) -> None:
     """Trains and/or resumes training of a Scorer model instance.
@@ -332,11 +323,10 @@ def train(
             or lr is not None
             or warmup_steps >= 0
             or freeze_staffer_steps >= 0
-            or detach_crop_box
         ):
             logging.warning(
                 "Resuming from checkpoint; --train-len/--valid-len/--lr/"
-                "--warmup-steps/--freeze-staffer-steps/--detach-crop-box ignored."
+                "--warmup-steps/--freeze-staffer-steps ignored."
             )
     else:
         config = replace(ctx.config, id_name=name)
@@ -351,7 +341,6 @@ def train(
             config.warmup_steps = warmup_steps
         if freeze_staffer_steps >= 0:
             config.freeze_staffer_steps = freeze_staffer_steps
-        config.detach_crop_box = detach_crop_box
         staffer_ckpt = Path("checkpoints") / "staffer" / staffer / "last.ckpt"
         noter_ckpt = Path("checkpoints") / "noter" / noter / "last.ckpt"
         for label, path in [("staffer", staffer_ckpt), ("noter", noter_ckpt)]:

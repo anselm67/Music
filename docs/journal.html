@@ -93,6 +93,46 @@
      following the format of the entries that follow. Keep newest-first order.
      ════════════════════════════════════════════════════════════════════════ -->
 
+<!-- ── Detach the crop-box gradient permanently ── -->
+<article class="entry">
+  <h2>Make the crop-box stop-gradient permanent — drop the <code>--detach-crop-box</code> flag</h2>
+  <div class="entry-meta">
+    <span>2026-06-28</span>
+    <span class="badge accepted">Accepted — always on, flag removed</span>
+    <span class="ref">introduced opt-in <code>1661b72</code> (tag <code>train/sibelius-detach</code>) · <code>scorer_module._step</code> · <code>ScorerConfig</code> · <code>cli/scorer.py</code></span>
+  </div>
+
+  <h3>Context</h3>
+  <p>
+    The differentiable <code>grid_sample</code> crop bridge backprops the transcription loss into the
+    detector's box coordinates. Because <code>crop()</code>'s context padding means a tighter box doesn't
+    hurt transcription, <code>lambda_tr</code> pulled the boxes <em>inward</em> — the
+    <a href="scorer-training.html#run-sibelius-detach">box-shrink</a> (on <span class="tag">sibelius</span>,
+    the system-0 RH stave ran −14&nbsp;px short on a ~37&nbsp;px staff). The
+    <code>sibelius-detach</code> run shipped <code>--detach-crop-box</code> as an opt-in
+    <code>ScorerConfig.detach_crop_box</code> that stop-gradients the box coords feeding <code>crop()</code>,
+    and the bridge-benefit A/B confirmed box <em>movement</em> was transcription-neutral: cutting the
+    gradient collapsed the top-stave error −14.26&nbsp;px&nbsp;→&nbsp;+2.05&nbsp;px while matched similarity
+    held (94.8&nbsp;→&nbsp;95.2%), at the cost of a few borderline staves (miscount 7&nbsp;→&nbsp;12&nbsp;/&nbsp;500).
+  </p>
+
+  <h3>Decision</h3>
+  <p>
+    Make the stop-gradient the only behaviour and delete the flag. <code>_step</code> now always crops
+    through <code>boxes.detach()</code>; the <code>detach_crop_box</code> config field, the
+    <code>--detach-crop-box</code> CLI option, and its resume-warning references are gone. The small
+    detection-count regression is worth trustworthy reported geometry, which matters downstream for MIDI
+    alignment and the phone-app overlay — and there's no reason to keep an off path that re-introduces a
+    known box-shrink. Part of the standing effort to delete dead command-line options.
+  </p>
+
+  <div class="outcome">
+    <strong>Outcome.</strong> Behaviour-preserving for any future run (it's what we'd always pass anyway);
+    ruff + mypy clean, no scorer tests to update. The <code>sibelius-detach</code> training card stays as the
+    historical record of how the fix was measured.
+  </div>
+</article>
+
 <!-- ── GT kern source: NIFC Chopin first editions ── -->
 <article class="entry">
   <h2>Source GT kern for missing works from the NIFC Chopin first-editions — not PDMX</h2>
