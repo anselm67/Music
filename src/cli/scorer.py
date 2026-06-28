@@ -3,7 +3,7 @@ import logging
 import random
 import shutil
 import sys
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from typing import Any, cast
 
@@ -148,10 +148,20 @@ def config_from_checkpoint(checkpoint_path: Path) -> ScorerConfig:
 
     torch.serialization.add_safe_globals([InterpolationMode])
     hp = torch.load(checkpoint_path, weights_only=False)["hyper_parameters"]
-    staffer = StafferConfig(**hp["staffer"])
-    noter = NoterConfig(**hp["noter"])
+
+    def known(cls: type, params: dict[str, Any]) -> dict[str, Any]:
+        names = {f.name for f in fields(cls)}
+        unknown = set(params) - names
+        if unknown:
+            logging.warning(
+                "config_from_checkpoint: ignoring unknown fields %s", unknown
+            )
+        return {k: v for k, v in params.items() if k in names}
+
+    staffer = StafferConfig(**known(StafferConfig, hp["staffer"]))
+    noter = NoterConfig(**known(NoterConfig, hp["noter"]))
     rest = {k: v for k, v in hp.items() if k not in ("staffer", "noter", "max_steps")}
-    return ScorerConfig(staffer=staffer, noter=noter, **rest)
+    return ScorerConfig(staffer=staffer, noter=noter, **known(ScorerConfig, rest))
 
 
 @click.command()

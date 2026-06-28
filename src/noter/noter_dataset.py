@@ -1,5 +1,4 @@
 import logging
-import random
 
 import torch
 from torch import Tensor
@@ -13,23 +12,12 @@ from sheetmusic import (
     Box,
     LetterboxResize,
     PerImageNormalize,
-    ScanAugment,
     Source,
     letterbox_scale,
 )
 
 from .noter_model import NoterConfig
 from .noter_vocab import Vocab
-
-# Per-edge box-jitter spec (sigma_px, clip_px), train-only augmentation modelling
-# the staffer detector's box error measured on KernSheet: horizontal error >>
-# vertical, right edge the worst.
-JITTER = {
-    "top": (3.0, 15.0),
-    "bot": (3.0, 15.0),
-    "left": (5.0, 26.0),
-    "right": (8.0, 50.0),
-}
 
 
 class SequenceLoader:
@@ -114,12 +102,7 @@ class NoterDataset(Dataset):
         self.source = source
         self.config = config
         self.vocab = vocab
-        # Train-only box jitter probability (0 = off); the datamodule enables it
-        # on the train view only, leaving validation on clean (centered) crops.
-        self.jitter = 0.0
-        # Clean transform (no scan augment); the datamodule calls enable_augment
-        # on the train view only, leaving validation on un-augmented pages.
-        self.transform = self._build_transform(0.0)
+        self.transform = self._build_transform()
         self.load_sequence = SequenceLoader(
             source, vocab, config.max_seqlen, config.max_chords
         )
@@ -189,9 +172,8 @@ class NoterDataset(Dataset):
                 break
         logging.info(f"\tNoterDataset: {len(self.items):,} samples.")
 
-    def _build_transform(self, augment: float) -> v2.Transform:
-        """Image transform; ScanAugment (prob ``augment``, 0 = off) runs on the
-        float [0,1] page before per-image normalisation."""
+    def _build_transform(self) -> v2.Transform:
+        """Image transform: grayscale, letterbox resize, per-image normalisation."""
         return v2.Compose(
             [
                 v2.Grayscale(),
@@ -202,18 +184,9 @@ class NoterDataset(Dataset):
                     antialias=self.config.antialias,
                     fill=1.0,
                 ),
-                ScanAugment(augment),
                 PerImageNormalize(),
             ]
         )
-
-    def enable_augment(self, prob: float) -> None:
-        """Rebuild the transform with scan augmentation at probability ``prob``.
-
-        Called by the datamodule on the (shallow-copied) train view only, so
-        validation keeps the clean transform built in ``__init__``.
-        """
-        self.transform = self._build_transform(prob)
 
     def __len__(self) -> int:
         return len(self.items)
@@ -261,8 +234,8 @@ class NoterDataset(Dataset):
         crop_top = box.top + box.height // 2 - height // 2
         src_top = max(0, crop_top)
         src_bot = min(page_height, crop_top + height)
-        # Clamp the crop to the page so overhang (jittered right edge past the
-        # page) pads white via the canvas, not black (crop() zero-pads = ink).
+        # Clamp the crop to the page so a box overhanging the right edge pads
+        # white via the canvas, not black (crop() zero-pads = ink).
         crop_width = min(box.width, page_width - box.left)
         tensor = crop(tensor, src_top, box.left, src_bot - src_top, crop_width)
         image = torch.full((1, height, width), image_pad_value)
@@ -270,19 +243,6 @@ class NoterDataset(Dataset):
         y0 = src_top - crop_top
         image[:, y0 : y0 + cropped_height, :cropped_width] = tensor
         return image, cropped_width
-
-    def _jitter_box(self, box: Box) -> Box:
-        """Perturb each edge independently by clipped Gaussian noise (px)."""
-
-        def delta(edge: str) -> int:
-            sigma, clip = JITTER[edge]
-            return int(round(max(-clip, min(clip, random.gauss(0.0, sigma)))))
-
-        left = max(0, box.left + delta("left"))
-        right = max(left + 1, box.right + delta("right"))
-        top = max(0, box.top + delta("top"))
-        bottom = max(top + 1, box.bottom + delta("bot"))
-        return Box(left, top, right, bottom)
 
     def _load_staff(
         self,
@@ -295,8 +255,6 @@ class NoterDataset(Dataset):
     ) -> tuple[Tensor, int, Tensor, Tensor] | None:
         """One staff's (image, width, sequence, articulations), or None if either
         can't load."""
-        if self.jitter and random.random() < self.jitter:
-            box = self._jitter_box(box)
         if (result := self._load_image(score_id, page_number, box)) is None:
             return None
         if (

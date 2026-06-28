@@ -68,12 +68,6 @@ class NoterConfig:
     lr: float = 3e-4
     weight_decay: float = 1e-2
     warmup_steps: int = 500
-    # Train-only box-jitter augmentation: probability a train sample's box is
-    # jittered (0 = disabled). Applied to the train split only.
-    jitter: float = 0.0
-    # Train-only scan-augmentation: probability a train page is passed through
-    # ScanAugment (0 = disabled). Applied to the train split only.
-    augment: float = 0.0
     max_steps: int = field(init=False)
 
     def __post_init__(self) -> None:

@@ -4,7 +4,6 @@ from .source import Source
 from .transform import (
     LetterboxResize,
     PerImageNormalize,
-    ScanAugment,
     letterbox_scale,
     to_display,
 )
@@ -21,7 +20,6 @@ __all__ = [
     "MixedSource",
     "LetterboxResize",
     "PerImageNormalize",
-    "ScanAugment",
     "letterbox_scale",
     "to_display",
 ]

@@ -61,17 +61,6 @@ NOTER_BASE_EPOCHS=12
 NOTER_FT_EPOCHS=12
 SCORER_EPOCHS=20
 
-NOTER_JITTER=0.5             # PDMX base only; KernSheet boxes are a thirds approx (no jitter)
-
-# Scan-augmentation probability (ScanAugment: ink spread / paper tone / blur / JPEG)
-# on the PDMX bases ONLY. OFF by default: the `mahler-augment` A/B was a NEGATIVE
-# result — a clean detector real-scan win (KS box 3.91->3.49px) that did NOT
-# propagate end-to-end (KS 90.7 vs 91.0%) and cost a PDMX miscount tax (5->12/500),
-# so `mahler` (no augment) stays production. If retried, augment the NOTER path, not
-# the staffer (prob=0.5 was too strong on the staffer base). See `project-scan-augment`.
-STAFFER_AUGMENT=0.0
-NOTER_AUGMENT=0.0
-
 # Per-stage fine-tune LR / warmup. The staffer FT ran 10x lower than the noter FT;
 # the scorer rides the ScorerConfig defaults (lr 1e-4, warmup 500, freeze 500) — it
 # passes no --lr/--warmup-steps/--freeze-staffer-steps, matching the ravel run.
@@ -125,7 +114,7 @@ elif done_ckpt staffer "$NAME"; then
 else
   tag "train/$NAME"
   run staffer --log-file "logs/staffer/$NAME.log" \
-    train -e "$STAFFER_BASE_EPOCHS" --use-sampler --augment "$STAFFER_AUGMENT" "$NAME"
+    train -e "$STAFFER_BASE_EPOCHS" --use-sampler "$NAME"
 fi
 
 # --- Stage 2: staffer rehearsal-mix fine-tune ---
@@ -153,12 +142,12 @@ elif done_ckpt noter "$NAME"; then
 else
   tag "train/$NAME"
   run noter --log-file "logs/noter/$NAME.log" \
-    train --vocab "$VOCAB" --jitter "$NOTER_JITTER" --augment "$NOTER_AUGMENT" \
+    train --vocab "$VOCAB" \
     -e "$NOTER_BASE_EPOCHS" \
     "$NAME"
 fi
 
-# --- Stage 4: noter rehearsal-mix fine-tune (no jitter; mix carries KS exposure) ---
+# --- Stage 4: noter rehearsal-mix fine-tune (mix carries KS exposure) ---
 stage "4/5  noter rehearsal-mix fine-tune -> checkpoints/noter/$NAME-mixed"
 if done_ckpt noter "$NAME-mixed"; then
   echo "  exists — skipping (FORCE=1 to retrain)"

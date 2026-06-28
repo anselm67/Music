@@ -5,7 +5,7 @@ import random
 import shutil
 import sys
 from collections import Counter
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from itertools import zip_longest
 from pathlib import Path
 from typing import Any, cast
@@ -315,7 +315,11 @@ def config_from_checkpoint(checkpoint_path: Path) -> NoterConfig:
     checkpoint = torch.load(checkpoint_path, weights_only=False)
     hyper_params = checkpoint["hyper_parameters"]
     hyper_params.pop("max_steps", None)
-    return NoterConfig(**hyper_params)
+    known = {f.name for f in fields(NoterConfig)}
+    unknown = set(hyper_params) - known
+    if unknown:
+        logging.warning("config_from_checkpoint: ignoring unknown fields %s", unknown)
+    return NoterConfig(**{k: v for k, v in hyper_params.items() if k in known})
 
 
 @click.command()
@@ -420,22 +424,6 @@ def grow_checkpoint(src_ckpt: Path, out_ckpt: Path, vocab_path: Path) -> None:
     help="Override the number of warmup steps.",
 )
 @click.option(
-    "--jitter",
-    type=float,
-    default=None,
-    help="Train-only box-jitter probability (0-1; fraction of train samples "
-    "whose box is perturbed to model the staffer detector's box error). "
-    "Omit to leave disabled.",
-)
-@click.option(
-    "--augment",
-    type=float,
-    default=None,
-    help="Train-only scan-augmentation probability (0-1; fraction of train "
-    "pages passed through ScanAugment to mimic real-scan ink spread / paper "
-    "tone / noise). Omit to leave disabled.",
-)
-@click.option(
     "--vocab",
     "vocab_path",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
@@ -483,8 +471,6 @@ def train(
     valid_len: int,
     lr: float | None,
     warmup_steps: int,
-    jitter: float | None,
-    augment: float | None,
     articulations: bool,
     articulation_weight: float | None,
     vocab_path: Path | None,
@@ -507,14 +493,12 @@ def train(
             or valid_len > 0
             or lr is not None
             or warmup_steps >= 0
-            or jitter is not None
-            or augment is not None
             or articulations
             or articulation_weight is not None
         ):
             logging.warning(
                 "Resuming from checkpoint; --train-len/--valid-len/--lr/--warmup-"
-                "steps/--jitter/--augment/--articulations(-weight) ignored."
+                "steps/--articulations(-weight) ignored."
             )
     else:
         ckpt_path = None
@@ -528,10 +512,6 @@ def train(
             config.lr = lr
         if warmup_steps >= 0:
             config.warmup_steps = warmup_steps
-        if jitter is not None:
-            config.jitter = jitter
-        if augment is not None:
-            config.augment = augment
         config.articulations = articulations
         if articulation_weight is not None:
             config.articulation_weight = articulation_weight

@@ -93,6 +93,58 @@
      following the format of the entries that follow. Keep newest-first order.
      ════════════════════════════════════════════════════════════════════════ -->
 
+<!-- ── Remove all train-time data augmentation ── -->
+<article class="entry">
+  <h2>Remove all train-time data augmentation — <code>ScanAugment</code> and box-jitter</h2>
+  <div class="entry-meta">
+    <span>2026-06-28</span>
+    <span class="badge accepted">Accepted — augmentation deleted, flags gone</span>
+    <span class="ref"><code>--augment</code> (staffer + noter) · <code>--jitter</code> (noter) · <code>sheetmusic/transform.py</code> · <code>scripts/pixel_hist.py</code> (deleted)</span>
+  </div>
+
+  <h3>Context</h3>
+  <p>
+    Two train-only augmentations had accumulated in the pipeline and neither earned its keep.
+    <strong>ScanAugment</strong> (the <code>--augment</code> flag, a print→scan chain of ink-spread /
+    blur / paper-tone / noise / JPEG) was a
+    <a href="scorer-training.html">clean detector real-scan win that didn't propagate end-to-end</a>
+    (<span class="tag">mahler-augment</span>: KS box 3.91→3.49&nbsp;px but scorer 90.7 vs 91.0% and a PDMX
+    miscount tax) — never promoted. <strong>Box-jitter</strong> (the <code>--jitter</code> flag, perturbing
+    the crop box to model the detector's error) was likewise opt-in. Both config fields defaulted to
+    <code>0.0</code>, so <strong>no shipped model — tatum, bartok, the production lineage — was trained
+    with either on</strong>. They were dead weight: untested code paths, two CLI flags, and a calibration
+    script (<code>pixel_hist.py</code>) maintained for an augmentation nobody used.
+  </p>
+
+  <h3>Decision</h3>
+  <p>
+    Delete all of it, flag → code. Removed the <code>ScanAugment</code> class and its package export, the
+    <code>--augment</code> / <code>--jitter</code> CLI options on both <code>staffer</code> and
+    <code>noter</code>, the <code>augment</code>/<code>jitter</code> config fields, the
+    <code>enable_augment</code> / <code>_jitter_box</code> dataset methods and the datamodules'
+    augment-branch (which also drops the <code>copy</code>/<code>Subset</code> shallow-copy dance — the
+    train and val views now share one clean transform), and the <code>pixel_hist.py</code> diagnostic that
+    existed only to calibrate ScanAugment. <strong>Letterbox resize and per-image normalisation stay</strong>
+    — those are the active, production resize/normalise path, not augmentation.
+  </p>
+  <p>
+    One backward-compat fix this surfaced: <code>noter</code> and <code>scorer</code>'s
+    <code>config_from_checkpoint</code> rebuilt configs with a bare <code>Config(**hyper_params)</code>, so a
+    checkpoint that saved the now-deleted fields would crash on load. Gave both the same unknown-field filter
+    <code>staffer</code> already had (warn + drop). This also retroactively fixes loading any post-<span
+    class="tag">sibelius-detach</span> scorer checkpoint, whose saved <code>detach_crop_box</code> key would
+    otherwise have crashed <code>ScorerConfig(**rest)</code>.
+  </p>
+
+  <div class="outcome">
+    <strong>Outcome.</strong> Behaviour-preserving for every shipped model (all trained with augmentation off).
+    Verified old checkpoints (<span class="tag">tatum</span>, <span class="tag">sibelius-detach</span>) load
+    with the stale fields filtered. ruff + mypy clean, 363 tests green. Net deletion across 9 source files +
+    one script. The <span class="tag">mahler-augment</span> / <code>jitter</code> training cards stay as the
+    historical record of why these were tried.
+  </div>
+</article>
+
 <!-- ── Detach the crop-box gradient permanently ── -->
 <article class="entry">
   <h2>Make the crop-box stop-gradient permanent — drop the <code>--detach-crop-box</code> flag</h2>

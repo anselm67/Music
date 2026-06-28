@@ -14,7 +14,6 @@ from tqdm import tqdm
 from sheetmusic import (
     LetterboxResize,
     PerImageNormalize,
-    ScanAugment,
     Source,
     letterbox_scale,
 )
@@ -33,9 +32,7 @@ class StafferDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]]):
     def __init__(self, config: StafferConfig, source: Source, count: int = -1):
         self.config = config
         self.source = source
-        # Clean transform (no augment); the datamodule calls enable_augment on the
-        # train view only, leaving validation on un-augmented pages.
-        self.transform = self._build_transform(0.0)
+        self.transform = self._build_transform()
         # Build flat list of (score id, page_number) pairs
         logging.info("Initializing StafferDataset...")
         self.items = []
@@ -69,9 +66,8 @@ class StafferDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]]):
                 break
         logging.info(f"\tStafferDataset: {len(self.items)} samples.")
 
-    def _build_transform(self, augment: float) -> v2.Transform:
-        """Image transform; ScanAugment (prob ``augment``, 0 = off) runs on the
-        float [0,1] page before per-image normalisation."""
+    def _build_transform(self) -> v2.Transform:
+        """Image transform: grayscale, letterbox resize, per-image normalisation."""
         return v2.Compose(
             [
                 v2.Grayscale(),
@@ -82,18 +78,9 @@ class StafferDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]]):
                     fill=255,
                 ),
                 v2.ToDtype(torch.float, scale=True),
-                ScanAugment(augment),
                 PerImageNormalize(),
             ]
         )
-
-    def enable_augment(self, prob: float) -> None:
-        """Rebuild the transform with scan augmentation at probability ``prob``.
-
-        Called by the datamodule on the (shallow-copied) train view only, so
-        validation keeps the clean transform built in ``__init__``.
-        """
-        self.transform = self._build_transform(prob)
 
     def __len__(self) -> int:
         return len(self.items)
