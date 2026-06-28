@@ -52,7 +52,10 @@ class NoterConfig:
     in_channels: int = 1
     embed_dim: int = 256  # Also known as D
     patch_width: int = 4
-    patch_height: int = -1
+    # Patch height in px; 16 = four vertical bands over the 64px crop, giving the
+    # encoder the vertical resolution to localise articulations above/below the
+    # staff (vs one full-height band). -1 falls back to the full input height.
+    patch_height: int = 16
     num_head: int = 8
     num_encoder_layers: int = 4
     num_decoder_layers: int = 4
