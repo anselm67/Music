@@ -368,7 +368,10 @@ class ScorerModule(L.LightningModule):
         stray = [
             k
             for k in result.missing_keys
-            if not any(s in k for s in ("cross_stave", "norm_xs", "xs_gate"))
+            if not any(
+                s in k
+                for s in ("cross_stave", "norm_xs", "xs_gate", "art_proj", "art_head")
+            )
         ]
         if stray or result.unexpected_keys:
             raise RuntimeError(

@@ -49,19 +49,16 @@ class NoterModule(L.LightningModule):
         labels = target[:, :, 1:].clone()  # (B, S, T-1, max_chords)
         labels[~stave_mask] = Vocab.PAD
 
-        if self.config.articulations:
-            # The input note's articulation is fed back alongside its token; the
-            # head predicts the *next* note's articulation (shifted, like tokens).
-            logits, art_logits = self.model.forward_both(
-                source,
-                source_widths,
-                tgt_in,
-                stave_mask,
-                causal,
-                articulations[:, :, :-1],
-            )
-        else:
-            logits = self.model(source, source_widths, tgt_in, stave_mask, causal)
+        # The input note's articulation is fed back alongside its token; the
+        # head predicts the *next* note's articulation (shifted, like tokens).
+        logits, art_logits = self.model.forward_both(
+            source,
+            source_widths,
+            tgt_in,
+            stave_mask,
+            causal,
+            articulations[:, :, :-1],
+        )
 
         V = logits.shape[-1]
         loss = F.cross_entropy(
@@ -79,10 +76,9 @@ class NoterModule(L.LightningModule):
         self.log(f"{stage}/loss", loss, prog_bar=True)
         self.log(f"{stage}/accuracy", accuracy, prog_bar=True)
 
-        if self.config.articulations:
-            loss = loss + self._articulation_loss(
-                art_logits, articulations[:, :, 1:], slot_mask, stage
-            )
+        loss = loss + self._articulation_loss(
+            art_logits, articulations[:, :, 1:], slot_mask, stage
+        )
 
         if stage == "train":
             self.log("train/lr", self.trainer.optimizers[0].param_groups[0]["lr"])
@@ -128,9 +124,8 @@ class NoterModule(L.LightningModule):
         siblings' rows ``< t`` through the cross-stave attention. A staff finishes at
         its own EOS; padded staves start finished.
 
-        With ``return_articulations`` (requires ``config.articulations``), also
-        returns the row-aligned generated articulation multi-hot
-        ``(B, S, T-1, max_chords, NUM_ARTICULATIONS)``.
+        With ``return_articulations``, also returns the row-aligned generated
+        articulation multi-hot ``(B, S, T-1, max_chords, NUM_ARTICULATIONS)``.
         """
         B, S, c = source.shape[0], source.shape[1], self.config
         flat_src = source.reshape(B * S, *source.shape[2:])
@@ -138,38 +133,27 @@ class NoterModule(L.LightningModule):
         generated = torch.full(
             (B, S, 1, c.max_chords), Vocab.SOS, device=self.device, dtype=torch.long
         )
-        # When the articulation head is on, carry a parallel buffer of generated
-        # articulations (SOS row = zeros) and feed it back as input, mirroring the
-        # teacher-forced training path. The buffer is row-aligned with `generated`.
-        art = (
-            torch.zeros(B, S, 1, c.max_chords, NUM_ARTICULATIONS, device=self.device)
-            if c.articulations
-            else None
-        )
+        # Carry a parallel buffer of generated articulations (SOS row = zeros) and
+        # feed it back as input, mirroring the teacher-forced training path. The
+        # buffer is row-aligned with `generated`.
+        art = torch.zeros(B, S, 1, c.max_chords, NUM_ARTICULATIONS, device=self.device)
         done = ~stave_mask.clone()  # padded staves emit EOS immediately
         for _ in range(c.max_seqlen - 1):
             T = generated.shape[2]
             causal = self._causal_mask(T)
-            if c.articulations:
-                logits, art_logits = self.model.decode_both(
-                    generated, memory, mem_pad, stave_mask, causal, art
-                )
-            else:
-                logits = self.model.decode(
-                    generated, memory, mem_pad, stave_mask, causal
-                )
+            logits, art_logits = self.model.decode_both(
+                generated, memory, mem_pad, stave_mask, causal, art
+            )
             next_tokens = logits[:, :, -1, :, :].argmax(dim=-1)  # (B, S, max_chords)
             next_tokens[done] = Vocab.EOS  # keep finished staves at EOS
             done = done | (next_tokens[..., 0] == Vocab.EOS)
             generated = torch.cat([generated, next_tokens.unsqueeze(2)], dim=2)
-            if art is not None:
-                next_art = (art_logits[:, :, -1] > 0).float()  # (B, S, mc, A)
-                next_art[done] = 0.0  # finished staves carry no articulation
-                art = torch.cat([art, next_art.unsqueeze(2)], dim=2)
+            next_art = (art_logits[:, :, -1] > 0).float()  # (B, S, mc, A)
+            next_art[done] = 0.0  # finished staves carry no articulation
+            art = torch.cat([art, next_art.unsqueeze(2)], dim=2)
             if done.all():
                 break
         if return_articulations:
-            assert art is not None, "return_articulations needs config.articulations"
             return generated[:, :, 1:], art[:, :, 1:]  # strip SOS
         return generated[:, :, 1:]  # strip SOS
 

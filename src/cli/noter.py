@@ -433,19 +433,10 @@ def grow_checkpoint(src_ckpt: Path, out_ckpt: Path, vocab_path: Path) -> None:
     "KernSheet without checkpoint surgery (the extra rows stay unlearned).",
 )
 @click.option(
-    "--articulations",
-    is_flag=True,
-    default=False,
-    help="Enable the separate articulation flow: a per-note multi-hot (tie, "
-    "staccato, fermata, accent) with its own head + input feedback, alongside "
-    "the unchanged pitch x duration token.",
-)
-@click.option(
     "--articulation-weight",
     type=float,
     default=None,
-    help="BCE weight for the articulation head (default 1.0); only with "
-    "--articulations.",
+    help="BCE weight for the articulation head (default 1.0).",
 )
 @click.option(
     "--kern-sheet",
@@ -471,7 +462,6 @@ def train(
     valid_len: int,
     lr: float | None,
     warmup_steps: int,
-    articulations: bool,
     articulation_weight: float | None,
     vocab_path: Path | None,
     kern_sheet: tuple[Path, float] | None,
@@ -493,12 +483,11 @@ def train(
             or valid_len > 0
             or lr is not None
             or warmup_steps >= 0
-            or articulations
             or articulation_weight is not None
         ):
             logging.warning(
                 "Resuming from checkpoint; --train-len/--valid-len/--lr/--warmup-"
-                "steps/--articulations(-weight) ignored."
+                "steps/--articulation-weight ignored."
             )
     else:
         ckpt_path = None
@@ -512,7 +501,6 @@ def train(
             config.lr = lr
         if warmup_steps >= 0:
             config.warmup_steps = warmup_steps
-        config.articulations = articulations
         if articulation_weight is not None:
             config.articulation_weight = articulation_weight
 
@@ -849,7 +837,6 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
     indices = random.sample(range(len(dataset)), n)
 
     # Free-running articulation tallies, per flag in ARTICULATIONS order.
-    art = config.articulations
     tp = np.zeros(len(ARTICULATIONS), dtype=np.int64)
     fp = np.zeros(len(ARTICULATIONS), dtype=np.int64)
     fn = np.zeros(len(ARTICULATIONS), dtype=np.int64)
@@ -865,14 +852,10 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
             images.unsqueeze(0).to(device),
             widths.unsqueeze(0).to(device),
             mask.unsqueeze(0).to(device),
-            return_articulations=art,
+            return_articulations=True,
         )
-        if art:
-            assert isinstance(out, tuple)
-            predicted, pred_arts = out[0][0].cpu(), out[1][0].cpu()
-        else:
-            assert isinstance(out, Tensor)
-            predicted = out[0].cpu()
+        assert isinstance(out, tuple)
+        predicted, pred_arts = out[0][0].cpu(), out[1][0].cpu()
 
         for g in valid.tolist():
             gt_tokens = strip_eos(gt_sequences[g][1:], Vocab.EOS)
@@ -882,12 +865,11 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
             similarity = 1.0 - edit_dist / max_cost if max_cost > 0 else 1.0
             similarities.append(similarity)
 
-            if art:
-                # Score articulation bits at the note slots the token alignment
-                # matches; gt/pred arts are row-aligned with their token rows.
-                gt_a = gt_articulations[g][1 : 1 + len(gt_tokens)]
-                pred_a = pred_arts[g][: len(pred_tokens)]
-                _tally_articulations(gt_tokens, gt_a, pred_tokens, pred_a, tp, fp, fn)
+            # Score articulation bits at the note slots the token alignment
+            # matches; gt/pred arts are row-aligned with their token rows.
+            gt_a = gt_articulations[g][1 : 1 + len(gt_tokens)]
+            pred_a = pred_arts[g][: len(pred_tokens)]
+            _tally_articulations(gt_tokens, gt_a, pred_tokens, pred_a, tp, fp, fn)
 
     if not similarities:
         print("No samples to evaluate.")
@@ -897,21 +879,20 @@ def run_eval(ctx: ClickContext, name: str, size: int) -> None:
     print(f"  avg: {sum(similarities) / len(similarities):.1%}")
     print(f"  max: {max(similarities):.1%}")
 
-    if art:
-        print("\nArticulations (free-running, per flag):")
-        print(f"  {'flag':<16}{'prec':>7}{'rec':>7}{'F1':>7}{'support':>9}")
-        for k, code in enumerate(ARTICULATIONS):
-            support = int(tp[k] + fn[k])
-            prec = tp[k] / (tp[k] + fp[k]) if tp[k] + fp[k] else 0.0
-            rec = tp[k] / support if support else 0.0
-            f1 = 2 * prec * rec / (prec + rec) if prec + rec else 0.0
-            label = f"{code} {_ARTICULATION_NAMES[k]}"
-            print(f"  {label:<16}{prec:>7.1%}{rec:>7.1%}{f1:>7.1%}{support:>9}")
-        t, f_, n_ = int(tp.sum()), int(fp.sum()), int(fn.sum())
-        prec = t / (t + f_) if t + f_ else 0.0
-        rec = t / (t + n_) if t + n_ else 0.0
+    print("\nArticulations (free-running, per flag):")
+    print(f"  {'flag':<16}{'prec':>7}{'rec':>7}{'F1':>7}{'support':>9}")
+    for k, code in enumerate(ARTICULATIONS):
+        support = int(tp[k] + fn[k])
+        prec = tp[k] / (tp[k] + fp[k]) if tp[k] + fp[k] else 0.0
+        rec = tp[k] / support if support else 0.0
         f1 = 2 * prec * rec / (prec + rec) if prec + rec else 0.0
-        print(f"  {'(micro avg)':<16}{prec:>7.1%}{rec:>7.1%}{f1:>7.1%}{t + n_:>9}")
+        label = f"{code} {_ARTICULATION_NAMES[k]}"
+        print(f"  {label:<16}{prec:>7.1%}{rec:>7.1%}{f1:>7.1%}{support:>9}")
+    t, f_, n_ = int(tp.sum()), int(fp.sum()), int(fn.sum())
+    prec = t / (t + f_) if t + f_ else 0.0
+    rec = t / (t + n_) if t + n_ else 0.0
+    f1 = 2 * prec * rec / (prec + rec) if prec + rec else 0.0
+    print(f"  {'(micro avg)':<16}{prec:>7.1%}{rec:>7.1%}{f1:>7.1%}{t + n_:>9}")
 
 
 @click.command()

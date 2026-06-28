@@ -40,9 +40,7 @@ class NoterConfig:
 
     # Separate articulation flow: a per-note multi-hot (tie, staccato, fermata,
     # accent) predicted by its own head and fed back on the input side, alongside
-    # the pitch x duration token (which is unchanged). Off by default so existing
-    # checkpoints and the scorer are unaffected.
-    articulations: bool = False
+    # the pitch x duration token (which is unchanged). Always on.
     # BCE weight for the articulation head. The duration-head pilot showed a high
     # auxiliary weight taxes the primary (pitch) task; keep this at parity (1.0).
     articulation_weight: float = 1.0
@@ -135,20 +133,17 @@ class TargetEmbedder(nn.Module):
         )
         # Per-slot articulation injected on the input side as a learned projection
         # of the multi-hot, mirroring the (separate) articulation head. Zero-init
-        # so the token path is unperturbed at the start of training (identity), and
-        # so a checkpoint trained without articulations loads unchanged.
-        self.art_proj: nn.Linear | None = None
-        if config.articulations:
-            self.art_proj = nn.Linear(NUM_ARTICULATIONS, config.embed_dim)
-            nn.init.zeros_(self.art_proj.weight)
-            nn.init.zeros_(self.art_proj.bias)
+        # so the token path is unperturbed at the start of training (identity).
+        self.art_proj = nn.Linear(NUM_ARTICULATIONS, config.embed_dim)
+        nn.init.zeros_(self.art_proj.weight)
+        nn.init.zeros_(self.art_proj.bias)
         self.norm = nn.LayerNorm(config.embed_dim)
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, target: Tensor, articulations: Tensor | None = None) -> Tensor:
         embeds = self.embedding(target)  # (B, T, H, D)
         embeds = embeds + self.chord_pos_embed  # per-slot position signal
-        if articulations is not None and self.art_proj is not None:
+        if articulations is not None:
             embeds = embeds + self.art_proj(articulations)  # (B, T, H, D)
         B, T, H, D = embeds.shape
         assert T <= self.pos_embed.shape[0], (
@@ -261,12 +256,10 @@ class NoterModel(nn.Module):
         )
         self.decoder = CrossStaveDecoder(config)
         self.mlp = nn.Linear(config.embed_dim, config.max_chords * config.vocab_size)
-        # Separate per-slot articulation head (multi-label logits), only when enabled.
-        self.art_head: nn.Linear | None = None
-        if config.articulations:
-            self.art_head = nn.Linear(
-                config.embed_dim, config.max_chords * NUM_ARTICULATIONS
-            )
+        # Separate per-slot articulation head (multi-label logits).
+        self.art_head = nn.Linear(
+            config.embed_dim, config.max_chords * NUM_ARTICULATIONS
+        )
 
     def make_src_padding_mask(self, widths: Tensor) -> Tensor:
         """
@@ -363,11 +356,10 @@ class NoterModel(nn.Module):
         memory_pad_mask: Tensor,  # (B*S, P)
         stave_mask: Tensor,  # (B, S) — True on real staves
         target_mask: Tensor,  # (T, T) causal
-        articulations: Tensor | None,  # (B, S, T, max_chords, NUM_ARTICULATIONS)
+        articulations: Tensor,  # (B, S, T, max_chords, NUM_ARTICULATIONS)
     ) -> tuple[Tensor, Tensor]:
         """Decode → (token logits ``(B,S,T,mc,vocab)``, articulation logits
-        ``(B,S,T,mc,NUM_ARTICULATIONS)``). Requires ``config.articulations``."""
-        assert self.art_head is not None, "decode_both needs config.articulations"
+        ``(B,S,T,mc,NUM_ARTICULATIONS)``)."""
         outs, (bsz, staves, t, mc) = self._decode_hidden(
             target, memory, memory_pad_mask, stave_mask, target_mask, articulations
         )
@@ -398,7 +390,7 @@ class NoterModel(nn.Module):
         articulations: Tensor,  # (B, S, T, max_chords, NUM_ARTICULATIONS)
     ) -> tuple[Tensor, Tensor]:
         """``forward`` with the articulation head: (token logits, articulation
-        logits). Requires ``config.articulations``."""
+        logits)."""
         bsz, staves = source.shape[:2]
         flat_src = source.reshape(bsz * staves, *source.shape[2:])
         memory, mem_pad = self.encode(flat_src, source_widths.reshape(bsz * staves))

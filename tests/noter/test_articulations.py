@@ -6,9 +6,8 @@ from noter import NoterConfig, NoterModule
 from noter.noter_model import NoterModel
 
 
-def _tiny_config(articulations: bool) -> NoterConfig:
+def _tiny_config() -> NoterConfig:
     cfg = NoterConfig(
-        articulations=articulations,
         embed_dim=32,
         num_head=2,
         num_encoder_layers=1,
@@ -38,15 +37,14 @@ def _batch(
     return source, widths, target, arts, stave_mask
 
 
-def test_heads_only_built_when_enabled() -> None:
-    off = NoterModel(_tiny_config(False))
-    assert off.art_head is None and off.target_embedder.art_proj is None
-    on = NoterModel(_tiny_config(True))
-    assert on.art_head is not None and on.target_embedder.art_proj is not None
+def test_heads_always_built() -> None:
+    model = NoterModel(_tiny_config())
+    assert isinstance(model.art_head, torch.nn.Linear)
+    assert isinstance(model.target_embedder.art_proj, torch.nn.Linear)
 
 
 def test_forward_both_shapes_and_backward() -> None:
-    cfg = _tiny_config(True)
+    cfg = _tiny_config()
     model = NoterModel(cfg)
     source, widths, target, arts, stave_mask = _batch(cfg)
     causal = torch.ones(target.shape[2], target.shape[2], dtype=torch.bool).triu(1)
@@ -64,7 +62,7 @@ def test_forward_both_shapes_and_backward() -> None:
 def test_zero_init_feedback_is_identity_for_tokens() -> None:
     """At init the articulation feedback is zero-init, so the token logits are
     identical whether or not articulations are fed — the token path is unperturbed."""
-    cfg = _tiny_config(True)
+    cfg = _tiny_config()
     model = NoterModel(cfg).eval()
     source, widths, target, arts, stave_mask = _batch(cfg)
     causal = torch.ones(target.shape[2], target.shape[2], dtype=torch.bool).triu(1)
@@ -78,7 +76,7 @@ def test_zero_init_feedback_is_identity_for_tokens() -> None:
 
 
 def test_module_step_and_predict() -> None:
-    cfg = _tiny_config(True)
+    cfg = _tiny_config()
     module = NoterModule(cfg)
     batch = _batch(cfg)
     loss = module._step(batch, "val")
