@@ -242,6 +242,13 @@ def check(ctx: ClickContext) -> None:
     help="Number of workers for the dataset loader.",
 )
 @click.option(
+    "--batch-size",
+    type=int,
+    default=-1,
+    help="Override the joint batch size (default 8). Lower it for a heavier noter "
+    "geometry (e.g. patch_height=4 = 3072 patches) that overflows GPU memory.",
+)
+@click.option(
     "--train-len",
     type=int,
     default=-1,
@@ -303,6 +310,7 @@ def train(
     early_stopping: float,
     epochs: int,
     num_workers: int,
+    batch_size: int,
     train_len: int,
     valid_len: int,
     lr: float | None,
@@ -331,17 +339,20 @@ def train(
         if (
             train_len > 0
             or valid_len > 0
+            or batch_size > 0
             or lr is not None
             or warmup_steps >= 0
             or freeze_staffer_steps >= 0
         ):
             logging.warning(
-                "Resuming from checkpoint; --train-len/--valid-len/--lr/"
+                "Resuming from checkpoint; --batch-size/--train-len/--valid-len/--lr/"
                 "--warmup-steps/--freeze-staffer-steps ignored."
             )
     else:
         config = replace(ctx.config, id_name=name)
         config.use_vocab(vocab)
+        if batch_size > 0:
+            config.batch_size = batch_size
         if train_len > 0:
             config.train_len = train_len
         if valid_len > 0:
