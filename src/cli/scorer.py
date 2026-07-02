@@ -22,7 +22,7 @@ from matplotlib.backend_bases import Event, KeyEvent
 from torchvision.io import decode_image
 from tqdm import tqdm
 
-from kern import ARTICULATIONS
+from kern import ARTICULATIONS, join_articulation
 from kernsheet import KernSheet, KernSheetSource
 from noter import NoterConfig, Vocab, report_articulations, tally_articulations
 from pdmx import PDMX, PdmxSource
@@ -610,18 +610,38 @@ def logs(
     print("Bye!")
 
 
-def _format_system(gt_seqs: list[list[str]], pred_seqs: list[list[str]]) -> str:
-    """Token-parallel multi-stave side-by-side display for one system."""
+def _format_system(
+    gt_seqs: list[list[str]],
+    pred_seqs: list[list[str]],
+    gt_art_seqs: list[list[str]] | None = None,
+    pred_art_seqs: list[list[str]] | None = None,
+) -> str:
+    """Token-parallel multi-stave side-by-side display for one system.
+
+    ``gt_art_seqs`` / ``pred_art_seqs`` (parallel to ``gt_seqs`` / ``pred_seqs``) carry
+    a per-timestep articulation suffix (``@sf`` or ``""``, from :func:`_art_suffixes`)
+    rendered in bright cyan after each token. They are display-only — never compared —
+    so articulations never light the red mismatch marker nor count toward accuracy.
+    """
     _RED = "\033[31m"
+    _CYAN = "\033[96m"  # bright cyan — clearly distinct from red across themes
     _RESET = "\033[0m"
+
+    def art(seqs: list[list[str]] | None, i: int, t: int) -> str:
+        if seqs is None or i >= len(seqs):
+            return ""
+        return seqs[i][t] if t < len(seqs[i]) else ""
+
+    def width(i: int, seq: list[str], arts: list[list[str]] | None, label: str) -> int:
+        cells = (len(t) + len(art(arts, i, ti)) for ti, t in enumerate(seq))
+        return max(max(cells, default=0), len(label)) + 2
+
     n_gt, n_pred = len(gt_seqs), len(pred_seqs)
     gt_widths = [
-        max(max((len(t) for t in seq), default=0), len(f"GT[{i}]")) + 2
-        for i, seq in enumerate(gt_seqs)
+        width(i, seq, gt_art_seqs, f"GT[{i}]") for i, seq in enumerate(gt_seqs)
     ]
     pred_widths = [
-        max(max((len(t) for t in seq), default=0), len(f"Pred[{i}]")) + 2
-        for i, seq in enumerate(pred_seqs)
+        width(i, seq, pred_art_seqs, f"Pred[{i}]") for i, seq in enumerate(pred_seqs)
     ]
     all_seqs = gt_seqs + pred_seqs
     max_len = max((len(s) for s in all_seqs), default=0)
@@ -631,22 +651,41 @@ def _format_system(gt_seqs: list[list[str]], pred_seqs: list[list[str]]) -> str:
     )
     rows = [f"{header_gt}| {header_pred}"]
     for t in range(max_len):
-        gt_parts = [
-            f"{(seq[t] if t < len(seq) else ''):<{w}}"
-            for seq, w in zip(gt_seqs, gt_widths)
-        ]
+        gt_parts = []
+        for i, (seq, w) in enumerate(zip(gt_seqs, gt_widths)):
+            tok = seq[t] if t < len(seq) else ""
+            suffix = art(gt_art_seqs, i, t) if tok else ""
+            cyan = f"{_CYAN}{suffix}{_RESET}" if suffix else ""
+            # Pad by visible width; the ANSI escapes are zero-width.
+            gt_parts.append(tok + cyan + " " * (w - len(tok) - len(suffix)))
         pred_parts = []
         for i, (seq, w) in enumerate(zip(pred_seqs, pred_widths)):
             tok = seq[t] if t < len(seq) else ""
             gt_tok = gt_seqs[i][t] if i < n_gt and t < len(gt_seqs[i]) else None
             is_mismatch = gt_tok is not None and tok != gt_tok
-            # Pad by raw length before adding ANSI codes (escape chars are invisible).
-            padded = f"{tok:<{w}}"
-            if is_mismatch:
-                padded = f"{_RED}{tok}{_RESET}" + " " * (w - len(tok))
-            pred_parts.append(padded)
+            suffix = art(pred_art_seqs, i, t) if tok else ""
+            base = f"{_RED}{tok}{_RESET}" if is_mismatch else tok
+            cyan = f"{_CYAN}{suffix}{_RESET}" if suffix else ""
+            pred_parts.append(base + cyan + " " * (w - len(tok) - len(suffix)))
         rows.append("".join(gt_parts) + "| " + "".join(pred_parts))
     return "\n".join(rows)
+
+
+def _art_suffixes(vocab: Vocab, ids: torch.Tensor, arts: torch.Tensor) -> list[str]:
+    """Per-timestep articulation suffix (e.g. ``@sf``) for a predicted stave.
+
+    Reuses :func:`join_articulation` on the union of set bits across the chord's real
+    (non-SIL/PAD) note slots; aligned 1:1 with :meth:`Vocab.i2tok` (same EOS cut).
+    Display-only — the model's own per-note bits still drive scoring in ``eval``.
+    """
+    rows: list[str] = []
+    for i in range(len(ids)):
+        if ids[i, 0] == vocab.EOS:
+            break
+        real = (ids[i] != vocab.SIL) & (ids[i] != vocab.PAD)
+        flags = (arts[i].bool() & real.unsqueeze(-1)).any(dim=0).tolist()
+        rows.append(join_articulation("", flags))
+    return rows
 
 
 def _similarity(gt_seq: torch.Tensor, pred_seq: torch.Tensor, max_chords: int) -> float:
@@ -718,19 +757,21 @@ def predict_from_images(
 ) -> None:
     for path in img_paths:
         image = dataset.transform(decode_image(path.as_posix())).to(module.device)
-        boxes, tokens, _arts, owners = module.predict(image.unsqueeze(0))
+        boxes, tokens, arts, owners = module.predict(image.unsqueeze(0))
         img = to_display(image)
         _draw_boxes(img, boxes, owners)
         pred_by_sys = _group_by_system(owners, boxes.shape[0])
         click.clear()
         print(f"{path}: detected {boxes.shape[0]} staves")
         for sys_id in range(max(pred_by_sys.keys(), default=-1) + 1):
-            pred_seqs = [
-                dataset.vocab.i2tok(tokens[k].cpu())
-                for k in pred_by_sys.get(sys_id, [])
+            members = pred_by_sys.get(sys_id, [])
+            pred_seqs = [dataset.vocab.i2tok(tokens[k].cpu()) for k in members]
+            pred_art_seqs = [
+                _art_suffixes(dataset.vocab, tokens[k].cpu(), arts[k].cpu())
+                for k in members
             ]
             print(f"\n── system[{sys_id}] ──")
-            print(_format_system([], pred_seqs))
+            print(_format_system([], pred_seqs, pred_art_seqs=pred_art_seqs))
         cv2.imshow("Page", img)
         if cv2.waitKey(0) == ord("q"):
             break
@@ -746,10 +787,10 @@ def predict_from_dataset(
         # resolve() reports the page actually built: __getitem__ skips pages whose
         # GT can't be assembled, so dataset.items[idx] can name a different page
         # than the sample returned. Use the resolved index for the printed path.
-        idx, (image, _gt_sys, _gt_stave, gt_assign, stave_tokens, _arts) = (
+        idx, (image, _gt_sys, _gt_stave, gt_assign, stave_tokens, gt_arts) = (
             dataset.resolve(idx)
         )
-        boxes, tokens, _pred_arts, owners = module.predict(
+        boxes, tokens, pred_arts, owners = module.predict(
             image.unsqueeze(0).to(module.device)
         )
         num_gt = int((gt_assign != -1).sum())
@@ -766,16 +807,20 @@ def predict_from_dataset(
         print(dataset.source.image_path(score_id, page_number))
         print(f"Item {idx}: detected {boxes.shape[0]} staves (GT {num_gt})")
         for sys_id in range(num_systems):
-            gt_seqs = [
-                dataset.vocab.i2tok(stave_tokens[k][1:])
-                for k in gt_by_sys.get(sys_id, [])
+            gt_members = gt_by_sys.get(sys_id, [])
+            gt_seqs = [dataset.vocab.i2tok(stave_tokens[k][1:]) for k in gt_members]
+            gt_art_seqs = [
+                _art_suffixes(dataset.vocab, stave_tokens[k][1:], gt_arts[k][1:])
+                for k in gt_members
             ]
-            pred_seqs = [
-                dataset.vocab.i2tok(tokens[k].cpu())
-                for k in pred_by_sys.get(sys_id, [])
+            members = pred_by_sys.get(sys_id, [])
+            pred_seqs = [dataset.vocab.i2tok(tokens[k].cpu()) for k in members]
+            pred_art_seqs = [
+                _art_suffixes(dataset.vocab, tokens[k].cpu(), pred_arts[k].cpu())
+                for k in members
             ]
             print(f"\n── system[{sys_id}] ──")
-            print(_format_system(gt_seqs, pred_seqs))
+            print(_format_system(gt_seqs, pred_seqs, gt_art_seqs, pred_art_seqs))
         cv2.imshow("Page", img)
         if cv2.waitKey(0) == ord("q"):
             break
