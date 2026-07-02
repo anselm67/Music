@@ -47,12 +47,12 @@ def test_chord_notes_sorted_low_to_high(tmp_path: Path) -> None:
 
 
 def test_split_articulation() -> None:
-    # bits: [tie-to-next, tie-from-prev, staccato, fermata, accent]
+    # bits: [arc-start, arc-end, staccato, fermata, accent]
     F = False
-    assert split_articulation("c/4@[f") == ("c/4", [True, F, F, True, F])
+    assert split_articulation("c/4@<f") == ("c/4", [True, F, F, True, F])
     assert split_articulation("c/4@a") == ("c/4", [F, F, F, F, True])
-    # A tie-middle (`_`) folds into both tie bits.
-    assert split_articulation("c/4@[]") == ("c/4", [True, True, F, F, F])
+    # A tie-middle (`_`) opens AND closes the arc.
+    assert split_articulation("c/4@<>") == ("c/4", [True, True, F, F, F])
     assert split_articulation("c/4") == ("c/4", [F, F, F, F, F])
     # Non-note tokens have no suffix and pass through unchanged.
     assert split_articulation("=1") == ("=1", [F, F, F, F, F])
@@ -60,15 +60,15 @@ def test_split_articulation() -> None:
 
 def test_join_articulation_round_trip() -> None:
     # join is the inverse of split for every token shape.
-    for token in ("c/4@[f", "c/4@a", "c/4@[]", "d/8:1@sfa", "c/4", "=1"):
+    for token in ("c/4@<f", "c/4@a", "c/4@<>", "d/8:1@sfa", "c/4", "=1"):
         base, flags = split_articulation(token)
         assert join_articulation(base, flags) == token
 
 
 def test_articulation_suffix(tmp_path: Path) -> None:
-    """Tie/staccato/fermata/accent ride a note token as an @-suffix; an unflagged
-    note is unchanged, so its vocab id is untouched. The tie-middle note `e_` ties
-    both ways -> `@[]`."""
+    """Arc (tie or slur) / staccato / fermata / accent ride a note token as an
+    @-suffix; an unflagged note is unchanged, so its vocab id is untouched. The
+    tie-middle note `e_` opens and closes the arc -> `@<>`."""
     kern = """
 **kern
 *clefG2
@@ -88,9 +88,35 @@ def test_articulation_suffix(tmp_path: Path) -> None:
         "=1",
         "c/4@s",
         "d/4@f",
-        "e/4@[",
-        "e/4@[]",
-        "e/4@]",
+        "e/4@<",
+        "e/4@<>",
+        "e/4@>",
+        "==",
+    ]
+
+
+def test_slur_folds_into_arc_bits(tmp_path: Path) -> None:
+    """A slur is the same glyph as a tie, so it feeds the same two arc bits: the
+    slur-opening note gets `@<`, the slur-closing note `@>`. The inner note of a
+    span carries neither (only the endpoints are arc boundaries)."""
+    kern = """
+**kern
+*clefG2
+*M4/4
+=1
+(4c
+4d
+4e)
+==
+""".strip()
+    reader = tokenize_input(tmp_path, kern)
+    assert reader.lines == [
+        "clef-GG",
+        "4/4",
+        "=1",
+        "c/4@<",
+        "d/4",
+        "e/4@>",
         "==",
     ]
 

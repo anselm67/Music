@@ -30,26 +30,30 @@ from kern.typing import (
 # Articulation flags ride alongside a note token as an "@"-suffix of single-char
 # codes, in this fixed order. They are stripped before vocab lookup so the token id
 # is unchanged (pitch x duration only); the noter splits them off into a separate
-# multi-hot channel with its own head. The two tie bits are read as playback
-# semantics: ``[`` = tied to the next note, ``]`` = tied from the previous one. A
-# kern tie-middle (`_`) sets BOTH, so {none, start, middle, end} all fall out of the
-# two bits with no information lost.
+# multi-hot channel with its own head. The first two bits mark an **arc** boundary:
+# ``<`` = an arc opens on this note, ``>`` = an arc closes on it. A tie and a slur are
+# the same glyph (a curved arc), distinguishable only by whether the endpoints share a
+# pitch, so both feed the same two bits — the model detects the arc, and a downstream
+# playback stage keys on pitch to decide fuse (tie) vs legato (slur). A kern tie-middle
+# (`_`) opens AND closes, so a tie chain's {none, start, middle, end} all fall out of
+# the two bits. ``<``/``>`` are used in raw kern only as ``**dynam`` hairpins, which we
+# never tokenize, so they can't collide inside a token file.
 ARTICULATIONS = (
-    "[",
-    "]",
+    "<",
+    ">",
     "s",
     "f",
     "a",
-)  # tie-to-next, tie-from-prev, stacc, ferm, acc
+)  # arc-start, arc-end, stacc, ferm, acc
 NUM_ARTICULATIONS = len(ARTICULATIONS)
 ARTICULATION_SEP = "@"
 
 
 def _note_articulations(note: Note) -> str:
-    """The set codes for ``note`` in ``ARTICULATIONS`` order (e.g. ``"[f"``)."""
+    """The set codes for ``note`` in ``ARTICULATIONS`` order (e.g. ``"<f"``)."""
     flags = (
-        note.starts_tie or note.continues_tie,  # tied to next
-        note.ends_tie or note.continues_tie,  # tied from previous
+        note.starts_tie or note.continues_tie or note.starts_slur,  # arc opens here
+        note.ends_tie or note.continues_tie or note.ends_slur,  # arc closes here
         note.is_staccato,
         note.is_fermata,
         note.is_accent,
@@ -60,7 +64,7 @@ def _note_articulations(note: Note) -> str:
 def split_articulation(token: str) -> tuple[str, list[bool]]:
     """Split a note token into its base (vocab) token and its articulation bits.
 
-    ``"C/4@[f"`` -> ``("C/4", [True, False, False, True, False])``. A token with no
+    ``"C/4@<f"`` -> ``("C/4", [True, False, False, True, False])``. A token with no
     suffix yields all-False bits, so non-note tokens pass through unchanged.
     """
     base, _, codes = token.partition(ARTICULATION_SEP)
@@ -70,7 +74,7 @@ def split_articulation(token: str) -> tuple[str, list[bool]]:
 def join_articulation(base: str, flags: Sequence[bool]) -> str:
     """Inverse of :func:`split_articulation`: reattach the ``@``-code suffix.
 
-    ``("C/4", [True, False, False, True, False])`` -> ``"C/4@[f"``. No set bit
+    ``("C/4", [True, False, False, True, False])`` -> ``"C/4@<f"``. No set bit
     yields ``base`` unchanged.
     """
     codes = "".join(code for code, on in zip(ARTICULATIONS, flags) if on)

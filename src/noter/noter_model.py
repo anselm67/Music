@@ -38,7 +38,7 @@ class NoterConfig:
     vocab_size: int = -1
     pad_idx: int = -1
 
-    # Separate articulation flow: a per-note multi-hot (tie, staccato, fermata,
+    # Separate articulation flow: a per-note multi-hot (arc, staccato, fermata,
     # accent) predicted by its own head and fed back on the input side, alongside
     # the pitch x duration token (which is unchanged). Always on.
     # BCE weight for the articulation head. The duration-head pilot showed a high

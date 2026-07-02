@@ -31,15 +31,15 @@ def test_load_sequence_reads_requested_spine() -> None:
 
 def test_load_splits_articulation_multihot() -> None:
     load_sequence, vocab, source = _loader()
-    # spine 1 = tie-to-next + fermata D. The suffix is stripped for the token id
+    # spine 1 = arc-start + fermata D. The suffix is stripped for the token id
     # and surfaces in the parallel articulation tensor instead.
-    source.records.return_value = ["C/4@s\tD/4@[f"]
+    source.records.return_value = ["C/4@s\tD/4@<f"]
     result = load_sequence.load("x", spine_number=1, first_bar=1, last_bar=2)
     assert result is not None
     seq, arts = result
     # token id unchanged by the suffix (still D/4, no new vocab entry)
     assert vocab.decode(int(seq[1, 0].item())) == "D/4"
-    # row 1 (first note after SOS), slot 0: [tie-to-next, tie-from-prev, s, f, a]
+    # row 1 (first note after SOS), slot 0: [arc-start, arc-end, s, f, a]
     assert arts[1, 0].tolist() == [1.0, 0.0, 0.0, 1.0, 0.0]
     # SOS row carries no articulations
     assert arts[0].sum().item() == 0.0

@@ -2,7 +2,7 @@
 
 Used by both the standalone noter (``NoterModule`` / ``noter`` CLI) and the
 end-to-end scorer (``ScorerModule`` / ``scorer`` CLI) so the two never drift on
-how the per-note multi-hot (tie / staccato / fermata / accent) is scored.
+how the per-note multi-hot (arc / staccato / fermata / accent) is scored.
 """
 
 import numpy as np
@@ -16,7 +16,7 @@ from utils import align_sequences
 from .noter_vocab import Vocab
 
 # Display names aligned to the ``kern.ARTICULATIONS`` flag order.
-ARTICULATION_NAMES = ("tie-to-next", "tie-from-prev", "staccato", "fermata", "accent")
+ARTICULATION_NAMES = ("arc-start", "arc-end", "staccato", "fermata", "accent")
 
 
 def articulation_loss(
