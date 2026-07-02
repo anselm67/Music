@@ -56,6 +56,7 @@
     .badge.superseded{ background: var(--slate-bg); border-color: var(--slate-bd); color: var(--slate-tx); }
     .badge.deferred  { background: var(--amber-bg); border-color: var(--amber-bd); color: var(--amber-tx); }
     .badge.rejected  { background: var(--rose-bg);  border-color: var(--rose-bd);  color: var(--rose-tx); }
+    .badge.pending   { background: var(--blue-bg);  border-color: var(--blue-bd);  color: var(--blue-tx); }
     .ref { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; }
 
     .rationale-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 0.75rem 0; }
@@ -92,6 +93,81 @@
      <article class="entry"> … </article> block directly below this comment,
      following the format of the entries that follow. Keep newest-first order.
      ════════════════════════════════════════════════════════════════════════ -->
+
+<!-- ── Merge ties + slurs into one "arc" articulation ── -->
+<article class="entry">
+  <h2>Merge ties and slurs into a single "arc" articulation; disambiguate at playback</h2>
+  <div class="entry-meta">
+    <span>2026-07-02</span>
+    <span class="badge pending">Pending — experiment in flight, from-scratch retrain (~48h)</span>
+    <span class="ref">flags <code>&lt;</code> / <code>&gt;</code> · <code>kern/tokenizer.py</code> <code>_note_articulations</code> · <code>noter/articulation.py</code></span>
+  </div>
+
+  <h3>Context</h3>
+  <p>
+    A tie (<code>[</code>/<code>]</code>/<code>_</code>) and a slur (<code>(</code>/<code>)</code>) are the
+    <strong>same glyph</strong> — a curved arc between two noteheads. There is no reliable shape difference;
+    the <em>only</em> discriminator is the endpoints' pitch: an arc between two notes of the <strong>same
+    pitch</strong> is a tie (fuse into one sustained sound), an arc between <strong>different pitches</strong> is
+    a slur (legato, no note-identity change). Today the articulation head carries two tie-specific bits
+    (<code>tie-to-next</code>, <code>tie-from-prev</code>) and <strong>drops slurs entirely</strong>
+    (<code>starts_slur</code>/<code>ends_slur</code> are parsed onto the <code>Note</code> but never emitted).
+    Beams (<code>L</code>/<code>J</code>) are correctly dropped as redundant with duration. Phrases
+    (<code>{</code>/<code>}</code>) are also arcs but structural, and stay dropped.
+  </p>
+
+  <h3>Decision</h3>
+  <p>
+    Have the model detect the <strong>arc</strong>, not the tie-vs-slur distinction it cannot see, and defer
+    the fuse-or-legato decision to a (future) playback stage where pitch is known exactly.
+  </p>
+  <ul>
+    <li><strong>Tokenizer</strong>: <code>_note_articulations</code> sets the two arc bits from ties
+      <em>or</em> slurs — <code>arc-start = starts_tie | continues_tie | starts_slur</code>,
+      <code>arc-end = ends_tie | continues_tie | ends_slur</code>. Staccato/fermata/accent unchanged.
+      <code>NUM_ARTICULATIONS</code> stays 5, so model geometry is untouched.</li>
+    <li><strong>Rename (semantics changed → names follow)</strong>: the <code>ARTICULATIONS</code> codes for the
+      two bits become <code>&lt;</code> / <code>&gt;</code> (arc-open / arc-close), and
+      <code>ARTICULATION_NAMES</code> becomes <code>arc-start</code> / <code>arc-end</code>. Chosen because
+      <code>[</code>/<code>]</code>/<code>(</code>/<code>)</code> are the raw-kern tie/slur brackets (maximally
+      confusing as our own codes), whereas <code>&lt;</code>/<code>&gt;</code> are kern <em>hairpin dynamics</em>
+      that live only in <code>**dynam</code> spines we never tokenize — so they never collide inside a
+      <code>.tokens</code> file.</li>
+    <li><strong>Re-tokenize</strong> all three corpora (PDMX, KernSheet, kern-sheet-edit): the <code>@</code>-suffix
+      changes on every slurred note. Vocab is <em>unaffected</em> (the suffix is stripped before vocab lookup),
+      so base token IDs — and thus token-accuracy comparability — are preserved.</li>
+    <li><strong>Retrain from scratch</strong>: noter first, then the scorer pipeline, on the re-tokenized data.</li>
+  </ul>
+
+  <h3>Rationale</h3>
+  <div class="rationale-grid">
+    <div class="rationale-card">
+      <h4>Why it should help accuracy</h4>
+      <p><strong>Well-posed target.</strong> Today the model is scored on a distinction (tie vs slur) invisible
+        in the glyph, so confusable opposite-labels drive false positives/negatives. "Detect an arc" removes the
+        impossible question.</p>
+      <p><strong>More positives.</strong> Folding slurs in gives the sparse arc class many more training
+        instances of the same visual feature — a genuine capacity gain, not just relabeling.</p>
+    </div>
+    <div class="rationale-card">
+      <h4>Costs / caveats</h4>
+      <p><strong>Not a literal A/B.</strong> Old tie-support ≠ new arc-support, so compare new arc P/R/F1 against
+        old tie P/R/F1 as an expectation, not a controlled delta.</p>
+      <p><strong>Lossy for playback.</strong> A slur over a repeated same-pitch note (legato but re-articulated)
+        will false-fuse under naive pitch-equality. Rare and audible; a known future-player decision.</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>Out of scope here.</strong> No player consumes the articulation bits yet — <code>to_midi.py</code>
+    has no tie/slur handling at all. The pitch-equality disambiguator (arc + same pitch ⇒ fuse; else legato) is
+    future work, and that is where the slurred-same-pitch-repeat edge case must be handled.
+  </div>
+
+  <h3>Outcome</h3>
+  <p><em>Pending.</em> Mark accepted/rejected once the noter + scorer retrain lands and the arc P/R/F1 is in the
+    training cards. Success = arc detection ≥ the old tie detection on both corpora, with token accuracy held.</p>
+</article>
 
 <!-- ── Articulations always-on, end-to-end ── -->
 <article class="entry">
