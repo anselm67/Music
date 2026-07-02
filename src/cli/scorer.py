@@ -824,8 +824,20 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
     help="Seed for the page sample — fixed by default so repeated runs hit "
     "identical pages; change it for a different draw.",
 )
+@click.option(
+    "--vocab",
+    "vocab_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Vocab JSON to evaluate against (default: <home>/build/vocab.json). Pass "
+    "the model's training vocab when it differs from the corpus default — e.g. the "
+    "KernSheet vocab (a prefix-superset, ids preserved) to eval a KS-vocab model on "
+    "PDMX, instead of swapping vocab files.",
+)
 @click.pass_obj
-def run_eval(ctx: ClickContext, name: str, size: int, seed: int) -> None:
+def run_eval(
+    ctx: ClickContext, name: str, size: int, seed: int, vocab_path: Path | None
+) -> None:
     """Evaluates end-to-end transcription on N random pages.
 
     Reports token similarity on predicted vs GT staves matched by center-y
@@ -836,7 +848,7 @@ def run_eval(ctx: ClickContext, name: str, size: int, seed: int) -> None:
     NAME: The model version to evaluate.
     """
     config, module = _load_for_inference(name)
-    vocab = Vocab.load(ctx.home / "build/vocab.json")
+    vocab = Vocab.load(vocab_path or ctx.home / "build/vocab.json")
     dataset = ScorerDataset(config, ctx.source, vocab)
     n = min(size, len(dataset))
     rng = random.Random(seed)
