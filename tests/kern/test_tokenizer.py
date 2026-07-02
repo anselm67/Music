@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from kern import KernReader, split_articulation, tokenize
+from kern import KernReader, join_articulation, split_articulation, tokenize
 
 
 def check_tokenization(tmp_path: Path, kern_text: str) -> bool:
@@ -56,6 +56,13 @@ def test_split_articulation() -> None:
     assert split_articulation("c/4") == ("c/4", [F, F, F, F, F])
     # Non-note tokens have no suffix and pass through unchanged.
     assert split_articulation("=1") == ("=1", [F, F, F, F, F])
+
+
+def test_join_articulation_round_trip() -> None:
+    # join is the inverse of split for every token shape.
+    for token in ("c/4@[f", "c/4@a", "c/4@[]", "d/8:1@sfa", "c/4", "=1"):
+        base, flags = split_articulation(token)
+        assert join_articulation(base, flags) == token
 
 
 def test_articulation_suffix(tmp_path: Path) -> None:

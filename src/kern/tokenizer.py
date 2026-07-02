@@ -6,7 +6,7 @@ import tempfile
 from contextlib import suppress
 from dataclasses import replace
 from pathlib import Path
-from typing import Callable, Iterable, TextIO, Type, cast
+from typing import Callable, Iterable, Sequence, TextIO, Type, cast
 
 from kern.parser import Handler, Parser
 from kern.typing import (
@@ -65,6 +65,16 @@ def split_articulation(token: str) -> tuple[str, list[bool]]:
     """
     base, _, codes = token.partition(ARTICULATION_SEP)
     return base, [code in codes for code in ARTICULATIONS]
+
+
+def join_articulation(base: str, flags: Sequence[bool]) -> str:
+    """Inverse of :func:`split_articulation`: reattach the ``@``-code suffix.
+
+    ``("C/4", [True, False, False, True, False])`` -> ``"C/4@[f"``. No set bit
+    yields ``base`` unchanged.
+    """
+    codes = "".join(code for code, on in zip(ARTICULATIONS, flags) if on)
+    return f"{base}{ARTICULATION_SEP}{codes}" if codes else base
 
 
 class Spine:

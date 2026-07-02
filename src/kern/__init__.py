@@ -5,6 +5,7 @@ from .to_midi import to_midi
 from .tokenizer import (
     ARTICULATIONS,
     NUM_ARTICULATIONS,
+    join_articulation,
     split_articulation,
     tokenize,
 )
@@ -48,6 +49,7 @@ __all__ = [
     "to_midi",
     "tokenize",
     "split_articulation",
+    "join_articulation",
     "ARTICULATIONS",
     "NUM_ARTICULATIONS",
 ]

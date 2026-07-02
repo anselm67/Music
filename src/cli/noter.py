@@ -25,7 +25,7 @@ from torch import Tensor
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from kern import ARTICULATIONS
+from kern import ARTICULATIONS, join_articulation
 from kernsheet import KernSheet, KernSheetSource
 from noter import (
     NoterConfig,
@@ -203,6 +203,29 @@ def _format_spines(columns: list[list[str]]) -> str:
     return "\n".join(lines)
 
 
+def _articulated_spine(vocab: Vocab, ids: Tensor, arts: Tensor) -> list[str]:
+    """Like ``Vocab.i2tok`` but reattaches each note's ``@``-articulation suffix.
+
+    ``ids`` is ``(T, max_chords)`` token ids, ``arts`` the parallel
+    ``(T, max_chords, NUM_ARTICULATIONS)`` multi-hot; SIL slots are skipped in
+    lockstep so the two stay aligned.
+    """
+    rows: list[str] = []
+    for i in range(len(ids)):
+        if ids[i, 0] == vocab.EOS:
+            break
+        rows.append(
+            " ".join(
+                join_articulation(
+                    vocab.decode(int(ids[i, j].item())), arts[i, j].bool().tolist()
+                )
+                for j in range(ids.shape[1])
+                if ids[i, j] != vocab.SIL
+            )
+        )
+    return rows
+
+
 @click.command()
 @click.pass_obj
 def show(ctx: ClickContext) -> None:
@@ -213,10 +236,17 @@ def show(ctx: ClickContext) -> None:
     while True:
         index = random.randint(0, len(dataset) - 1)
         score_id, page_number = dataset.items[index][:2]
-        images, _, sequences, _, mask = dataset[index]
+        images, _, sequences, articulations, mask = dataset[index]
         staves = mask.nonzero(as_tuple=True)[0].tolist()
         print(ctx.source.image_path(score_id, page_number))
-        print(_format_spines([dataset.vocab.i2tok(sequences[g]) for g in staves]))
+        print(
+            _format_spines(
+                [
+                    _articulated_spine(dataset.vocab, sequences[g], articulations[g])
+                    for g in staves
+                ]
+            )
+        )
         cv2.imshow("System", np.vstack([to_display(images[g]) for g in staves]))
         if cv2.waitKey(0) == ord("q"):
             break
@@ -440,19 +470,6 @@ def grow_checkpoint(src_ckpt: Path, out_ckpt: Path, vocab_path: Path) -> None:
     help="BCE weight for the articulation head (default 1.0).",
 )
 @click.option(
-    "--patch-width",
-    type=int,
-    default=-1,
-    help="Override the source patch width in px (default: config 4).",
-)
-@click.option(
-    "--patch-height",
-    type=int,
-    default=-1,
-    help="Override the source patch height in px (default: config 16). Fewer px "
-    "= more vertical bands, the resolution that localises articulations.",
-)
-@click.option(
     "--kern-sheet",
     "kern_sheet",
     type=(click.Path(exists=True, file_okay=False, path_type=Path), float),
@@ -477,8 +494,6 @@ def train(
     lr: float | None,
     warmup_steps: int,
     articulation_weight: float | None,
-    patch_width: int,
-    patch_height: int,
     vocab_path: Path | None,
     kern_sheet: tuple[Path, float] | None,
 ) -> None:
@@ -500,12 +515,10 @@ def train(
             or lr is not None
             or warmup_steps >= 0
             or articulation_weight is not None
-            or patch_width > 0
-            or patch_height > 0
         ):
             logging.warning(
                 "Resuming from checkpoint; --train-len/--valid-len/--lr/--warmup-"
-                "steps/--articulation-weight/--patch-* ignored."
+                "steps/--articulation-weight ignored."
             )
     else:
         ckpt_path = None
@@ -521,10 +534,6 @@ def train(
             config.warmup_steps = warmup_steps
         if articulation_weight is not None:
             config.articulation_weight = articulation_weight
-        if patch_width > 0:
-            config.patch_width = patch_width
-        if patch_height > 0:
-            config.patch_height = patch_height
 
     config.max_steps = epochs * (config.train_len // config.batch_size)
     logging.info(
