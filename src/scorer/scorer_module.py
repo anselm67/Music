@@ -20,6 +20,11 @@ from staffer.staffer_loss import generalized_iou
 
 from .scorer_model import ScorerConfig, ScorerModel, build_stave_boxes
 
+# Max staves encoded together during inference. The noter encoder's O(P²) attention
+# over the 3072-patch crops (patch_height=4) OOMs a 16GB GPU on pages with many
+# staves; chunking the per-crop-independent encode bounds peak memory.
+_ENCODE_CHUNK = 4
+
 
 def mean_sys_iou(
     pred_stave_tb: Tensor,  # (B, M, 2) — top, bottom
@@ -339,7 +344,21 @@ class ScorerModule(L.LightningModule):
                 grouped_idx[g, slot] = k
                 stave_mask[g, slot] = True
 
-        memory, mem_pad = self.model.noter.encode(crops, widths)  # (K,P,D),(K,P)
+        # Encode staves in sub-batches. The encoder's O(P²) self-attention over the
+        # 3072-patch crops (patch_height=4) materialises K×heads×3072² scores at once,
+        # which OOMs a page with many staves; chunking bounds peak memory. Encode is
+        # per-crop independent and P is fixed at 3072, so the chunks concatenate.
+        if K <= _ENCODE_CHUNK:
+            memory, mem_pad = self.model.noter.encode(crops, widths)  # (K,P,D),(K,P)
+        else:
+            parts = [
+                self.model.noter.encode(
+                    crops[i : i + _ENCODE_CHUNK], widths[i : i + _ENCODE_CHUNK]
+                )
+                for i in range(0, K, _ENCODE_CHUNK)
+            ]
+            memory = torch.cat([m for m, _ in parts], dim=0)  # (K,P,D)
+            mem_pad = torch.cat([p for _, p in parts], dim=0)  # (K,P)
         mem_g = memory[grouped_idx].reshape(ng * smax, *memory.shape[1:])
         pad_g = mem_pad[grouped_idx].reshape(ng * smax, -1)
 
