@@ -812,15 +812,25 @@ def logs(
     show_default=True,
     help="Number of random samples to evaluate.",
 )
+@click.option(
+    "--vocab",
+    "vocab_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Vocab JSON to evaluate against (default: <home>/build/vocab.json). Pass "
+    "the model's training vocab when it differs from the corpus default — e.g. the "
+    "KernSheet vocab (a prefix-superset, ids preserved) to eval a KS-vocab model on "
+    "PDMX, instead of swapping vocab files.",
+)
 @click.pass_obj
-def run_eval(ctx: ClickContext, name: str, size: int) -> None:
+def run_eval(ctx: ClickContext, name: str, size: int, vocab_path: Path | None) -> None:
     """Evaluates prediction accuracy on N random samples from the dataset.
 
     NAME: The model version to use to make the predictions.
     """
     ckpt_path = Path("checkpoints") / "noter" / name / "last.ckpt"
     config = config_from_checkpoint(ckpt_path)
-    vocab = Vocab.load(ctx.home / "build/vocab.json")
+    vocab = Vocab.load(vocab_path or ctx.home / "build/vocab.json")
     dataset = NoterDataset(config, ctx.source, vocab)
     module = NoterModule.load_from_checkpoint(
         ckpt_path, config=config, weights_only=False

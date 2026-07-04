@@ -56,7 +56,6 @@
     .badge.superseded{ background: var(--slate-bg); border-color: var(--slate-bd); color: var(--slate-tx); }
     .badge.deferred  { background: var(--amber-bg); border-color: var(--amber-bd); color: var(--amber-tx); }
     .badge.rejected  { background: var(--rose-bg);  border-color: var(--rose-bd);  color: var(--rose-tx); }
-    .badge.pending   { background: var(--blue-bg);  border-color: var(--blue-bd);  color: var(--blue-tx); }
     .ref { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; }
 
     .rationale-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 0.75rem 0; }
@@ -99,7 +98,7 @@
   <h2>Merge ties and slurs into a single "arc" articulation; disambiguate at playback</h2>
   <div class="entry-meta">
     <span>2026-07-02</span>
-    <span class="badge pending">Pending — experiment in flight, from-scratch retrain (~48h)</span>
+    <span class="badge accepted">Accepted — noter retrain landed; arc beats tie on real scans, no pitch tax</span>
     <span class="ref">flags <code>&lt;</code> / <code>&gt;</code> · <code>kern/tokenizer.py</code> <code>_note_articulations</code> · <code>noter/articulation.py</code></span>
   </div>
 
@@ -165,8 +164,18 @@
   </div>
 
   <h3>Outcome</h3>
-  <p><em>Pending.</em> Mark accepted/rejected once the noter + scorer retrain lands and the arc P/R/F1 is in the
-    training cards. Success = arc detection ≥ the old tie detection on both corpora, with token accuracy held.</p>
+  <p><strong>Accepted.</strong> The from-scratch noter A/B landed (<code>tatum-arc</code> / <code>tatum-arc-mixed</code>,
+    2026-07-04; full P/R/F1 in the <a href="noter-training.html#run-tatum-arc">training card</a>). The success
+    criterion — <em>arc detection ≥ the old tie detection on both corpora, token accuracy held</em> — is met, and the
+    win is strongest exactly where it matters. On <strong>real scans (KS)</strong> the arc bits <em>beat</em> the tie
+    bits (F1 63.5/63.9 → <strong>68.0/69.2</strong>, +4.5/+5.3) despite the arc being a <em>harder</em> superset target
+    (ties AND slurs); KS micro-F1 64.7 → 68.9. On clean PDMX the arc bits wash with ties (±1 F1) — ties were already
+    easy there, so the extra recall only pays off once the signal degrades. <strong>Token similarity is tied to the
+    decimal</strong> on both corpora (97.7 / 95.2) — no pitch tax — and staccato precision jumped as a bonus
+    (+13–22pp), the merge freeing head capacity. The −16pp PDMX→KS domain gap is a uniform lift, not narrowed (the
+    arc-merge is not a domain-gap fix). One blemish: accent regressed on PDMX (an independent, unstable, rare flag —
+    not a mechanical effect of the merge). <strong>Next:</strong> the scorer's articulation head is still fresh; an
+    end-to-end scorer arc retrain off <code>tatum-arc-mixed</code> is the follow-on (scorer inherits the 4×4 geometry).</p>
 </article>
 
 <!-- ── Articulations always-on, end-to-end ── -->
