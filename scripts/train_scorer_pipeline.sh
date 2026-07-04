@@ -58,7 +58,9 @@ MIX=0.67                    # KernSheet share of each fine-tune epoch (rest is P
 STAFFER_BASE_EPOCHS=7
 STAFFER_FT_EPOCHS=30
 NOTER_BASE_EPOCHS=12
-NOTER_FT_EPOCHS=12
+NOTER_FT_EPOCHS=30   # cap, not a fixed count: stage 4 runs `-s 2.0` early-stopping.
+                     # 12 under-trained the FT (tatum-arc-mixed-e30 stopped at 21,
+                     # a strict win: KS art micro-F1 68.9->73.2, gap -16.3->-10.6pp).
 SCORER_EPOCHS=20
 
 # Per-stage fine-tune LR / warmup. The staffer FT ran 10x lower than the noter FT;

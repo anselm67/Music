@@ -175,7 +175,15 @@
     (+13–22pp), the merge freeing head capacity. The −16pp PDMX→KS domain gap is a uniform lift, not narrowed (the
     arc-merge is not a domain-gap fix). One blemish: accent regressed on PDMX (an independent, unstable, rare flag —
     not a mechanical effect of the merge). <strong>Next:</strong> the scorer's articulation head is still fresh; an
-    end-to-end scorer arc retrain off <code>tatum-arc-mixed</code> is the follow-on (scorer inherits the 4×4 geometry).</p>
+    end-to-end scorer arc retrain off the noter base is the follow-on (scorer inherits the 4×4 geometry).</p>
+  <p><strong>Addendum (2026-07-04) — the FT was under-trained.</strong> A rerun with the epoch cap raised 12→30
+    (<code>tatum-arc-mixed-e30</code>, early-stopped at epoch 21) is a strict win on both corpora:
+    <strong>KS micro-F1 68.9 → 73.2</strong>, token 95.2 → 97.0; PDMX micro-F1 81.5 → 84.0. It also <em>reverses</em>
+    the accent blemish (KS F1 24.4 → 41.5, PDMX 33.3 → 47.2) and <strong>narrows the domain gap −16.3 → −10.6pp</strong>
+    — so that gap was partly under-training, not just domain shift. <code>tatum-arc-mixed-e30</code> is the production
+    noter articulation base and the scorer arc retrain inits from it. Lesson: the rehearsal-FT recipe should cap high
+    and let early-stopping converge, not hardcode the epoch count. (See the
+    <a href="noter-training.html#run-tatum-arc-mixed-e30">e30 training card</a>.)</p>
 </article>
 
 <!-- ── Articulations always-on, end-to-end ── -->
