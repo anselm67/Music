@@ -85,6 +85,8 @@ class Vocab:
         for tokens_file in files:
             with open(tokens_file, "r") as f:
                 for record in f:
+                    if record.startswith("*"):  # `*staffN` metadata row, not music
+                        continue
                     for token in record.strip().split():
                         counts[Vocab._strip(token)] += 1
 
@@ -110,6 +112,8 @@ class Vocab:
         for tokens_file in files:
             with open(tokens_file, "r") as f:
                 for record in f:
+                    if record.startswith("*"):  # `*staffN` metadata row, not music
+                        continue
                     for token in record.strip().split():
                         counts[Vocab._strip(token)] += 1
 

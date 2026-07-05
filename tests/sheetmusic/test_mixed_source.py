@@ -41,6 +41,9 @@ class FakeSource:
     def spine_count(self, id: str) -> int:
         return len(id)
 
+    def staff_map(self, id: str) -> list[int]:
+        return list(reversed(range(len(id))))
+
 
 def _heads(scores: list[Score]) -> Counter[str]:
     return Counter(s.id.split(MixedSource.SEP, 1)[0] for s in scores)
@@ -82,6 +85,13 @@ def test_spine_count_routes_and_strips_prefix() -> None:
     # FakeSource.spine_count returns len(stripped id), proving the prefix is removed.
     assert mixed.spine_count("0::pdmx-1") == len("pdmx-1")
     assert mixed.spine_count("1::ks-0") == len("ks-0")
+
+
+def test_staff_map_routes_and_strips_prefix() -> None:
+    mixed = MixedSource(FakeSource("pdmx", 2), FakeSource("ks", 2), mix=0.5)
+    # FakeSource.staff_map returns reversed(range(len(stripped id))).
+    assert mixed.staff_map("0::pdmx-1") == list(reversed(range(len("pdmx-1"))))
+    assert mixed.staff_map("1::ks-0") == list(reversed(range(len("ks-0"))))
 
 
 def test_image_path_routes_to_owning_child() -> None:

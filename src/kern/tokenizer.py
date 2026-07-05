@@ -23,6 +23,7 @@ from kern.typing import (
     Pitch,
     Rest,
     SpinePath,
+    StaffPosition,
     Token,
 )
 
@@ -115,6 +116,7 @@ class TokenFormatter:
             Chord: self.format_chord,
             Instrument: self.format_instrument,
             SpinePath: self.format_spine_path,
+            StaffPosition: self.format_staff,
         }
 
     def format_unknown(self, token: Token) -> str:
@@ -201,6 +203,12 @@ class TokenFormatter:
     def format_instrument(self, token: Token) -> str:
         instrument = cast(Instrument, token)
         return f"Instr: {instrument.literal}"
+
+    def format_staff(self, token: Token) -> str:
+        # Kept verbatim (`*staff2`): the leading `*` is unique to this row, so the
+        # vocab builder and KernReader can tell metadata from musical tokens.
+        staff = cast(StaffPosition, token)
+        return f"*staff{staff.staff}"
 
     def format_spine_path(self, _: Token) -> str:
         return self.format_continue(Continue())

@@ -31,6 +31,7 @@ from .typing import (
     Pitch,
     Rest,
     SpinePath,
+    StaffPosition,
     Token,
 )
 
@@ -53,6 +54,7 @@ __all__ = [
     "Pitch",
     "Rest",
     "SpinePath",
+    "StaffPosition",
     "Token",
     "to_midi",
     "write_midi",

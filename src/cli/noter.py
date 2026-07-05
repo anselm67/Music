@@ -6,6 +6,7 @@ import shutil
 import sys
 from collections import Counter
 from dataclasses import dataclass, fields, replace
+from functools import partial
 from itertools import zip_longest
 from pathlib import Path
 from typing import Any, cast
@@ -34,6 +35,7 @@ from noter import (
     NoterModel,
     NoterModule,
     Vocab,
+    collate_systems,
     grow_state_dict,
     report_articulations,
     tally_articulations,
@@ -95,7 +97,7 @@ class ClickContext:
 )
 @click.option(
     "--csv",
-    default="System2.csv",
+    default="System4.csv",
     show_default=True,
     help="Name of the .csv master file.",
 )
@@ -296,8 +298,11 @@ def image_stats(ctx: ClickContext, num_workers: int) -> None:
     """Computes the mean and std of a subset of images from the dataset.."""
     vocab = Vocab.load(ctx.home / "build/vocab.json")
     ds = NoterDataset(ctx.config, ctx.source, vocab)
-    loader = DataLoader[tuple[Tensor, Tensor]](
-        ds, num_workers=num_workers, batch_size=ctx.config.batch_size
+    loader = DataLoader(
+        ds,
+        num_workers=num_workers,
+        batch_size=ctx.config.batch_size,
+        collate_fn=partial(collate_systems, config=ctx.config, vocab=vocab),
     )
     pix_sum = 0
     pix_sum2 = 0

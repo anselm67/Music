@@ -224,6 +224,15 @@ class SpinePath(Token):
 
 
 @dataclass(frozen=True)
+class StaffPosition(Token):
+    """A ``*staffN`` tandem interpretation: the staff a spine belongs to (``staff1``
+    is the top staff). Names the spine->staff mapping the noter needs to route a
+    system's staves to their token columns."""
+
+    staff: int
+
+
+@dataclass(frozen=True)
 class Instrument(Token):
     """Encodes an instrument tabdem interpretation.
     The literal field is either the literal instrument name with a leading ' or ", or

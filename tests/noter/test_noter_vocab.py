@@ -132,6 +132,25 @@ class TestVocab:
             }
             assert vocab._tok2i == expected_tok2i
 
+    def test_from_files_skips_staff_metadata_row(self) -> None:
+        # The leading `*staffN` row is metadata, not music — it must not enter vocab.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tokens_file = Path(temp_dir) / "gs.tokens"
+            tokens_file.write_text("*staff2\t*staff1\ntoken1 token2\ntoken1 token2\n")
+            vocab = Vocab.from_files([tokens_file])
+        assert "*staff1" not in vocab._tok2i
+        assert "*staff2" not in vocab._tok2i
+        assert vocab.encode("token1") == 5
+
+    def test_extend_from_files_skips_staff_metadata_row(self) -> None:
+        base = Vocab({"PAD": 0, "UNK": 1, "SOS": 2, "EOS": 3, "SIL": 4})
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tokens_file = Path(temp_dir) / "gs.tokens"
+            tokens_file.write_text("*staff2\t*staff1\nnew new\n")
+            extended = base.extend_from_files([tokens_file])
+        assert "*staff1" not in extended._tok2i
+        assert extended.encode("new") == 5
+
     def test_extend_from_files_preserves_ids_and_appends(self) -> None:
         base = Vocab({"PAD": 0, "UNK": 1, "SOS": 2, "EOS": 3, "SIL": 4, "old": 5})
         with tempfile.TemporaryDirectory() as temp_dir:
