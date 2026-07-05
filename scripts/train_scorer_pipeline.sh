@@ -174,9 +174,14 @@ else
   # to the PDMX vocab (4785), but the mixed branches carry the extended KernSheet
   # vocab (5492) — without it the noter state_dict mismatches and load crashes.
   # LR/warmup/freeze ride the ScorerConfig defaults, as the ravel run did.
+  # --batch-size 4: the default 4x4 noter (3072 encoder patches) overflows a 16GB
+  # GPU at the default batch 8. And expandable_segments reclaims the ~3GB CUDA
+  # reserved-but-unallocated fragmentation that OOMs batch 4 too (tatum-arc-e30).
+  PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
   run scorer --log-file "logs/scorer/$SCORER_NAME.log" \
     train --staffer "$NAME-mixed" --noter "$NAME-mixed" \
     --kern-sheet "$KS" "$MIX" --vocab "$VOCAB" \
+    --batch-size 4 \
     --train-len "$SCORER_FT_TRAIN" --valid-len "$SCORER_FT_VALID" \
     -e "$SCORER_EPOCHS" \
     "$SCORER_NAME"
