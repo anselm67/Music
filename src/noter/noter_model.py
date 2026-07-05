@@ -32,9 +32,18 @@ class NoterConfig:
     max_chords: int = 8
     max_seqlen: int = 128  # Also known as T
     # Staves per system — the cross-stave decode unit. A system's staves are
-    # row-aligned (one shared barline grid), batched together and padded to this
-    # width (a stave_mask marks the real ones). 2 covers the System2 corpus.
-    max_staves: int = 2
+    # row-aligned (one shared barline grid), batched together and decoded jointly
+    # (a stave_mask marks the real ones). Now a ceiling, not a fixed pad width: the
+    # dataset skips systems with more staves, and batches pad to the batch-max staff
+    # count (see collate_systems), not this. 4 covers quartet/SATB/organ; the
+    # cross-stave attention holds no max_staves-sized params so a 2-staff checkpoint
+    # warm-starts a 4-staff model unchanged.
+    max_staves: int = 4
+    # Fixed per-batch crop budget for the staff-count bucket sampler: a bucket of
+    # G-staff systems batches ``crop_budget // G`` systems, so the encoded crop count
+    # (G × systems) stays ~constant and peak memory is flat regardless of staves per
+    # system. 32 = the historical 2-staff batch_size (16) × 2 staves.
+    crop_budget: int = 32
     vocab_size: int = -1
     pad_idx: int = -1
 
@@ -82,6 +91,13 @@ class NoterConfig:
             self.train_len = 12500 * self.batch_size
         if self.valid_len == -1:
             self.valid_len = 100 * self.batch_size
+        # Training length in optimizer steps (the CLI overrides this from --epochs).
+        # NB with the staff-count bucket sampler the true steps/epoch is the sum of
+        # per-bucket batch counts (batch size = crop_budget // staves), not
+        # train_len // batch_size; so "epochs" here is a batch_size-equivalent
+        # nominal, and the cosine horizon can run slightly short/long of a whole-
+        # corpus pass. The schedule stays self-consistent (cosine over max_steps,
+        # trainer stops at max_steps); only the epoch↔step mapping is approximate.
         self.max_steps = 4 * (self.train_len // self.batch_size)
 
     def asdict(self) -> dict[str, object]:

@@ -111,16 +111,19 @@ class NoterDataset(Dataset):
         self.items = []
         target_h, target_w = config.page_shape
         for score in tqdm(source.scores(), desc="Loading noter dataset"):
-            # One spine per staff is the contract. A token file with more spines than
-            # a system has staves (a voiced staff, or a krn declaring more staves than
-            # the scan shows) would have its extra spine(s) silently dropped by the
-            # spine_numbers routing below — training the staff against a partial
-            # transcription. Read the per-score count once and skip those systems.
+            # One spine per staff is the contract. `staff_map` routes each staff
+            # (top->bottom) to its token column via the `*staffN` row, with a
+            # positional bass-first fallback; its length is the token-file spine
+            # count. A system whose staff count differs from the spine count (a
+            # voiced staff, or a krn declaring a different staff count than the scan
+            # shows) can't be routed one-to-one, so skip it rather than train a staff
+            # against a partial/mismatched transcription (see spine_count review).
             try:
-                spine_count = source.spine_count(score.id)
+                staff_map = source.staff_map(score.id)
             except Exception as e:
-                logging.error(f"{score.id}: cannot read spine count ({e}), skipping")
+                logging.error(f"{score.id}: cannot read staff map ({e}), skipping")
                 continue
+            spine_count = len(staff_map)
             for page in source.pages(score.id):
                 # Letterbox the boxes by the same single scale the image transform
                 # uses, so crop coords land on the (aspect-preserved) staff.
@@ -132,22 +135,18 @@ class NoterDataset(Dataset):
                     min(round(page.image_height * scale), target_h),
                 )
                 for system in page.systems:
-                    match system.staff_count:
-                        case 1:
-                            spine_numbers = [0]
-                        case 2:
-                            spine_numbers = [1, 0]
-                        case _:
-                            logging.error(
-                                f"{score.id}: too many staves in system "
-                                f"({system.staff_count} vs {self.config.max_staves})"
-                            )
-                            continue
-                    if spine_count > system.staff_count:
+                    if system.staff_count > self.config.max_staves:
+                        logging.error(
+                            f"{score.id}: too many staves in system "
+                            f"({system.staff_count} vs max_staves "
+                            f"{self.config.max_staves})"
+                        )
+                        continue
+                    if spine_count != system.staff_count:
                         logging.error(
                             f"{score.id}: token file has {spine_count} spines but "
                             f"system has {system.staff_count} staves; skipping "
-                            f"(extra spine(s) dropped — see spine_count review)"
+                            f"(spine/staff mismatch — see spine_count review)"
                         )
                         continue
                     if not system.bar_numbers:
@@ -156,13 +155,14 @@ class NoterDataset(Dataset):
                         )
                         continue
                     # One item per system: its staves' boxes + spine numbers, kept
-                    # aligned. The staves are decoded together (shared barline grid).
+                    # aligned top->bottom. The staves are decoded together (shared
+                    # barline grid).
                     self.items.append(
                         (
                             score.id,
                             page.page_number,
                             system.staff_boxes,
-                            spine_numbers,
+                            staff_map,
                             system.first_bar_number,
                             system.last_bar_number,
                         )
@@ -265,43 +265,33 @@ class NoterDataset(Dataset):
         sequence, articulations = seq
         return image, actual_width, sequence, articulations
 
-    def _pad_staves(
-        self,
-        images: list[Tensor],
-        widths: list[int],
-        sequences: list[Tensor],
-        articulations: list[Tensor],
-    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
-        """Stack a system's G staves and pad to ``max_staves`` with masked slots.
+    def _next_same_count(self, idx: int) -> int:
+        """Next index whose system has the same staff count as ``idx`` (wraps).
 
-        A padding slot is a zero image (full-width so no encoder patch is masked →
-        no all-masked NaN), an SOS-only sequence, and zero articulations; the
-        returned ``stave_mask`` is True for the G real staves, False for the pad,
-        so the model excludes the pad from loss and cross-stave attention.
-        """
-        c = self.config
-        g, s = len(images), c.max_staves
-        h, w = c.input_shape
-        pad_img = torch.zeros(s - g, 1, h, w)
-        pad_w = torch.full((s - g,), w)
-        pad_seq = torch.full((s - g, c.max_seqlen, c.max_chords), self.vocab.PAD)
-        pad_seq[:, 0, :] = self.vocab.SOS
-        pad_art = torch.zeros(s - g, c.max_seqlen, c.max_chords, NUM_ARTICULATIONS)
-        out_img = torch.cat([torch.stack(images), pad_img], dim=0)
-        out_w = torch.cat([torch.tensor(widths), pad_w], dim=0)
-        out_seq = torch.cat([torch.stack(sequences), pad_seq], dim=0)
-        out_art = torch.cat([torch.stack(articulations), pad_art], dim=0)
-        mask = torch.arange(s) < g
-        return out_img, out_w, out_seq, out_art, mask
+        The load-failure fallback must keep the substitute's staff count, or a
+        staff-count bucket batch would gain a taller system and ``collate_systems``
+        would pad the whole (possibly large) batch up to it — a memory spike that
+        defeats the flat-peak crop budget. Falls back to the neighbour if no other
+        system shares the count (degenerate corpus)."""
+        n = len(self)
+        target = len(self.items[idx][2])
+        for step in range(1, n):
+            j = (idx + step) % n
+            if len(self.items[j][2]) == target:
+                return j
+        return (idx + 1) % n
 
     def __getitem__(self, idx: int) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
-        """A system: ``(images, widths, sequences, articulations, stave_mask)`` padded
-        to max_staves.
+        """A system's ``G`` real staves: ``(images, widths, sequences,
+        articulations, stave_mask)``, unpadded.
 
-        Shapes ``(S, 1, 64, 768)``, ``(S,)``, ``(S, max_seqlen, max_chords)``,
-        ``(S, max_seqlen, max_chords, NUM_ARTICULATIONS)``, ``(S,)`` with
-        ``S = max_staves``. If any staff of the system fails to load the whole
-        system is skipped (advance to the next item).
+        Shapes ``(G, 1, 64, 768)``, ``(G,)``, ``(G, max_seqlen, max_chords)``,
+        ``(G, max_seqlen, max_chords, NUM_ARTICULATIONS)``, ``(G,)`` all-True. Padding
+        to a common width happens at the batch level in ``collate_systems`` (to the
+        batch-max staff count, ~0 within a staff-count bucket) rather than to the
+        global ``max_staves``. If any staff of the system fails to load the whole
+        system is skipped for another of the same staff count (keeps bucket batches
+        homogeneous).
         """
         while True:
             score_id, page_number, boxes, spine_numbers, first_bar, last_bar = (
@@ -313,10 +303,60 @@ class NoterDataset(Dataset):
                 for box, spine in zip(boxes, spine_numbers)
             ]
             if any(staff is None for staff in loaded):
-                idx = (idx + 1) % len(self)
+                idx = self._next_same_count(idx)
                 continue
-            images = [staff[0] for staff in loaded if staff is not None]
-            widths = [staff[1] for staff in loaded if staff is not None]
-            sequences = [staff[2] for staff in loaded if staff is not None]
-            articulations = [staff[3] for staff in loaded if staff is not None]
-            return self._pad_staves(images, widths, sequences, articulations)
+            valid = [staff for staff in loaded if staff is not None]
+            images = torch.stack([staff[0] for staff in valid])
+            widths = torch.tensor([staff[1] for staff in valid])
+            sequences = torch.stack([staff[2] for staff in valid])
+            articulations = torch.stack([staff[3] for staff in valid])
+            mask = torch.ones(len(valid), dtype=torch.bool)
+            return images, widths, sequences, articulations, mask
+
+
+def collate_systems(
+    batch: list[tuple[Tensor, Tensor, Tensor, Tensor, Tensor]],
+    config: NoterConfig,
+    vocab: Vocab,
+) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+    """Stack a batch of systems, padding each to the batch-max staff count.
+
+    Each item carries only its ``G`` real staves (variable across the batch); this
+    pads the short ones up to ``S = max(G)`` with masked slots and stacks to
+    ``(B, S, ...)``. A padding slot is a zero image (full-width so no encoder patch
+    is all-masked → no NaN), an SOS-only sequence, zero articulations, and a False
+    ``stave_mask`` entry, so the model excludes it from loss and cross-stave
+    attention. With the staff-count bucket sampler every item in a batch already has
+    the same ``G``, so this pads nothing; it stays correct for a mixed batch too.
+    """
+    s = max(item[0].shape[0] for item in batch)
+    h, w = config.input_shape
+    images, widths, sequences, articulations, masks = [], [], [], [], []
+    for img, wid, seq, art, mask in batch:
+        if (pad := s - img.shape[0]) > 0:
+            pad_seq = torch.full((pad, config.max_seqlen, config.max_chords), vocab.PAD)
+            pad_seq[:, 0, :] = vocab.SOS
+            img = torch.cat([img, torch.zeros(pad, 1, h, w)])
+            wid = torch.cat([wid, torch.full((pad,), w)])
+            seq = torch.cat([seq, pad_seq])
+            art = torch.cat(
+                [
+                    art,
+                    torch.zeros(
+                        pad, config.max_seqlen, config.max_chords, NUM_ARTICULATIONS
+                    ),
+                ]
+            )
+            mask = torch.cat([mask, torch.zeros(pad, dtype=torch.bool)])
+        images.append(img)
+        widths.append(wid)
+        sequences.append(seq)
+        articulations.append(art)
+        masks.append(mask)
+    return (
+        torch.stack(images),
+        torch.stack(widths),
+        torch.stack(sequences),
+        torch.stack(articulations),
+        torch.stack(masks),
+    )
