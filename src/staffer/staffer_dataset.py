@@ -11,12 +11,7 @@ from torch.utils.data import Dataset, Subset, WeightedRandomSampler
 from torchvision.transforms import v2
 from tqdm import tqdm
 
-from sheetmusic import (
-    LetterboxResize,
-    PerImageNormalize,
-    Source,
-    letterbox_scale,
-)
+from sheetmusic import Source, letterbox_scale, page_transform
 
 from .staffer_model import StafferConfig
 
@@ -68,18 +63,10 @@ class StafferDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]]):
 
     def _build_transform(self) -> v2.Transform:
         """Image transform: grayscale, letterbox resize, per-image normalisation."""
-        return v2.Compose(
-            [
-                v2.Grayscale(),
-                LetterboxResize(
-                    self.config.image_shape,
-                    interpolation=self.config.interpolation,
-                    antialias=self.config.antialias,
-                    fill=255,
-                ),
-                v2.ToDtype(torch.float, scale=True),
-                PerImageNormalize(),
-            ]
+        return page_transform(
+            self.config.image_shape,
+            self.config.interpolation,
+            self.config.antialias,
         )
 
     def __len__(self) -> int:

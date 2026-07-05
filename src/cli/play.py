@@ -16,93 +16,52 @@ shell-out to ``scorer predict``.
 
 import logging
 import subprocess
-import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import click
-import cv2
 import torch
+from pdf2image import convert_from_path
+from torchvision.io import decode_image
 from torchvision.transforms import v2
 
 from kern import Dynamics, Part, render_systems, write_midi
 from noter import Vocab
-from sheetmusic import LetterboxResize, PerImageNormalize
+from sheetmusic import page_transform
 from utils import log_uncaught_exceptions
 
 if TYPE_CHECKING:
-    from scorer import ScorerConfig, ScorerModule
+    from scorer import ScorerModule
 
 HOME = Path("/home/anselm/datasets/PDMX")
 DEFAULT_SOUNDFONT = Path("/usr/share/sounds/sf2/default-GM.sf2")
 TICKS_PER_QUARTER = 480
+# PDF rasterisation DPI. 200 matches the KernSheet build. With an antialias=True model
+# the transform antialiases the downscale to its canvas, so the DPI is not load-bearing
+# and a raw render reads correctly. NB an antialias=False checkpoint (e.g.
+# tatum-arc-e30) does NOT antialias, so a large downscale can flip its pitch/octave
+# reads — such a model must be retrained under antialias=True to be played reliably.
+RENDER_DPI = 200
 
 
-def rasterize_pdf(pdf: Path, out_dir: Path, dpi: int) -> list[Path]:
-    """Rasterise every page of ``pdf`` to PNG with ``pdftoppm``."""
-    prefix = out_dir / pdf.stem
-    subprocess.run(
-        ["pdftoppm", "-png", "-r", str(dpi), str(pdf), str(prefix)], check=True
-    )
-    pages = sorted(out_dir.glob(f"{pdf.stem}-*.png"))
-    if not pages:
-        raise click.ClickException(f"pdftoppm produced no pages from {pdf}")
-    return pages
+def load_pages(inputs: tuple[Path, ...]) -> list[tuple[str, torch.Tensor]]:
+    """Expand the CLI inputs into ordered ``(name, RGB CHW uint8 tensor)`` pairs.
 
-
-def resolve_pages(inputs: tuple[Path, ...], out_dir: Path, dpi: int) -> list[Path]:
-    """Expand the CLI inputs into a flat, ordered list of page PNGs."""
-    pages: list[Path] = []
+    Image files are read with ``decode_image`` — the same call the dataset uses to load
+    a corpus page — so play's read path is identical to train/predict. PDFs are
+    rasterised with ``pdf2image`` (the KernSheet build's rasteriser) at
+    :data:`RENDER_DPI`, each page converted to the same tensor form. The transform's
+    antialiased letterbox resize downscales any size to the model canvas, so nothing
+    needs resizing here.
+    """
+    pages: list[tuple[str, torch.Tensor]] = []
     for item in inputs:
         if item.suffix.lower() == ".pdf":
-            pages.extend(rasterize_pdf(item, out_dir, dpi))
+            for i, page in enumerate(convert_from_path(str(item), dpi=RENDER_DPI), 1):
+                pages.append((f"{item.stem}-{i}", v2.functional.pil_to_tensor(page)))
         else:
-            pages.append(item)
+            pages.append((item.name, decode_image(item.as_posix())))
     return pages
-
-
-def build_transform(config: "ScorerConfig") -> v2.Compose:
-    """The page transform, identical to ScorerDataset's (per-image normalised)."""
-    staffer = config.staffer
-    return v2.Compose(
-        [
-            v2.Grayscale(),
-            LetterboxResize(
-                staffer.image_shape,
-                interpolation=staffer.interpolation,
-                antialias=staffer.antialias,
-                fill=255,
-            ),
-            v2.ToDtype(torch.float, scale=True),
-            PerImageNormalize(),
-        ]
-    )
-
-
-def load_page(path: Path, width: int, transform: v2.Compose) -> torch.Tensor:
-    """Decode a page and downscale it to the training width before the transform.
-
-    The scorer trained on ~1200px-wide renders (kernsheet builds build/png by
-    ``cv2.resize(INTER_AREA)`` down to width 1200), and is sensitive to staff-line
-    stroke width: feed it a source far off that scale and it mis-reads pitch/octave.
-    Best is to rasterise the PDF near 1200px in the first place (``--dpi 150``); this
-    is the belt-and-braces normalisation for any oversized input (a big scan, or a
-    higher --dpi). Uses the exact same ``cv2.resize(INTER_AREA)`` to ``width`` as the
-    kernsheet build, then hands the transform an RGB CHW tensor — what ``decode_image``
-    yields when the dataset reads that build PNG.
-
-    Note a *large* downscale (e.g. a 300-DPI 2550px page to 1200) is not equivalent to
-    rasterising at ~1200 directly: the aggressive resample shifts the line rendering
-    enough to flip the model's pitch/octave read on some staves, so keep --dpi low.
-    """
-    bgr = cv2.imread(path.as_posix(), cv2.IMREAD_COLOR)
-    if bgr is None:
-        raise click.ClickException(f"Could not read image: {path}")
-    h, w = bgr.shape[:2]
-    if w > width:  # only downscale; INTER_AREA degrades to nearest on upscale
-        bgr = cv2.resize(bgr, (width, int(h * width / w)), interpolation=cv2.INTER_AREA)
-    rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-    return transform(torch.from_numpy(rgb).permute(2, 0, 1).contiguous())
 
 
 def decode_stave(
@@ -181,25 +140,6 @@ def play_or_render(midi: Path, soundfont: Path, wav: Path | None, play: bool) ->
     help="MIDI output path (default: <first input>.mid).",
 )
 @click.option("--tempo", type=int, default=90, show_default=True, help="Quarter BPM.")
-@click.option(
-    "--dpi",
-    type=int,
-    default=150,
-    show_default=True,
-    help="PDF rasterisation DPI. 150 (pdftoppm's default) renders A4 to ~1275px, "
-    "near the model's training scale. Higher DPIs then need a big downscale to "
-    "--width, whose artefacts can flip the model's pitch/octave reads.",
-)
-@click.option(
-    "--width",
-    type=int,
-    default=1200,
-    show_default=True,
-    help="Downscale each page to this px width before the model, matching the "
-    "kernsheet build (INTER_AREA to 1200) the scorer trained on. Native high-res "
-    "renders have sharp thin staff lines the model mis-registers (pitches read a "
-    "third off).",
-)
 @click.option("--play", is_flag=True, default=False, help="Play the result aloud.")
 @click.option(
     "--wav",
@@ -239,8 +179,6 @@ def cli(
     model: str,
     output: Path | None,
     tempo: int,
-    dpi: int,
-    width: int,
     play: bool,
     wav: Path | None,
     soundfont: Path,
@@ -266,18 +204,21 @@ def cli(
             f"Vocab not found: {vocab_file} (pass --vocab or --pdmx-home)."
         )
     vocab = Vocab.load(vocab_file)
-    transform = build_transform(config)
+    transform = page_transform(
+        config.staffer.image_shape,
+        config.staffer.interpolation,
+        config.staffer.antialias,
+    )
 
     midi_path = output or inputs[0].with_suffix(".mid")
-    with tempfile.TemporaryDirectory() as tmp:
-        pages = resolve_pages(inputs, Path(tmp), dpi)
-        click.echo(f"Transcribing {len(pages)} page(s) with '{model}' ...")
-        systems: list[list[Part]] = []
-        for page in pages:
-            image = load_page(page, width, transform).to(module.device)
-            page_systems = transcribe_page(module, vocab, image)
-            systems.extend(page_systems)
-            click.echo(f"  {page.name}: {sum(len(s) for s in page_systems)} staves")
+    pages = load_pages(inputs)
+    click.echo(f"Transcribing {len(pages)} page(s) with '{model}' ...")
+    systems: list[list[Part]] = []
+    for name, page in pages:
+        image = transform(page).to(module.device)
+        page_systems = transcribe_page(module, vocab, image)
+        systems.extend(page_systems)
+        click.echo(f"  {name}: {sum(len(s) for s in page_systems)} staves")
 
     if not systems:
         raise click.ClickException("No staves detected — nothing to play.")

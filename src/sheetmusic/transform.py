@@ -9,9 +9,34 @@ top-left origin (which is what the datasets' box normalisation assumes).
 """
 
 import numpy as np
+import torch
 import torchvision.transforms.v2.functional as TF
 from torch import Tensor
+from torchvision.transforms import v2
 from torchvision.transforms.functional import InterpolationMode
+
+
+def page_transform(
+    image_shape: list[int], interpolation: InterpolationMode, antialias: bool
+) -> v2.Compose:
+    """The scorer/staffer model-input transform: grayscale, letterbox, per-image norm.
+
+    Shared by ``ScorerDataset`` and the ``play`` CLI so the tensor the model sees is
+    identical however the page arrived (a built corpus PNG or a freshly rasterised PDF).
+    """
+    return v2.Compose(
+        [
+            v2.Grayscale(),
+            LetterboxResize(
+                image_shape,
+                interpolation=interpolation,
+                antialias=antialias,
+                fill=255,
+            ),
+            v2.ToDtype(torch.float, scale=True),
+            PerImageNormalize(),
+        ]
+    )
 
 
 def letterbox_scale(image_h: int, image_w: int, target_h: int, target_w: int) -> float:

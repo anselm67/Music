@@ -40,7 +40,12 @@ class StafferConfig:
     num_stave_queries: int = 16  # Also known as M
 
     interpolation: InterpolationMode = InterpolationMode.BILINEAR
-    antialias: bool = False
+    # Antialias when downscaling to the model canvas — the correct resample, and it
+    # makes the input scale-robust: a page rasterised at any DPI reads the same, so
+    # inference (e.g. the play CLI) can feed a raw render straight to the transform
+    # with no pre-resize. (Older checkpoints trained with False keep their stored
+    # value; a model must be trained under True to rely on it.)
+    antialias: bool = True
 
     # Training config.
     batch_size: int = 16

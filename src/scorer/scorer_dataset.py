@@ -14,7 +14,7 @@ from torch.utils.data import Dataset
 from torchvision.transforms import v2
 from tqdm import tqdm
 
-from sheetmusic import LetterboxResize, PerImageNormalize, Source, letterbox_scale
+from sheetmusic import Source, letterbox_scale, page_transform
 
 from kern import NUM_ARTICULATIONS
 from noter import SequenceLoader, Vocab
@@ -41,18 +41,10 @@ class ScorerDataset(Dataset[Sample]):
         # (NoterConfig.page_shape == StafferConfig.image_shape), a crop sampled
         # from this page matches the standalone noter crop exactly, so no recolour
         # is needed in ScorerModel.crop.
-        self.transform = v2.Compose(
-            [
-                v2.Grayscale(),
-                LetterboxResize(
-                    config.staffer.image_shape,
-                    interpolation=config.staffer.interpolation,
-                    antialias=config.staffer.antialias,
-                    fill=255,
-                ),
-                v2.ToDtype(torch.float, scale=True),
-                PerImageNormalize(),
-            ]
+        self.transform = page_transform(
+            config.staffer.image_shape,
+            config.staffer.interpolation,
+            config.staffer.antialias,
         )
         self.load_sequence = SequenceLoader(
             source, vocab, config.noter.max_seqlen, config.noter.max_chords

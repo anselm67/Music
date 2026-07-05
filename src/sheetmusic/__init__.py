@@ -5,6 +5,7 @@ from .transform import (
     LetterboxResize,
     PerImageNormalize,
     letterbox_scale,
+    page_transform,
     to_display,
 )
 
@@ -21,5 +22,6 @@ __all__ = [
     "LetterboxResize",
     "PerImageNormalize",
     "letterbox_scale",
+    "page_transform",
     "to_display",
 ]
