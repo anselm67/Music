@@ -93,6 +93,156 @@
      following the format of the entries that follow. Keep newest-first order.
      ════════════════════════════════════════════════════════════════════════ -->
 
+<!-- ── Lift noter/scorer to N-staff systems via *staff routing ── -->
+<article class="entry">
+  <h2>Lift noter/scorer past 2-staff systems — route spines to staves with <code>*staff</code></h2>
+  <div class="entry-meta">
+    <span>2026-07-05</span>
+    <span class="badge deferred">Planned — investigation complete, build pending</span>
+    <span class="ref"><code>max_staves</code> 2→4 · <code>kern/tokenizer.py</code> · <code>sheetmusic/source.py</code> <code>staff_map</code> · <code>noter/noter_dataset.py</code></span>
+  </div>
+
+  <h3>Context</h3>
+  <p>
+    The <code>staffer</code> detector already trains and predicts systems with any number of staves, but the
+    <code>noter</code> (and therefore the <code>scorer</code>) is capped at <strong>2 staves per system</strong>. The
+    cap exists because the spine→staff mapping was hard-coded: a system's staves are routed to token columns by a
+    literal <code>match staff_count: case 1 → [0]; case 2 → [1, 0]</code>
+    (<code>noter_dataset.py:135-146</code>, mirrored in <code>scorer_dataset.py</code> and
+    <code>cli/kernsheet.py</code>). The blocker was believed to be that kern spine order can't be mapped to image
+    staves in the general case. It can: Humdrum's <code>*staffN</code> tandem interpretation names each spine's staff
+    (<code>staff1</code> = top), which is exactly the mapping we need.
+  </p>
+
+  <h3>Investigation</h3>
+  <p>Two questions decided the design — both answered by scanning every <code>.krn</code> in both corpora.</p>
+  <p><strong>1. Is <code>*staff</code> present, and is it ever non-positional?</strong> If spine columns are always
+    ordered bottom-to-top, <code>*staff</code> is redundant with column position and the fix is a one-liner
+    (<code>reversed(range(N))</code>). It is <em>almost</em> redundant — but not quite:</p>
+  <table>
+    <tr><th></th><th>PDMX (Verovio)</th><th>KernSheet (real scans)</th></tr>
+    <tr><td>multi-staff files</td><td>75,636</td><td>715</td></tr>
+    <tr><td>carry <code>*staff</code></td><td>75,228 (99.5%)</td><td>671 (94%)</td></tr>
+    <tr><td><code>*staff</code> order == positional</td><td><strong>100%</strong></td><td>669 / 671</td></tr>
+    <tr><td>genuinely non-positional</td><td>0</td><td><strong>1</strong> (<code>sonata62-2</code>, treble-first <code>[1,2]</code>)</td></tr>
+    <tr><td>voiced (<code>n_kern&gt;n_staff</code>)</td><td>0</td><td>1 (<code>prelude28-01</code>)</td></tr>
+  </table>
+  <p>So the current hard-coded <code>[1,0]</code> is correct for 100% of PDMX and 99.7% of KernSheet — but it
+    <strong>silently misroutes</strong> the one treble-first real file, training its treble image against bass tokens.
+    <code>*staff</code> is the only signal that catches this, and hand-authored KS additions can reintroduce the
+    pattern. Verdict: use <code>*staff</code> when present, fall back to reversed-column order when absent (which is
+    today's <code>[1,0]</code>, generalized).</p>
+  <p><strong>2. What <code>max_staves</code> is worth supporting?</strong> Staves-per-<em>system</em> distribution
+    (1.56M PDMX systems; KernSheet is <strong>100% 2-staff</strong>, so multi-staff is PDMX-only for now):</p>
+  <table>
+    <tr><th>staves/system</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>8</th><th>16</th></tr>
+    <tr><td>cumulative % of PDMX systems</td><td>41.6</td><td><strong>62.8</strong></td><td>70.0</td><td><strong>78.9</strong></td><td>84.5</td><td>88.8</td><td>92.6</td><td>98.1</td></tr>
+  </table>
+  <p>4 is the sweet spot: it jumps coverage 62.8% → 78.9% and captures the structured repertoire that recurs on a
+    phone — string quartet / SATB open score (4-staff, <em>more</em> common than 3), organ and piano+voice (3).
+    Higher counts are orchestral-reduction territory that the real-scan domain can't validate.</p>
+
+  <h3>Decision</h3>
+  <ul>
+    <li><strong>Mapping = <code>*staff</code> + positional fallback.</strong> Emit a leading <code>*staffN</code> row
+      into <code>.tokens</code> (aligned to the surviving <code>**kern</code> columns — the tokenizer knows which
+      spines it keeps after dropping <code>**dynam</code>, so raw-<code>.krn</code> column indices don't line up and
+      the tokenizer is the correct emission point). <code>Source.staff_map(id)</code> reads it, falling back to
+      <code>reversed(range(spine_count))</code> when absent.</li>
+    <li><strong><code>max_staves = 4</code>.</strong> A <em>pure config number</em>: cross-stave attention treats
+      <code>staves</code> as a runtime reshape dim with a <code>stave_mask</code> and holds <strong>zero
+      <code>max_staves</code>-sized parameters</strong> — so the model geometry is untouched and the current 2-staff
+      production checkpoint warm-starts every retrain. Bumpable to 8 later on the same checkpoint if orchestral
+      coverage becomes worth it.</li>
+    <li><strong>Memory: staff-count bucketing with a fixed crop budget</strong> (detailed below), so the common
+      2-staff batches cost exactly what they do today and peak memory stays flat — rather than eating a blanket ~2×
+      from padding every system to 4. Blunt fallback if needed: <code>batch_size</code> 16→8 + grad accumulation
+      (matters most for the already-tight scorer, cf. the stage-5 OOM fix).</li>
+    <li><strong>Sequence:</strong> Phase 1 — <code>*staff</code> through parser → tokenizer → <code>KernReader</code>
+      → <code>Source.staff_map</code>, re-tokenize both corpora, rebuild vocab (with the staff row
+      <em>excluded</em> from vocab and from records). Phase 2 — noter multi-staff (routing, <code>max_staves=4</code>,
+      batch-max padding, <code>System4</code> subset), prove it, update the training card. Phase 3 — scorer
+      (<code>group_systems</code> + predict path), 5-stage pipeline retrain.</li>
+  </ul>
+
+  <h3>Phase 2 memory design — staff-count bucketing</h3>
+  <p>
+    The naive bump — pad every system to the global <code>max_staves=4</code> — is a flat ~2× memory hit that never
+    goes away. A padding slot is a zero-crop, but it is <strong>still run through the encoder</strong>
+    (<code>noter_model.py:382-385</code> flattens the batch to <code>B·S</code> crops); it is only excluded from the
+    loss and cross-stave attention via <code>stave_mask</code>. Encoder memory tracks the crop count <code>B·S</code>,
+    padding included, so padding a mostly-2-staff corpus to 4 spends roughly half the encoder on zeros.
+  </p>
+  <p>
+    Padding to the <em>per-batch</em> max instead of the global 4 does not fix this on its own: with ~35% of the
+    <code>System4</code> subset at ≥3 staves, ≈99.9% of random 16-system batches contain at least one big system and
+    get padded up to 4 anyway — a single 4-staff system drags the whole batch's staff dim to 4. The savings only
+    materialise if batches are made staff-<em>homogeneous</em>. The design:
+  </p>
+  <ul>
+    <li><strong>Padding moves out of <code>__getitem__</code> into the collate.</strong> Today <code>_pad_staves</code>
+      pads each item to <code>max_staves</code> inside <code>__getitem__</code>, which is exactly what forces the
+      global shape. Instead <code>__getitem__</code> returns the <code>G</code> real staves unpadded, and a batch
+      <code>collate_systems</code> pads to the batch's max <code>G</code> and builds the <code>stave_mask</code> — a
+      no-op pad when the batch is homogeneous.</li>
+    <li><strong>A <code>BucketBatchSampler</code> groups item indices by staff count</strong> and sizes each bucket's
+      batch to a fixed <strong>crop budget</strong> <code>B·S ≈ crop_budget</code> (default 32 = today's
+      <code>batch_size 16 × 2</code>), shuffling within buckets and across batches each epoch:</li>
+  </ul>
+<pre>bs = max(1, crop_budget // staves)   # systems per batch for this bucket</pre>
+  <table>
+    <tr><th>bucket (staves/system)</th><th>1</th><th>2</th><th>3</th><th>4</th></tr>
+    <tr><td>systems per batch (budget 32)</td><td>32</td><td>16</td><td>10</td><td>8</td></tr>
+    <tr><td>crops per batch (<code>B·S</code>)</td><td>32</td><td>32</td><td>30</td><td>32</td></tr>
+  </table>
+  <p>
+    Net properties: (1) <strong>training padding drops to ~zero</strong> — homogeneous batches never pad the staff
+    dim, so <code>stave_mask</code> is all-True and the common piano batch costs exactly what it does today;
+    (2) <strong>peak memory is flat, not just average</strong> — the crop budget is what guarantees the all-4-staff
+    batch fits (per-batch-max padding alone only flattens the average). The <code>stave_mask</code> machinery is
+    <em>kept</em> regardless: at <strong>scorer inference</strong> the <em>detected</em> staves per system are not
+    bucketed and must still pad to <code>max_staves</code>.
+  </p>
+  <div class="callout">
+    <strong>Two hooks this needs.</strong> An <em>index-level</em> train/val split replaces <code>random_split</code>
+    (whose <code>Subset</code> hides the index→staff-count map the sampler buckets on). And homogeneous batches perturb
+    i.i.d.-ness — the within-bucket + across-batch shuffle each epoch mitigates it, but the per-epoch reseed must
+    actually fire (verify Lightning re-<code>__iter__</code>s the sampler under <code>persistent_workers</code>, else
+    wire a <code>set_epoch</code>).
+  </div>
+
+  <h3>Rationale</h3>
+  <div class="rationale-grid">
+    <div class="rationale-card">
+      <h4>Why it's low-risk</h4>
+      <p><strong>No architectural change.</strong> The N-staff machinery (runtime <code>staves</code> dim,
+        <code>stave_mask</code>, cross-stave attention) already exists and is exercised at 2; lifting the cap is
+        data-routing plus a config number.</p>
+      <p><strong>Fixes an existing silent bug.</strong> <code>*staff</code> corrects the treble-first misroute that
+        the hard-coded <code>[1,0]</code> gets wrong today, independent of the multi-staff goal.</p>
+    </div>
+    <div class="rationale-card">
+      <h4>Costs / caveats</h4>
+      <p><strong>Multi-staff is synthetic-only.</strong> KernSheet is 100% 2-staff, so 3–4-staff accuracy is
+        PDMX-validated only — same caveat class as the accent/arc synthetic-only results. Bringing back the ≤29 KS
+        multi-staff scores is separate manual layout work.</p>
+      <p><strong>Re-tokenize is the expensive, near-irreversible step</strong> (wipes <code>build/tokens</code> for
+        240k+ files). Land Phase 1 with tests green and spot-check <code>staff_map</code> before firing the rebuild.</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>Out of scope.</strong> Voiced staves (<code>n_kern&gt;n_staff</code>, 1 KS file) and variable-staff
+    systems (orchestral optimized-away staves) stay skipped by the existing <code>spine_count&gt;staff_count</code>
+    guard. The vocab must exclude the new <code>*staff</code> row (metadata, not a musical token) — the main footgun
+    of emitting it into <code>.tokens</code>.
+  </div>
+
+  <h3>Outcome</h3>
+  <p><em>Pending — plan approved 2026-07-05, implementation not yet started. This card is updated with per-staff-count
+    eval breakdowns once the noter and scorer retrains land.</em></p>
+</article>
+
 <!-- ── Merge ties + slurs into one "arc" articulation ── -->
 <article class="entry">
   <h2>Merge ties and slurs into a single "arc" articulation; disambiguate at playback</h2>
