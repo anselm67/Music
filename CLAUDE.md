@@ -101,6 +101,9 @@ noter --csv System2.csv stats
 scorer eval <model_name> --size 500 [--rerank]
 scorer predict <model_name> <img.png> [--rerank]
 
+# Full pipeline playback: score (PDF or images) → transcription → MIDI → audio
+play <score.pdf|page1.png ...> [-o out.mid] [--play] [--wav out.wav]
+
 # KernSheet real-scan corpus
 kernsheet make                  # pre-render the page-image cache
 kernsheet detect [prefix]       # cv2-seed un-validated layouts for scores with none
@@ -117,7 +120,7 @@ kern --help
 
 ```
 src/
-  cli/         # Click entry points: kern.py, pdmx.py, staffer.py, noter.py, scorer.py, kernsheet.py
+  cli/         # Click entry points: kern.py, pdmx.py, staffer.py, noter.py, scorer.py, kernsheet.py, play.py
   sheetmusic/  # Source protocol + layout types (Score, Page, System, Staff, Box), shared by all datasets
   pdmx/        # PDMX index, asset builder, stats
   kernsheet/   # Real-scan corpus (IMSLP-derived): index, asset builder, editor, reviews framework

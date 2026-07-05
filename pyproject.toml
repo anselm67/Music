@@ -63,6 +63,7 @@ kernsheet = "cli.kernsheet:main"
 staffer = "cli.staffer:main"
 noter = "cli.noter:main"
 scorer = "cli.scorer:main"
+play = "cli.play:main"
 
 [[tool.uv.index]]
 name = "pytorch-cu130"

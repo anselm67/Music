@@ -23,6 +23,15 @@ TO_TWELVE = {
 }
 
 
+def duration_to_ticks(duration: Duration, ticks_per_quarter: int) -> int:
+    ticks = 4 * ticks_per_quarter // duration.duration
+    if duration.dots > 0:
+        for _ in range(duration.dots):
+            dot_ticks = ticks // 2
+            ticks += dot_ticks
+    return ticks
+
+
 def note_to_midi(note: Note) -> MidiPitch:
     (octave, number) = note.pitch.value
     number = TO_TWELVE[number]
@@ -90,12 +99,7 @@ class MidiSpine(Spine):
         return self.track
 
     def duration_to_ticks(self, duration: Duration) -> int:
-        ticks = 4 * self.ticks_per_quarter // duration.duration
-        if duration.dots > 0:
-            for _ in range(duration.dots):
-                dot_ticks = ticks // 2
-                ticks += dot_ticks
-        return ticks
+        return duration_to_ticks(duration, self.ticks_per_quarter)
 
     def note_duration_to_ticks(self, note: Note) -> int:
         if note.is_gracenote:

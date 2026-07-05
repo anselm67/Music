@@ -103,25 +103,6 @@
   </div>
   <p class="no-match" id="no-match">No scripts match the selected tags.</p>
 
-  <!-- ──────────────────────────────────────────────────────── imslp_predict -->
-  <div class="script">
-    <div class="script-header">
-      <span class="script-name">imslp_predict.py</span>
-      <span class="badge badge-green">demo</span>
-      <span class="badge badge-green">scorer</span>
-    </div>
-    <p class="script-desc">
-      End-to-end demo on a real IMSLP score. Downloads a PDF (direct URL or local
-      file), rasterises every page to PNG via <code>pdftoppm</code>, then runs
-      <code>scorer predict</code>. Handles the IMSLP disclaimer cookie automatically.
-    </p>
-    <div class="label">Usage</div>
-<pre>uv run python scripts/imslp_predict.py &lt;url|file.pdf&gt; [--dpi 300] [--model ravel] [--pages N]</pre>
-    <div class="label">Notes</div>
-    <p>Requires <code>pdftoppm</code> (poppler). Pass <code>--pages N</code> to limit
-    to the first N pages. The default model is <code>ravel</code>.</p>
-  </div>
-
   <!-- ─────────────────────────────────────────────── scorer_system_agreement -->
   <div class="script">
     <div class="script-header">
