@@ -327,3 +327,42 @@ def test_instrument_mixed_with_spine_path_skipped(tmp_path: Path) -> None:
 """.strip()
     reader = tokenize_input(tmp_path, kern)
     assert not any("Instr:" in line for line in reader.lines)
+
+
+def test_staff_row_emitted_and_maps_grand_staff(tmp_path: Path) -> None:
+    """A `*staffN` row is carried into the tokens file (bass-first grand staff) and
+    `staff_map` inverts it to the top->bottom column order (the historical [1, 0])."""
+    kern = """
+**kern\t**kern
+*staff2\t*staff1
+*clefF4\t*clefG2
+*M4/4\t*M4/4
+=1\t=1
+4C\t4c
+==\t==
+""".strip()
+    reader = tokenize_input(tmp_path, kern)
+    assert reader.lines[0] == "*staff2\t*staff1"
+    assert reader.staff_numbers == [2, 1]
+    assert reader.staff_map() == [1, 0]
+    # The metadata row is not a bar, a preamble entry, or a record.
+    assert reader.first_bar == 1
+    assert not any(line.startswith("*staff") for line in reader.get_text(1) or [])
+
+
+def test_staff_row_treble_first_maps_correctly(tmp_path: Path) -> None:
+    """When the columns are treble-first (`*staff1` then `*staff2`), `staff_map`
+    yields [0, 1] — the case the hard-coded [1, 0] silently misrouted."""
+    kern = """
+**kern\t**kern
+*staff1\t*staff2
+*clefG2\t*clefF4
+*M4/4\t*M4/4
+=1\t=1
+4c\t4C
+==\t==
+""".strip()
+    reader = tokenize_input(tmp_path, kern)
+    assert reader.lines[0] == "*staff1\t*staff2"
+    assert reader.staff_numbers == [1, 2]
+    assert reader.staff_map() == [0, 1]

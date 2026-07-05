@@ -25,6 +25,7 @@ from kern.typing import (
     Pitch,
     Rest,
     SpinePath,
+    StaffPosition,
     Token,
     pitch_from_note_and_octave,
 )
@@ -347,6 +348,7 @@ class Parser(Generic[T]):
         self.close_spine(source_holder)
 
     INSTRUMENT_RE = re.compile(r'^\*I(["\'])?(.*)$')
+    STAFF_RE = re.compile(r"^\*staff(\d+)$")
     INDICATOR_RE = re.compile(r'^\*([-#:/\w"\'\.+\[\]]*)$')
     SECTION_LABEL_RE = re.compile(r"^\*>.*$")
 
@@ -390,6 +392,10 @@ class Parser(Generic[T]):
             case _ if m := self.INSTRUMENT_RE.match(indicator):
                 # https://www.humdrum.org/Humdrum/guide.append2.html
                 return Instrument(literal=m.group(2), is_canonical=m.group(1) is None)
+            case _ if m := self.STAFF_RE.match(indicator):
+                # `*staffN` names the spine's staff (staff1 = top); carried through
+                # to the token file so the noter can map spines -> staves.
+                return StaffPosition(staff=int(m.group(1)))
             case _ if m := self.INDICATOR_RE.match(indicator):
                 # Un-handled spine indicator.
                 if indicator := m.group(1):

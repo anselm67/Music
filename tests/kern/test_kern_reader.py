@@ -212,3 +212,42 @@ bar1\tbar2
             reader.get_text(2, 3),
             ["clef-G\tclef-f", "=2", "keys-\t.", "bar1\tbar2", "=3"],
         )
+
+    def test_staff_map_from_staff_row(self) -> None:
+        reader = get_kern_reader(
+            """
+*staff2\t*staff1
+clef-f\tclef-G
+=1
+foo1\tfoo2
+=2
+""".strip()
+        )
+        self.assertEqual(reader.staff_numbers, [2, 1])
+        self.assertEqual(reader.staff_map(), [1, 0])
+        # The `*staff` row is metadata: excluded from bars, preamble, and records.
+        self.assertEqual(reader.first_bar, 1)
+        self.assertEqual(
+            reader.get_text(1, 2), ["clef-f\tclef-G", "=1", "foo1\tfoo2", "=2"]
+        )
+
+    def test_staff_map_treble_first(self) -> None:
+        reader = get_kern_reader("*staff1\t*staff2\n=1\nfoo1\tfoo2\n=2")
+        self.assertEqual(reader.staff_map(), [0, 1])
+
+    def test_staff_map_positional_fallback_without_staff_row(self) -> None:
+        # No `*staff` row -> reversed-column (bass-first) fallback: the old [1, 0].
+        reader = get_kern_reader("clef-f\tclef-G\n=1\nfoo1\tfoo2\n=2")
+        self.assertEqual(reader.staff_numbers, [])
+        self.assertEqual(reader.staff_map(), [1, 0])
+
+    def test_staff_map_noncontiguous_falls_back(self) -> None:
+        # A gapped labelling (staff3 with no staff2) is not invertible -> fallback.
+        reader = get_kern_reader("*staff3\t*staff1\n=1\nfoo1\tfoo2\n=2")
+        self.assertEqual(reader.staff_map(), [1, 0])
+
+    def test_staff_map_voiced_falls_back(self) -> None:
+        # A voiced staff (staff2 on two columns) is not a one-per-staff bijection:
+        # fall back to a full-width positional map, not a short "clean" list.
+        reader = get_kern_reader("*staff2\t*staff2\t*staff1\n=1\na\tb\tc\n=2")
+        self.assertEqual(reader.staff_map(), [2, 1, 0])

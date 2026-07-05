@@ -64,3 +64,7 @@ class PdmxSource:
     def spine_count(self, id: str) -> int:
         tokens_file = self.pdmx.get_path(self.pdmx.home / id, "tokens")
         return KernReader(tokens_file).spine_count
+
+    def staff_map(self, id: str) -> list[int]:
+        tokens_file = self.pdmx.get_path(self.pdmx.home / id, "tokens")
+        return KernReader(tokens_file).staff_map()

@@ -12,6 +12,9 @@ class KernReader:
     preambles: dict[int, list[str]]
     bars: dict[int, int]
     first_bar: int
+    # Per-column staff number from the `*staffN` row (empty if the file has none);
+    # `staff_map` turns it into the spine->staff routing, with a positional fallback.
+    staff_numbers: list[int]
 
     @property
     def bar_count(self) -> int:
@@ -29,12 +32,14 @@ class KernReader:
         self.bars = dict()
         self.preambles = dict()
         self.first_bar = -1
+        self.staff_numbers = []
         self.load_tokens()
 
     BAR_RE = re.compile(r"^=+\s*(\d+)?.*$")
     SIG_RE = re.compile(r"^\d+/\d+$")
     CLEF_RE = re.compile(r"^clef-.*$")
     KEYS_RE = re.compile(r"^key.*$")
+    STAFF_RE = re.compile(r"^\*staff(\d+)$")
 
     def _get_spline_count(self) -> int:
         if len(self.lines) == 0:
@@ -63,7 +68,15 @@ class KernReader:
         clef: list[str] = [""] * spine_count
         keys: list[str] = [""] * spine_count
         for lineno, line in enumerate(self.lines):
-            for spine, tok in enumerate(line.split("\t")):
+            toks = line.split("\t")
+            # The `*staffN` metadata row (all columns match): capture the per-column
+            # staff numbers and skip it — it is not a bar, preamble, or record.
+            staff_matches = [self.STAFF_RE.match(tok) for tok in toks]
+            if all(staff_matches):  # a blank line is ["" ]-> no match -> not staff
+                # `if m` is for the type-checker (all() doesn't narrow the elements).
+                self.staff_numbers = [int(m.group(1)) for m in staff_matches if m]
+                continue
+            for spine, tok in enumerate(toks):
                 assert spine < spine_count, "Invalid .tokens: spine count mismatch."
                 if self.SIG_RE.match(tok):
                     sig[spine] = tok
@@ -98,6 +111,33 @@ class KernReader:
     def has_bar_zero(self) -> bool:
         return 0 in self.bars
 
+    def staff_map(self) -> list[int]:
+        """Token column index for each staff, ordered top (staff1) to bottom.
+
+        Built from the ``*staffN`` row when present; otherwise falls back to the
+        positional (bass-first) convention — the leftmost column is the bottom
+        staff — i.e. ``reversed(range(spine_count))``, which is the historical
+        ``[1, 0]`` for a grand staff, generalized. A voiced/shared staff (a staff
+        number on more than one column) keeps that staff's first column; the noter
+        drops such scores via its ``spine_count > staff_count`` guard.
+        """
+        n = self.spine_count
+        if not self.staff_numbers:
+            return list(reversed(range(n)))
+        col_of: dict[int, int] = {}
+        for col, staff in enumerate(self.staff_numbers):
+            col_of.setdefault(staff, col)
+        # Only invert a clean bijection: one column per staff, labelled 1..n with no
+        # gaps. A voiced staff (a number on >1 column) makes len(col_of) < n; a gap or
+        # `*staff1/2` span that never parsed fails the range test. Either way it is not
+        # a mapping we can invert (and the noter's spine_count>staff_count guard drops
+        # such scores) — fall back to positional so we never return a short/clean-
+        # looking list that hides the voicing.
+        staves = sorted(col_of)
+        if len(col_of) != n or staves != list(range(1, n + 1)):
+            return list(reversed(range(n)))
+        return [col_of[staff] for staff in staves]
+
     def get_text(
         self, start_barno: int, end_barno: int | None = None
     ) -> Optional[list[str]]:
@@ -119,7 +159,11 @@ class KernReader:
         # limitation that needs a list-per-bar index to fix.
         later = [ln for bn, ln in self.bars.items() if bn >= end_barno]
         eos = min(later) + 1 if later else len(self.lines)
-        return preamble + self.lines[bos:eos]
+        # Drop any `*`-prefixed metadata (the `*staffN` row) — usually it sits above
+        # bar 1 and is never sliced, but a rare mid-piece staff change would otherwise
+        # leak the raw `*staff` string into the records as a spurious UNK.
+        records = [ln for ln in self.lines[bos:eos] if not ln.startswith("*")]
+        return preamble + records
 
     def header(self) -> list[str]:
         return self.lines[:10]

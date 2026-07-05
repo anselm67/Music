@@ -90,3 +90,7 @@ class MixedSource:
     def spine_count(self, id: str) -> int:
         child, rest = self._route(id)
         return child.spine_count(rest)
+
+    def staff_map(self, id: str) -> list[int]:
+        child, rest = self._route(id)
+        return child.staff_map(rest)

@@ -47,3 +47,6 @@ class KernSheetSource:
 
     def spine_count(self, id: str) -> int:
         return self.kern_sheet.load_tokens(id).spine_count
+
+    def staff_map(self, id: str) -> list[int]:
+        return self.kern_sheet.load_tokens(id).staff_map()

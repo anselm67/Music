@@ -59,3 +59,13 @@ class Source(Protocol):
         ``spine_count`` guard in ``NoterDataset``.
         """
         ...
+
+    def staff_map(self, id: str) -> list[int]:
+        """Token column index for each staff of the score, top staff first.
+
+        From the Humdrum ``*staffN`` row when present, else the positional bass-first
+        fallback (``reversed(range(spine_count))``). The noter zips this against a
+        system's ``staff_boxes`` (also top-to-bottom) to route each staff to its
+        token column. See :meth:`KernReader.staff_map`.
+        """
+        ...
