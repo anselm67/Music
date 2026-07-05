@@ -1,8 +1,8 @@
 """One-off: take an IMSLP PDF (URL or local file), rasterise to PNG, run
-`scorer predict ravel`.
+`scorer predict tatum-arc-e30`.
 
 Usage:
-    uv run python scripts/imslp_predict.py <url|file.pdf> [--dpi 300] [--model ravel]
+    uv run python scripts/imslp_predict.py <url|file.pdf> [--dpi 300] [--model NAME]
 
 Downloads (or copies) the PDF to a temp dir, converts every page to PNG with
 `pdftoppm`, then shells out to `scorer predict <model> <page>.png ...`.
@@ -49,7 +49,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("source", help="Direct IMSLP PDF URL or a local .pdf path")
     ap.add_argument("--dpi", type=int, default=300)
-    ap.add_argument("--model", default="ravel")
+    ap.add_argument("--model", default="tatum-arc-e30")
     ap.add_argument(
         "--pages", type=int, default=0, help="Limit to the first N pages (0 = all)."
     )
