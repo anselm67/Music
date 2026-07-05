@@ -16,6 +16,11 @@ from kern import KernReader, tokenize
 from sheetmusic import Score, Status
 from utils import from_json
 
+# DPI at which score PDFs are rasterised for this corpus. This is pdf2image's own
+# default, made explicit so the play CLI can render at the exact same scale the
+# build/png cache was made with (the scorer is sensitive to page scale).
+RENDER_DPI = 200
+
 
 @dataclass
 class KernScore:
@@ -274,7 +279,7 @@ class KernSheet:
         """Render ``build/png`` for every page of ``score``. ``kern_score`` resolves
         the source pdf; ``score`` supplies the per-page width/rotation to apply."""
         pdf_path = self.pdf_path(kern_score)
-        images = convert_from_path(pdf_path)
+        images = convert_from_path(pdf_path, dpi=RENDER_DPI)
         for page in score.pages:
             if page.page_number > len(images):  # page_number is 1-based
                 logging.warning(

@@ -26,6 +26,7 @@ from torchvision.io import decode_image
 from torchvision.transforms import v2
 
 from kern import Dynamics, Part, render_systems, write_midi
+from kernsheet import RENDER_DPI
 from noter import Vocab
 from sheetmusic import page_transform
 from utils import log_uncaught_exceptions
@@ -36,12 +37,11 @@ if TYPE_CHECKING:
 HOME = Path("/home/anselm/datasets/PDMX")
 DEFAULT_SOUNDFONT = Path("/usr/share/sounds/sf2/default-GM.sf2")
 TICKS_PER_QUARTER = 480
-# PDF rasterisation DPI. 200 matches the KernSheet build. With an antialias=True model
-# the transform antialiases the downscale to its canvas, so the DPI is not load-bearing
-# and a raw render reads correctly. NB an antialias=False checkpoint (e.g.
-# tatum-arc-e30) does NOT antialias, so a large downscale can flip its pitch/octave
-# reads — such a model must be retrained under antialias=True to be played reliably.
-RENDER_DPI = 200
+# Rasterise PDFs at the corpus DPI (kernsheet.RENDER_DPI) so play renders at the exact
+# scale the build/png cache was made with. With an antialias=True model the transform
+# antialiases the downscale to its canvas, so the DPI is not load-bearing and a raw
+# render reads correctly; an antialias=False checkpoint (e.g. tatum-arc-e30) does NOT
+# antialias, so it must be retrained under antialias=True to be played reliably.
 
 
 def load_pages(inputs: tuple[Path, ...]) -> list[tuple[str, torch.Tensor]]:

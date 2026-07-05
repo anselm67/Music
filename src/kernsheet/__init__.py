@@ -1,9 +1,10 @@
 from .classical_staffer import ClassicalStaffer
-from .kernsheet import KernEntry, KernScore, KernSheet
+from .kernsheet import RENDER_DPI, KernEntry, KernScore, KernSheet
 from .kernsheet_source import KernSheetSource
 from .reviews import Finding, review_names, score_findings
 
 __all__ = [
+    "RENDER_DPI",
     "ClassicalStaffer",
     "Finding",
     "KernEntry",
