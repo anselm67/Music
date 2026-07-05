@@ -43,7 +43,8 @@ def note_to_midi(note: Note) -> MidiPitch:
     elif number > 12:
         number -= 12
         octave += 1
-    return MidiPitch(octave * 12 + number - 1)
+    # +1 octave: MIDI middle C (kern `c`, pitch octave 4) is note 60, i.e. (4+1)*12.
+    return MidiPitch((octave + 1) * 12 + number - 1)
 
 
 class Spine:

@@ -10,35 +10,35 @@ from midi import Pitch as MidiPitch
 
 class TestToMidi(unittest.TestCase):
     def test_note_to_midi_octave(self) -> None:
+        # Kern middle C `c` is MIDI 60; `C` is C3=48, `CCCC` is C0=12, `ccccc` C8=108.
         note = Note(Duration(4, 0), KernPitch.CCCC)
         midi = note_to_midi(note)
-        self.assertEqual(midi, MidiPitch.CX)
+        self.assertEqual(midi, MidiPitch.C0)
 
         note = Note(Duration(4, 0), KernPitch.C)
         midi = note_to_midi(note)
-        self.assertEqual(midi, MidiPitch.C2)
+        self.assertEqual(midi, MidiPitch.C3)
 
         note = Note(Duration(4, 0), KernPitch.ccccc)
         midi = note_to_midi(note)
-        self.assertEqual(midi, MidiPitch.C7)
+        self.assertEqual(midi, MidiPitch.C8)
 
     def test_note_to_midi_sharp(self) -> None:
         note = Note(Duration(4, 0), KernPitch.f, sharps=1)
         midi = note_to_midi(note)
-        self.assertEqual(midi, MidiPitch.F3Sharp)
+        self.assertEqual(midi, MidiPitch.F4Sharp)
 
         note = Note(Duration(4, 0), KernPitch.ee, flats=1)
         midi = note_to_midi(note)
-        self.assertEqual(midi, MidiPitch.D4Sharp)
+        self.assertEqual(midi, MidiPitch.D5Sharp)
 
         note = Note(Duration(4, 0), KernPitch.ee, flats=2)
         midi = note_to_midi(note)
-        self.assertEqual(midi, MidiPitch.D4)
+        self.assertEqual(midi, MidiPitch.D5)
 
         note = Note(Duration(4, 0), KernPitch.bb, sharps=1)
         midi = note_to_midi(note)
-        self.assertEqual(midi, MidiPitch.C5)
-        self.assertEqual(midi, MidiPitch.C5)
+        self.assertEqual(midi, MidiPitch.C6)
 
     def test_handler_channel(self) -> None:
         handler = MidiHandler(480, 120)
@@ -65,14 +65,12 @@ class TestToMidi(unittest.TestCase):
 
         self.assertEqual(len(handler.tracks), 1)
 
-        # 4c is Middle C (C3 in this system per tests, 48)
-        # 4d is D3 (50)
-        # Duration 4 -> 480 ticks
+        # 4c is Middle C (C4 = MIDI 60), 4d is D4 (62); duration 4 -> 480 ticks
         expected_calls = [
-            call.note_on(Channel.Chan0, MidiPitch.C3, Velocity.Forte, 0),
-            call.note_off(Channel.Chan0, MidiPitch.C3, Velocity.Forte, 480),
-            call.note_on(Channel.Chan0, MidiPitch.D3, Velocity.Forte, 0),
-            call.note_off(Channel.Chan0, MidiPitch.D3, Velocity.Forte, 480),
+            call.note_on(Channel.Chan0, MidiPitch.C4, Velocity.Forte, 0),
+            call.note_off(Channel.Chan0, MidiPitch.C4, Velocity.Forte, 480),
+            call.note_on(Channel.Chan0, MidiPitch.D4, Velocity.Forte, 0),
+            call.note_off(Channel.Chan0, MidiPitch.D4, Velocity.Forte, 480),
         ]
         mock_midi_output.return_value.assert_has_calls(expected_calls, any_order=False)
 
@@ -83,11 +81,11 @@ class TestToMidi(unittest.TestCase):
         parser = Parser.from_text("**kern\n4c 4e 4g\n*-", handler)
         parser.parse()
         expected_calls = [
-            call.note_on(Channel.Chan0, MidiPitch.C3, Velocity.Forte, 0),
-            call.note_on(Channel.Chan0, MidiPitch.E3, Velocity.Forte, 0),
-            call.note_on(Channel.Chan0, MidiPitch.G3, Velocity.Forte, 0),
-            call.note_off(Channel.Chan0, MidiPitch.C3, Velocity.Forte, 480),
-            call.note_off(Channel.Chan0, MidiPitch.E3, Velocity.Forte, 0),
-            call.note_off(Channel.Chan0, MidiPitch.G3, Velocity.Forte, 0),
+            call.note_on(Channel.Chan0, MidiPitch.C4, Velocity.Forte, 0),
+            call.note_on(Channel.Chan0, MidiPitch.E4, Velocity.Forte, 0),
+            call.note_on(Channel.Chan0, MidiPitch.G4, Velocity.Forte, 0),
+            call.note_off(Channel.Chan0, MidiPitch.C4, Velocity.Forte, 480),
+            call.note_off(Channel.Chan0, MidiPitch.E4, Velocity.Forte, 0),
+            call.note_off(Channel.Chan0, MidiPitch.G4, Velocity.Forte, 0),
         ]
         mock_midi_output.return_value.assert_has_calls(expected_calls, any_order=False)
