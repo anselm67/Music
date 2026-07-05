@@ -21,8 +21,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import click
+import cv2
 import torch
-from torchvision.io import decode_image
 from torchvision.transforms import v2
 
 from kern import Dynamics, Part, parts_to_midi
@@ -76,6 +76,31 @@ def build_transform(config: "ScorerConfig") -> v2.Compose:
             PerImageNormalize(),
         ]
     )
+
+
+def load_page(path: Path, width: int, transform: v2.Compose) -> torch.Tensor:
+    """Decode a page and downscale it to the training width before the transform.
+
+    Not about pixel count — a controlled test shows the model reads the KS render
+    correctly whether it's 1200px or upscaled to 2481px. It's about stroke
+    sharpness: kernsheet builds build/png by ``cv2.resize(INTER_AREA)`` down to
+    width 1200, which softens/thickens the staff lines, and that is what the
+    scorer trained on. A native high-res render (e.g. a 300-DPI pdftoppm page at
+    ~2481px) has hair-thin sharp lines the model never saw, so the staffer
+    mis-registers the staff by a line and every pitch reads a third off.
+
+    Uses the exact same ``cv2.resize(INTER_AREA)`` to ``width`` as the kernsheet
+    build (``KernSheet._transform``), then hands the transform an RGB CHW tensor —
+    the same thing ``decode_image`` yields when the dataset reads that build PNG.
+    """
+    bgr = cv2.imread(path.as_posix(), cv2.IMREAD_COLOR)
+    if bgr is None:
+        raise click.ClickException(f"Could not read image: {path}")
+    h, w = bgr.shape[:2]
+    if w > width:  # only downscale; INTER_AREA degrades to nearest on upscale
+        bgr = cv2.resize(bgr, (width, int(h * width / w)), interpolation=cv2.INTER_AREA)
+    rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+    return transform(torch.from_numpy(rgb).permute(2, 0, 1).contiguous())
 
 
 def decode_stave(
@@ -157,6 +182,16 @@ def play_or_render(midi: Path, soundfont: Path, wav: Path | None, play: bool) ->
 @click.option(
     "--dpi", type=int, default=300, show_default=True, help="PDF rasterisation DPI."
 )
+@click.option(
+    "--width",
+    type=int,
+    default=1200,
+    show_default=True,
+    help="Downscale each page to this px width before the model, matching the "
+    "kernsheet build (INTER_AREA to 1200) the scorer trained on. Native high-res "
+    "renders have sharp thin staff lines the model mis-registers (pitches read a "
+    "third off).",
+)
 @click.option("--play", is_flag=True, default=False, help="Play the result aloud.")
 @click.option(
     "--wav",
@@ -197,6 +232,7 @@ def cli(
     output: Path | None,
     tempo: int,
     dpi: int,
+    width: int,
     play: bool,
     wav: Path | None,
     soundfont: Path,
@@ -230,7 +266,7 @@ def cli(
         click.echo(f"Transcribing {len(pages)} page(s) with '{model}' ...")
         parts: dict[int, Part] = {}
         for page in pages:
-            image = transform(decode_image(page.as_posix())).to(module.device)
+            image = load_page(page, width, transform).to(module.device)
             count = transcribe_page(module, vocab, image, parts)
             click.echo(f"  {page.name}: {count} staves")
 
