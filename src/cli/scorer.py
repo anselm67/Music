@@ -833,8 +833,19 @@ def predict_from_dataset(
     nargs=-1,
     type=click.Path(file_okay=True, exists=True, readable=True, path_type=Path),
 )
+@click.option(
+    "--vocab",
+    "vocab_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Vocab JSON to decode with (default: <home>/build/vocab.json). Pass the "
+    "model's training vocab when it differs from the corpus default — e.g. the "
+    "KernSheet vocab (a prefix-superset, ids preserved) for a KS-vocab model.",
+)
 @click.pass_obj
-def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
+def predict(
+    ctx: ClickContext, name: str, img_paths: tuple[Path, ...], vocab_path: Path | None
+) -> None:
     """Detects, crops, and transcribes staves on a list of images or random pages.
 
     NAME: The model version to use to make the predictions.
@@ -842,7 +853,7 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
     PDMX dataset (with GT comparison).
     """
     config, module = _load_for_inference(name)
-    vocab = Vocab.load(ctx.home / "build/vocab.json")
+    vocab = Vocab.load(vocab_path or ctx.home / "build/vocab.json")
     dataset = ScorerDataset(config, ctx.source, vocab)
     cv2.namedWindow("Page")
     if img_paths:
