@@ -6,8 +6,9 @@ from .tokens_to_midi import (
     Dynamics,
     NoteEvent,
     Part,
-    parts_to_midi,
     part_to_events,
+    render_systems,
+    write_midi,
 )
 from .tokenizer import (
     ARTICULATIONS,
@@ -54,8 +55,9 @@ __all__ = [
     "SpinePath",
     "Token",
     "to_midi",
-    "parts_to_midi",
+    "write_midi",
     "part_to_events",
+    "render_systems",
     "Dynamics",
     "NoteEvent",
     "Part",

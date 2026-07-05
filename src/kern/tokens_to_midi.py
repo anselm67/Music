@@ -124,30 +124,81 @@ def _gate(ticks: int, flags: Flags, dyn: Dynamics) -> int:
     return int(round(ticks * dyn.normal_gate))
 
 
-def part_to_events(
-    part: Part, ticks_per_quarter: int, dyn: Dynamics
-) -> list[NoteEvent]:
-    """Decode one part's timesteps into a time-ordered event list.
+def _event_ticks(row: Timestep, ticks_per_quarter: int) -> int | None:
+    """The onsetting event's duration in one stave-row, or ``None`` for a sustain
+    (``.``) or a 0-duration structural token (bar / clef / key / meter)."""
+    base = row[0][0]
+    rest = _rest_ticks(base, ticks_per_quarter)
+    if rest is not None:
+        return rest
+    for token, _ in row:
+        parsed = _parse_note(token, ticks_per_quarter)
+        if parsed is not None:
+            return parsed[1]
+    return None
 
-    Advances a clock over rest/note timesteps (bars, clefs, keys and meters take no
-    time) and resolves arcs: an arc-opened note followed immediately by a same-pitch
-    arc-closed note fuses into one sustained event (tie); otherwise the arc is a slur
-    and both notes sound legato. Chord ties are out of scope — a chord always strikes.
+
+def _row_schedule(
+    staves: list[Part], ticks_per_quarter: int, dyn: Dynamics
+) -> tuple[list[int], int]:
+    """Shared onset tick per row across a system's aligned staves, plus the total.
+
+    The staves of a system are decoded in lockstep (one row = one shared time slice),
+    so timing must come from the grid, not each stave's own note durations — those can
+    disagree (a mispredicted duration in one hand) and desync the parts. The slice at
+    row ``t`` lasts the *shortest* onsetting event across the staves (the finest
+    subdivision defines the step; a longer note simply spans several rows via ``.``).
+    A row carrying a fermata holds (``fermata_scale``).
+    """
+    nrows = max((len(s) for s in staves), default=0)
+    onsets = [0] * nrows
+    clock = 0
+    for t in range(nrows):
+        durations: list[int] = []
+        fermata = False
+        for stave in staves:
+            if t < len(stave):
+                ticks = _event_ticks(stave[t], ticks_per_quarter)
+                if ticks is not None:
+                    durations.append(ticks)
+                    fermata = fermata or any(f[FERMATA] for _, f in stave[t])
+        step = min(durations) if durations else 0
+        if fermata:
+            step = int(round(step * dyn.fermata_scale))
+        onsets[t] = clock
+        clock += step
+    return onsets, clock
+
+
+def _stave_events(
+    stave: Part,
+    onsets: list[int],
+    ticks_per_quarter: int,
+    dyn: Dynamics,
+    pending: _Pending | None = None,
+) -> tuple[list[NoteEvent], _Pending | None]:
+    """Decode one stave's rows into events, onsetting each at its shared-grid tick.
+
+    Resolves arcs: an arc-opened note followed immediately by a same-pitch arc-closed
+    note fuses into one sustained event (tie); otherwise the arc is a slur and both
+    notes sound legato. Chord ties are out of scope — a chord always strikes.
+
+    ``pending`` carries an arc opened at the end of the previous system (its event
+    holds a global onset); returning the still-open ``pending`` lets the caller fuse a
+    tie across a system break. ``onsets`` must therefore be in the same (global) frame
+    as any incoming ``pending`` event's onset.
     """
     events: list[NoteEvent] = []
-    clock = 0
-    pending: _Pending | None = None
-    for timestep in part:
-        rest = _rest_ticks(timestep[0][0], ticks_per_quarter)
-        if rest is not None:
-            clock += rest
+    for t, row in enumerate(stave):
+        clock = onsets[t]
+        if _rest_ticks(row[0][0], ticks_per_quarter) is not None:
             pending = None  # a rest breaks any pending tie
             continue
 
         notes = [
             (m, ticks, flags)
-            for base, flags in timestep
-            if (parsed := _parse_note(base, ticks_per_quarter)) is not None
+            for token, flags in row
+            if (parsed := _parse_note(token, ticks_per_quarter)) is not None
             for m, ticks in [parsed]
         ]
         if not notes:
@@ -165,7 +216,8 @@ def part_to_events(
             )
             if tie:
                 assert pending is not None
-                pending.event.duration += nominal  # fuse into the held note
+                # Extend the held note through this one's end on the shared clock.
+                pending.event.duration = clock + nominal - pending.event.onset
                 pending = (
                     _Pending(pitch.value, pending.event) if flags[ARC_START] else None
                 )
@@ -180,8 +232,40 @@ def part_to_events(
                 events.append(
                     NoteEvent(clock, pitch, _gate(nominal, flags, dyn), velocity)
                 )
-        clock += nominal
-    return events
+    return events, pending
+
+
+def render_systems(
+    systems: list[list[Part]], ticks_per_quarter: int, dyn: Dynamics
+) -> list[list[NoteEvent]]:
+    """Render an ordered sequence of systems into per-part event lists.
+
+    Lays the systems end-to-end on a running tick offset (both hands share each
+    system's grid, so they stay locked), and threads per-stave arc state across system
+    breaks so a tie spanning a line break fuses into one held note. Staves are matched
+    across systems by slot — their top-to-bottom position is the same instrument.
+    """
+    parts: dict[int, list[NoteEvent]] = {}
+    pendings: dict[int, _Pending | None] = {}
+    offset = 0
+    for staves in systems:
+        local, total = _row_schedule(staves, ticks_per_quarter, dyn)
+        onsets = [tick + offset for tick in local]  # lift into the global frame
+        for slot, stave in enumerate(staves):
+            events, pendings[slot] = _stave_events(
+                stave, onsets, ticks_per_quarter, dyn, pendings.get(slot)
+            )
+            parts.setdefault(slot, []).extend(events)
+        offset += total
+    return [parts[slot] for slot in sorted(parts)]
+
+
+def part_to_events(
+    part: Part, ticks_per_quarter: int, dyn: Dynamics
+) -> list[NoteEvent]:
+    """Decode a single stand-alone stave (its own rows drive the clock)."""
+    onsets, _ = _row_schedule([part], ticks_per_quarter, dyn)
+    return _stave_events(part, onsets, ticks_per_quarter, dyn)[0]
 
 
 def _serialize_part(track: MidiOutput, events: list[NoteEvent], chan: Channel) -> None:
@@ -203,19 +287,20 @@ def _serialize_part(track: MidiOutput, events: list[NoteEvent], chan: Channel) -
             track.note_off(chan, pitch, velocity, delta)
 
 
-def parts_to_midi(
-    parts: list[Part],
+def write_midi(
+    parts: list[list[NoteEvent]],
     midi_file: Path,
     tempo: int = 90,
     ticks_per_quarter: int = 480,
-    dynamics: Dynamics | None = None,
 ) -> None:
-    """Render decoded parts to a Format-1 MIDI file, one track/channel per part."""
-    dyn = dynamics or Dynamics()
+    """Serialise already-decoded parts to a Format-1 MIDI file, one track per part.
+
+    Each part is a flat event list with absolute onsets (the caller lays systems
+    end-to-end on a shared offset), so this only allocates channels and writes bytes.
+    """
     channels = deque(c for c in Channel if c.value != 9)  # skip the GM drum channel
     tracks: list[MidiOutput] = []
-    for part in parts:
-        events = part_to_events(part, ticks_per_quarter, dyn)
+    for events in parts:
         if not channels:
             raise ValueError(
                 f"Too many parts ({len(parts)}) for the 15 melodic MIDI channels"

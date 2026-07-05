@@ -1,7 +1,7 @@
 """Tests for the simplified-token -> MIDI playback bridge."""
 
 from kern.tokenizer import split_articulation
-from kern.tokens_to_midi import Dynamics, Part, part_to_events
+from kern.tokens_to_midi import Dynamics, Part, part_to_events, render_systems
 
 TPQ = 480
 DYN = Dynamics()
@@ -92,6 +92,28 @@ def test_orphaned_arc_end_sounds_legato() -> None:
     events = part_to_events(part("C/4@>"), TPQ, DYN)
     assert len(events) == 1
     assert events[0].duration == TPQ
+
+
+def test_system_keeps_staves_synced_despite_divergent_durations() -> None:
+    # Two hands on a shared grid: the second hand's notes sum to 4 quarters on their
+    # own (480+480+960) but the grid's min-per-row keeps both at 3 quarter slices, so
+    # the parts stay aligned (the desync bug decoded each hand independently).
+    left = part("C/4", "C/4", "C/4")
+    right = part("C/4", "C/4", "C/2")
+    parts = render_systems([[left, right]], TPQ, DYN)
+    assert [e.onset for e in parts[0]] == [0, TPQ, 2 * TPQ]
+    assert [e.onset for e in parts[1]] == [0, TPQ, 2 * TPQ]
+
+
+def test_tie_fuses_across_system_break() -> None:
+    # Arc opens on the last note of system 0 and closes on the first (same-pitch) note
+    # of system 1: the two systems are decoded separately, but the pending arc threads
+    # across the break, so the note is held (one fused event), not re-struck.
+    system0 = part("C/4", "C/4@<")
+    system1 = part("C/4@>", "D/4")
+    parts = render_systems([[system0], [system1]], TPQ, DYN)
+    assert [e.onset for e in parts[0]] == [0, TPQ, 3 * TPQ]  # C, held C, then D
+    assert parts[0][1].duration == 2 * TPQ  # the fused note spans the system break
 
 
 def test_tie_chain_middle_note() -> None:

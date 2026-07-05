@@ -3,7 +3,7 @@
 
 Runs the trained ``scorer`` (detect -> crop -> transcribe) over each page, stitches
 the per-stave token/articulation output into continuous parts, and renders a MIDI
-file via the articulation-aware :func:`kern.parts_to_midi` bridge. Optionally plays
+file via the articulation-aware :mod:`kern.tokens_to_midi` bridge. Optionally plays
 or renders the result to audio with ``fluidsynth``.
 
 Supersedes ``scripts/imslp_predict.py``: this is the real end-to-end tool, no longer a
@@ -25,7 +25,7 @@ import cv2
 import torch
 from torchvision.transforms import v2
 
-from kern import Dynamics, Part, parts_to_midi
+from kern import Dynamics, Part, render_systems, write_midi
 from noter import Vocab
 from sheetmusic import LetterboxResize, PerImageNormalize
 from utils import log_uncaught_exceptions
@@ -35,6 +35,7 @@ if TYPE_CHECKING:
 
 HOME = Path("/home/anselm/datasets/PDMX")
 DEFAULT_SOUNDFONT = Path("/usr/share/sounds/sf2/default-GM.sf2")
+TICKS_PER_QUARTER = 480
 
 
 def rasterize_pdf(pdf: Path, out_dir: Path, dpi: int) -> list[Path]:
@@ -81,17 +82,18 @@ def build_transform(config: "ScorerConfig") -> v2.Compose:
 def load_page(path: Path, width: int, transform: v2.Compose) -> torch.Tensor:
     """Decode a page and downscale it to the training width before the transform.
 
-    Not about pixel count — a controlled test shows the model reads the KS render
-    correctly whether it's 1200px or upscaled to 2481px. It's about stroke
-    sharpness: kernsheet builds build/png by ``cv2.resize(INTER_AREA)`` down to
-    width 1200, which softens/thickens the staff lines, and that is what the
-    scorer trained on. A native high-res render (e.g. a 300-DPI pdftoppm page at
-    ~2481px) has hair-thin sharp lines the model never saw, so the staffer
-    mis-registers the staff by a line and every pitch reads a third off.
+    The scorer trained on ~1200px-wide renders (kernsheet builds build/png by
+    ``cv2.resize(INTER_AREA)`` down to width 1200), and is sensitive to staff-line
+    stroke width: feed it a source far off that scale and it mis-reads pitch/octave.
+    Best is to rasterise the PDF near 1200px in the first place (``--dpi 150``); this
+    is the belt-and-braces normalisation for any oversized input (a big scan, or a
+    higher --dpi). Uses the exact same ``cv2.resize(INTER_AREA)`` to ``width`` as the
+    kernsheet build, then hands the transform an RGB CHW tensor — what ``decode_image``
+    yields when the dataset reads that build PNG.
 
-    Uses the exact same ``cv2.resize(INTER_AREA)`` to ``width`` as the kernsheet
-    build (``KernSheet._transform``), then hands the transform an RGB CHW tensor —
-    the same thing ``decode_image`` yields when the dataset reads that build PNG.
+    Note a *large* downscale (e.g. a 300-DPI 2550px page to 1200) is not equivalent to
+    rasterising at ~1200 directly: the aggressive resample shifts the line rendering
+    enough to flip the model's pitch/octave read on some staves, so keep --dpi low.
     """
     bgr = cv2.imread(path.as_posix(), cv2.IMREAD_COLOR)
     if bgr is None:
@@ -128,22 +130,22 @@ def decode_stave(
 
 
 def transcribe_page(
-    module: "ScorerModule", vocab: Vocab, image: torch.Tensor, parts: dict[int, Part]
-) -> int:
-    """Transcribe one page, appending each stave's timesteps to its part.
+    module: "ScorerModule", vocab: Vocab, image: torch.Tensor
+) -> list[list[Part]]:
+    """Transcribe one page into its systems, each a list of decoded staves.
 
-    Staves at the same top-to-bottom slot across systems (and pages) are the same
-    instrument, so they concatenate into one part. Returns the stave count.
+    A system's staves are returned top-to-bottom (slot order = instrument); the caller
+    concatenates systems across the whole score before rendering, so timing and ties
+    are resolved over the full piece.
     """
     boxes, tokens, arts, owners = module.predict(image.unsqueeze(0).to(module.device))
     by_system: dict[int, list[int]] = {}
     for k in range(boxes.shape[0]):
         by_system.setdefault(int(owners[k]), []).append(k)
-    for system in sorted(by_system):
-        for slot, k in enumerate(by_system[system]):
-            steps = decode_stave(vocab, tokens[k].cpu(), arts[k].cpu())
-            parts.setdefault(slot, []).extend(steps)
-    return int(boxes.shape[0])
+    return [
+        [decode_stave(vocab, tokens[k].cpu(), arts[k].cpu()) for k in by_system[system]]
+        for system in sorted(by_system)
+    ]
 
 
 def play_or_render(midi: Path, soundfont: Path, wav: Path | None, play: bool) -> None:
@@ -180,7 +182,13 @@ def play_or_render(midi: Path, soundfont: Path, wav: Path | None, play: bool) ->
 )
 @click.option("--tempo", type=int, default=90, show_default=True, help="Quarter BPM.")
 @click.option(
-    "--dpi", type=int, default=300, show_default=True, help="PDF rasterisation DPI."
+    "--dpi",
+    type=int,
+    default=150,
+    show_default=True,
+    help="PDF rasterisation DPI. 150 (pdftoppm's default) renders A4 to ~1275px, "
+    "near the model's training scale. Higher DPIs then need a big downscale to "
+    "--width, whose artefacts can flip the model's pitch/octave reads.",
 )
 @click.option(
     "--width",
@@ -264,17 +272,18 @@ def cli(
     with tempfile.TemporaryDirectory() as tmp:
         pages = resolve_pages(inputs, Path(tmp), dpi)
         click.echo(f"Transcribing {len(pages)} page(s) with '{model}' ...")
-        parts: dict[int, Part] = {}
+        systems: list[list[Part]] = []
         for page in pages:
             image = load_page(page, width, transform).to(module.device)
-            count = transcribe_page(module, vocab, image, parts)
-            click.echo(f"  {page.name}: {count} staves")
+            page_systems = transcribe_page(module, vocab, image)
+            systems.extend(page_systems)
+            click.echo(f"  {page.name}: {sum(len(s) for s in page_systems)} staves")
 
-    if not parts:
+    if not systems:
         raise click.ClickException("No staves detected — nothing to play.")
-    ordered = [parts[slot] for slot in sorted(parts)]
-    parts_to_midi(ordered, midi_path, tempo=tempo, dynamics=Dynamics())
-    click.echo(f"Wrote MIDI: {midi_path} ({len(ordered)} parts)")
+    parts = render_systems(systems, TICKS_PER_QUARTER, Dynamics())
+    write_midi(parts, midi_path, tempo=tempo)
+    click.echo(f"Wrote MIDI: {midi_path} ({len(parts)} parts)")
 
     if play or wav is not None:
         play_or_render(midi_path, soundfont, wav, play)
