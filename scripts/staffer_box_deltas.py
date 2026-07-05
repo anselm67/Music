@@ -76,7 +76,7 @@ def _staffer_from_scorer(path: Path, device: torch.device) -> StafferModel:
 
 @torch.no_grad()
 def _predict_boxes(
-    model: StafferModule, img: torch.Tensor
+    model: StafferModel | StafferModule, img: torch.Tensor
 ) -> list[tuple[float, float, float, float]]:
     """Normalised (left, top, right, bottom) for active staves, top→bottom."""
     stave_tb, stave_logits, boundary_logits, sys_lr, _ = (
