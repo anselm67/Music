@@ -105,10 +105,13 @@ def group_systems(
 
     The flat batch is ordered page-by-page then by each page's GT-stave order — the
     same order ``build_stave_boxes`` and the target ``cat`` use. Staves sharing a page
-    and a system index form one system, capped and padded to ``max_staves``. Returns
-    ``(grouped_idx, stave_mask)`` both ``(num_systems, max_staves)``: ``grouped_idx``
-    indexes the flat batch (0 on pad slots — the caller masks them via ``stave_mask``,
-    which is True only on real staves).
+    and a system index form one system, capped at ``max_staves`` and padded to the
+    batch-max staff count ``smax`` (≤ ``max_staves``) — padding to the batch-max, not
+    the global ceiling, keeps a batch of ≤2-staff systems at ``smax=2`` so bumping
+    ``max_staves`` to 4 costs nothing on the common case. Returns ``(grouped_idx,
+    stave_mask)`` both ``(num_systems, smax)``: ``grouped_idx`` indexes the flat batch
+    (0 on pad slots — the caller masks them via ``stave_mask``, True only on real
+    staves).
     """
     groups: list[list[int]] = []
     k = 0
@@ -119,8 +122,9 @@ def group_systems(
             k += 1
         groups.extend(by_sys[s][:max_staves] for s in sorted(by_sys))
     ng = len(groups)
-    grouped_idx = torch.zeros((ng, max_staves), dtype=torch.long, device=device)
-    stave_mask = torch.zeros((ng, max_staves), dtype=torch.bool, device=device)
+    smax = max((len(m) for m in groups), default=1)
+    grouped_idx = torch.zeros((ng, smax), dtype=torch.long, device=device)
+    stave_mask = torch.zeros((ng, smax), dtype=torch.bool, device=device)
     for g, members in enumerate(groups):
         for slot, kk in enumerate(members):
             grouped_idx[g, slot] = kk
@@ -208,11 +212,11 @@ class ScorerModule(L.LightningModule):
             grouped_idx, stave_mask = group_systems(
                 assign_q, sys_ids, max_staves, image.device
             )
-            ng = grouped_idx.shape[0]
-            mem_g = memory[grouped_idx].reshape(ng * max_staves, *memory.shape[1:])
-            pad_g = mem_pad[grouped_idx].reshape(ng * max_staves, -1)
-            tgt = targets[grouped_idx]  # (ng, max_staves, T, max_chords)
-            art = arts[grouped_idx]  # (ng, max_staves, T, max_chords, A)
+            ng, smax = grouped_idx.shape
+            mem_g = memory[grouped_idx].reshape(ng * smax, *memory.shape[1:])
+            pad_g = mem_pad[grouped_idx].reshape(ng * smax, -1)
+            tgt = targets[grouped_idx]  # (ng, smax, T, max_chords)
+            art = arts[grouped_idx]  # (ng, smax, T, max_chords, A)
             tgt_in = tgt[:, :, :-1]
             labels = tgt[:, :, 1:].clone()
             labels[~stave_mask] = Vocab.PAD  # exclude padded staves from the loss
@@ -225,7 +229,7 @@ class ScorerModule(L.LightningModule):
                 stave_mask,
                 self._causal_mask(tgt_in.shape[2]),
                 art[:, :, :-1],
-            )  # (ng, max_staves, T-1, max_chords, V/A)
+            )  # (ng, smax, T-1, max_chords, V/A)
             V = logits.shape[-1]
             tr = F.cross_entropy(
                 logits.reshape(-1, V), labels.reshape(-1), ignore_index=Vocab.PAD
@@ -330,13 +334,14 @@ class ScorerModule(L.LightningModule):
         """
         c = self.config.noter
         K, device = crops.shape[0], crops.device
-        smax = c.max_staves
-        # Group flat staves by owner into (Ng, smax) slots (pad slots index 0, masked).
+        # Group flat staves by owner; cap each system at max_staves and pad to the
+        # page's batch-max staff count (a page of ≤2-staff systems stays smax=2).
         by_sys: dict[int, list[int]] = {}
         for k in range(K):
             by_sys.setdefault(int(owners[k].item()), []).append(k)
-        groups = [by_sys[s][:smax] for s in sorted(by_sys)]
+        groups = [by_sys[s][: c.max_staves] for s in sorted(by_sys)]
         ng = len(groups)
+        smax = max((len(m) for m in groups), default=1)
         grouped_idx = torch.zeros((ng, smax), dtype=torch.long, device=device)
         stave_mask = torch.zeros((ng, smax), dtype=torch.bool, device=device)
         for g, members in enumerate(groups):

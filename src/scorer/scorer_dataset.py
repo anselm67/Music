@@ -2,8 +2,10 @@
 
 Each sample is a page image paired with the staffer layout ground truth (system /
 stave boxes + assignment) *and* the noter token sequence for every stave slot, in the
-same top-to-bottom enumeration order as the stave boxes. Restricted to ≤2-staff
-systems (use ``System2.csv``) so the spine ordering and token coverage are well defined.
+same top-to-bottom enumeration order as the stave boxes. Restricted to systems of at
+most ``noter.max_staves`` staves (use ``System4.csv``); each staff is routed to its
+token column by the ``*staffN`` staff map (positional fallback), so the spine ordering
+and token coverage are well defined.
 """
 
 import logging
@@ -71,8 +73,9 @@ class ScorerDataset(Dataset[Sample]):
         """Build a sample, skipping pages whose full GT can't be assembled.
 
         Returns the index actually used together with its sample: a page may be
-        un-buildable (transform error, a system that isn't 1–2 staves, a missing
-        token sequence, too many staves), in which case the next page is tried.
+        un-buildable (transform error, a system with more than ``max_staves`` staves,
+        a spine/staff-count mismatch, a missing token sequence), in which case the
+        next page is tried.
         Callers that report a page identity must use the returned index, not the
         requested one, or the printed path will drift from the sample shown.
         """
@@ -93,6 +96,17 @@ class ScorerDataset(Dataset[Sample]):
             return None
 
         score = self.source.score(score_id)
+        # One spine per staff is the contract: ``staff_map`` routes each staff
+        # (top->bottom) to its token column via the ``*staffN`` row, with a positional
+        # bass-first fallback; its length is the token-file spine count. A system whose
+        # staff count differs can't be routed one-to-one, so the page is skipped.
+        try:
+            staff_map = self.source.staff_map(score_id)
+        except Exception as e:
+            logging.error(f"{score_id}: cannot read staff map ({e})")
+            return None
+        spine_count = len(staff_map)
+        max_staves = self.config.noter.max_staves
         # items() enrols only source.pages() (validated, for KernSheet) by their
         # page_number; the lookup below relies on pages being dense 1-based.
         page = score.pages[page_number - 1]
@@ -129,12 +143,12 @@ class ScorerDataset(Dataset[Sample]):
         for sys_idx, system in enumerate(page.systems):
             if (
                 sys_idx >= c.num_system_queries
-                or system.staff_count not in (1, 2)
+                or system.staff_count > max_staves
+                or spine_count != system.staff_count
                 or not system.bar_numbers
             ):
                 is_ok = False
                 break
-            spine_numbers = [0] if system.staff_count == 1 else [1, 0]
             sys_boxes[sys_idx] = torch.tensor(
                 [
                     system.box.left * sx,
@@ -144,14 +158,14 @@ class ScorerDataset(Dataset[Sample]):
                 ]
             )
             for i, staff in enumerate(system.staves):
-                # System2.csv only bounds the first system's staff count, so a
-                # page of many 2-staff systems can exceed num_stave_queries.
+                # System4.csv only bounds the first system's staff count, so a page
+                # of many staves can still exceed num_stave_queries.
                 if staff_idx >= c.num_stave_queries:
                     is_ok = False
                     break
                 seq = self.load_sequence.load(
                     score_id,
-                    spine_numbers[i],
+                    staff_map[i],
                     system.first_bar_number,
                     system.last_bar_number,
                 )
