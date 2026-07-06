@@ -171,7 +171,10 @@ def test_make_renders_pages_into_annotation_space(tmp_path: Path) -> None:
     with patch("kernsheet.kernsheet.convert_from_path", return_value=[raw]) as conv:
         ks.make()
 
-    conv.assert_called_once_with(tmp_path / "a/b/work.pdf", dpi=RENDER_DPI)
+    # rendered page-by-page (first_page/last_page) to cap peak memory at ~one page.
+    conv.assert_called_once_with(
+        tmp_path / "a/b/work.pdf", dpi=RENDER_DPI, first_page=1, last_page=1
+    )
     assert (tmp_path / "build" / "png" / "a/b/work-001.png").exists()
 
     # image() just decodes the cached png; width normalised to image_width=40,

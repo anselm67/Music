@@ -121,24 +121,27 @@ class ScorerModel(nn.Module):
         return self.staffer(image)
 
     def crop(self, image: Tensor, boxes: Tensor) -> tuple[Tensor, Tensor]:
-        """Crop the selected staves from the page → ``(K, 1, 64, 768)`` crops.
+        """Crop the selected staves from the page → ``(K, 1, *input_shape)`` crops.
 
         Reproduces the standalone noter crop window, differentiably. The noter takes a
-        **1:1 (un-stretched)** window: a 64px-tall slice starting one stave-height above
-        the stave top, left-aligned at the system's left edge, with the real stave width
-        reported as ``source_widths`` so the right of the canvas is padded and masked
-        (``make_src_padding_mask``). This matters because the last system of a score
-        usually ends mid-page — stretching it to fill 768px would distort note spacing
-        (timing). So the window size is fixed at ``input_shape`` *pixels* (1:1) and only
-        its position depends on the box → gradient flows to the stave top/bottom and the
-        system left (position), not to a spurious scale.
+        **1:1 (un-stretched)** window: an ``input_shape[0]``px-tall slice starting one
+        stave-height above the stave top, left-aligned at the system's left edge, with
+        the real stave width reported as ``source_widths`` so the right of the canvas is
+        padded and masked (``make_src_padding_mask``). This matters because the last
+        system of a score usually ends mid-page — stretching it to fill
+        ``input_shape[1]`` would distort note spacing (timing). So the window size is
+        fixed at ``input_shape`` *pixels* (1:1) and only its position depends on the
+        box → gradient flows to the stave top/bottom and the system left (position),
+        not to a spurious scale.
 
         Built with ``affine_grid`` + ``grid_sample`` (not ``torchvision.ops.roi_align``,
         which does not backprop to box coordinates). No recolour is needed: the page
         is per-image normalised and the noter canvas equals the staffer canvas, so the
         crop already lives in the noter's input space. NB: exact for staves where
-        ``3·h ≥ 64px`` (the System2 norm); very short staves get page context instead
-        of white vertical pad — a minor deviation to revisit if it bites.
+        ``3·h ≥ input_shape[0]`` (the System2 norm — both the stave height and the
+        crop window scale with the canvas, so this holds at any resolution); very
+        short staves get page context instead of white vertical pad — a minor
+        deviation to revisit if it bites.
         """
         out_h, out_w = self.config.noter.input_shape
         _, C, H, W = image.shape

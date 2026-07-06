@@ -11,15 +11,17 @@ import cv2
 import numpy as np
 from cv2.typing import MatLike
 from pdf2image import convert_from_path
+from PIL import Image
 
 from kern import KernReader, tokenize
 from sheetmusic import Score, Status
 from utils import from_json
 
-# DPI at which score PDFs are rasterised for this corpus. This is pdf2image's own
-# default, made explicit so the play CLI can render at the exact same scale the
-# build/png cache was made with (the scorer is sensitive to page scale).
-RENDER_DPI = 200
+# DPI at which score PDFs are rasterised for this corpus, so the play CLI renders at
+# the same scale the build/png cache was made with (the scorer is sensitive to page
+# scale). 300 (was pdf2image's 200 default) fills the 2× staffer canvas with real
+# scan detail: a letter page renders ~2550px wide, downscaled to image_width 2400.
+RENDER_DPI = 300
 
 
 @dataclass
@@ -277,24 +279,42 @@ class KernSheet:
 
     def rebuild_images(self, kern_score: KernScore, score: Score) -> None:
         """Render ``build/png`` for every page of ``score``. ``kern_score`` resolves
-        the source pdf; ``score`` supplies the per-page width/rotation to apply."""
+        the source pdf; ``score`` supplies the per-page width/rotation to apply.
+
+        Pages are rasterised one at a time (``first_page``/``last_page``) so peak
+        memory stays at ~one page: at RENDER_DPI a whole large-media-box PDF rendered
+        at once can exceed RAM and get OOM-killed. It also skips any pdf pages the
+        score does not reference."""
         pdf_path = self.pdf_path(kern_score)
-        images = convert_from_path(pdf_path, dpi=RENDER_DPI)
-        for page in score.pages:
-            if page.page_number > len(images):  # page_number is 1-based
-                logging.warning(
-                    f"{kern_score.id}: score references page {page.page_number} "
-                    f"but pdf has only {len(images)} page(s)"
+        # Trusted corpus: allow the large RENDER_DPI renders (some PDFs have oversized
+        # media boxes) past PIL's decompression-bomb guard for the duration of this
+        # render only — not process-wide, since kernsheet is imported by every CLI.
+        prev_max_pixels = Image.MAX_IMAGE_PIXELS
+        Image.MAX_IMAGE_PIXELS = None
+        try:
+            for page in score.pages:
+                images = convert_from_path(
+                    pdf_path,
+                    dpi=RENDER_DPI,
+                    first_page=page.page_number,
+                    last_page=page.page_number,
                 )
-                continue
-            image = self._transform(
-                np.array(images[page.page_number - 1]),
-                page.image_width,
-                page.image_rotation,
-            )
-            png_path = self.png_path(kern_score.id, page.page_number)
-            png_path.parent.mkdir(parents=True, exist_ok=True)
-            cv2.imwrite(png_path.as_posix(), image)
+                if not images:  # page_number (1-based) is past the end of the pdf
+                    logging.warning(
+                        f"{kern_score.id}: score references page {page.page_number} "
+                        f"past the end of the pdf"
+                    )
+                    continue
+                image = self._transform(
+                    np.array(images[0]),
+                    page.image_width,
+                    page.image_rotation,
+                )
+                png_path = self.png_path(kern_score.id, page.page_number)
+                png_path.parent.mkdir(parents=True, exist_ok=True)
+                cv2.imwrite(png_path.as_posix(), image)
+        finally:
+            Image.MAX_IMAGE_PIXELS = prev_max_pixels
 
     def make(self) -> None:
         """Ensures that for each entry, we have a tokens file, and for each pdf page of

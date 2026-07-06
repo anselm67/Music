@@ -76,7 +76,7 @@ def svg_to_png_command(svg_file: Path, png_file: Path) -> tuple[Path, list[str]]
         "-b",
         "white",
         "--width",
-        "1024",
+        "2048",
         "-o",
         png_file.as_posix(),
         svg_file.as_posix(),

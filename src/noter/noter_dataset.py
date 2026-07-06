@@ -227,7 +227,8 @@ class NoterDataset(Dataset):
         height, width = self.config.input_shape
         _, page_height, page_width = tensor.shape
         # Center the staff vertically in the fixed-height window. A real staff
-        # (~24-32px) is far shorter than `height` (64), so the old 3*box.height
+        # (~48-64px at the 2× canvas) is far shorter than `height` (128), so the
+        # old 3*box.height
         # window always exceeded it: cropping from box.top-box.height shoved the
         # staff into the lower half and clipped the tallest ones. Center on the
         # staff midline instead, padding white (image_pad_value) at page edges.
@@ -285,7 +286,7 @@ class NoterDataset(Dataset):
         """A system's ``G`` real staves: ``(images, widths, sequences,
         articulations, stave_mask)``, unpadded.
 
-        Shapes ``(G, 1, 64, 768)``, ``(G,)``, ``(G, max_seqlen, max_chords)``,
+        Shapes ``(G, 1, 128, 1536)``, ``(G,)``, ``(G, max_seqlen, max_chords)``,
         ``(G, max_seqlen, max_chords, NUM_ARTICULATIONS)``, ``(G,)`` all-True. Padding
         to a common width happens at the batch level in ``collate_systems`` (to the
         batch-max staff count, ~0 within a staff-count bucket) rather than to the

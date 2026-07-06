@@ -16,9 +16,12 @@ class StafferConfig:
     git_hash: str = current_commit()
     image_shape: list[int] = field(init=False)
 
-    # Maximums as obtained with the "stats" command.
-    max_width: int = 1024
-    max_height: int = 1449
+    # Maximums as obtained with the "stats" command, for the 2048-wide png render
+    # (svg_to_png_command --width / KernSheet image_width 2400); ~2× the earlier
+    # 1024-wide render. Paired with patch_size 32 (was 16) they hold the patch grid
+    # at 60×43=2580 while doubling input resolution — see scale_to_patch.
+    max_width: int = 2048
+    max_height: int = 2898
 
     in_channels: int = 1
     divider: float = 1.5
@@ -26,7 +29,7 @@ class StafferConfig:
     mlp_dim: int = 1024
 
     num_heads: int = 8  # Also known as H
-    patch_size: int = 16
+    patch_size: int = 32
     dropout: float = 0.1
     num_encoder_layers: int = 4
     num_decoder_layers: int = 4

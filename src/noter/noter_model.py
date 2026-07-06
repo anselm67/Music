@@ -23,12 +23,12 @@ class NoterConfig:
     # computed by scale_to_patch): the scorer crops the noter's input from a
     # page letterboxed to the staffer shape, so the standalone noter must train
     # on the same page geometry. Sourced here rather than copy-pasting the
-    # computed [960, 688] so the two never drift apart again. NB: when used as a
+    # computed [1920, 1376] so the two never drift apart again. NB: when used as a
     # ScorerConfig sub-config this is force-set to the scorer's staffer canvas
     # (ScorerConfig.__post_init__), so an explicit value passed there is ignored.
     page_shape: list[int] = field(default_factory=lambda: StafferConfig().image_shape)
 
-    input_shape: list[int] = field(default_factory=lambda: [64, 6 * 128])
+    input_shape: list[int] = field(default_factory=lambda: [128, 12 * 128])
     max_chords: int = 8
     max_seqlen: int = 128  # Also known as T
     # Staves per system — the cross-stave decode unit. A system's staves are
@@ -60,12 +60,14 @@ class NoterConfig:
     # Model parameters.
     in_channels: int = 1
     embed_dim: int = 256  # Also known as D
-    patch_width: int = 4
-    # Patch height in px; 4 = sixteen vertical bands over the 64px crop, giving the
+    patch_width: int = 8
+    # Patch height in px; 8 = sixteen vertical bands over the 128px crop, giving the
     # encoder ~glyph-scale vertical resolution to localise articulations above/below
     # the staff (the tatum-4x4 run: fixes the accent free-running collapse on clean
-    # renders, beats 8/4 bands on every flag). -1 falls back to the full input height.
-    patch_height: int = 4
+    # renders, beats 8/4 bands on every flag). At the 2× canvas the crop is 128×1536
+    # (was 64×768) with 8×8 patches (was 4×4): same 16×192 patch grid, 2× resolution.
+    # -1 falls back to the full input height.
+    patch_height: int = 8
     num_head: int = 8
     num_encoder_layers: int = 4
     num_decoder_layers: int = 4
