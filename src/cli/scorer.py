@@ -326,7 +326,7 @@ def train(
 
     NAME: sets id/name of the model being trained.
     """
-    VAL_CHECK_INTERVAL = 250
+    VAL_CHECK_INTERVAL = 500
 
     vocab = Vocab.load(vocab_path or ctx.home / "build" / "vocab.json")
     ckpt_path: Path | None = None

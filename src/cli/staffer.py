@@ -355,8 +355,8 @@ def train(
             config.warmup_steps = warmup_steps
     config.max_steps = epochs * (config.train_len // config.batch_size)
     # Cap at one epoch's batches: small datasets (e.g. KernSheet) have fewer
-    # than the default 250 training batches per epoch, which Lightning rejects.
-    VAL_CHECK_INTERVAL = min(250, config.train_len // config.batch_size)
+    # than the default 500 training batches per epoch, which Lightning rejects.
+    VAL_CHECK_INTERVAL = min(500, config.train_len // config.batch_size)
     logging.info(
         f"Training for {epochs} epochs, "
         f"or {config.max_steps} steps of {config.batch_size}."
