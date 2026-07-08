@@ -17,7 +17,7 @@ shell-out to ``scorer predict``.
 import logging
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 import click
 import torch
@@ -107,6 +107,20 @@ def transcribe_page(
     ]
 
 
+_Row = TypeVar("_Row")
+
+
+def select_staves(
+    systems: list[list[_Row]], staves: tuple[int, ...]
+) -> list[list[_Row]]:
+    """Keep only the given stave slots (top-to-bottom, 0-based) within each system.
+
+    Slots are the same instrument across systems, so filtering by index plays a
+    consistent subset of parts. Indices beyond a system's stave count are ignored.
+    """
+    return [[row[i] for i in staves if i < len(row)] for row in systems]
+
+
 def play_or_render(midi: Path, soundfont: Path, wav: Path | None, play: bool) -> None:
     """Render the MIDI to ``wav`` and/or play it through ``fluidsynth``."""
     if not soundfont.is_file():
@@ -140,6 +154,13 @@ def play_or_render(midi: Path, soundfont: Path, wav: Path | None, play: bool) ->
     help="MIDI output path (default: <first input>.mid).",
 )
 @click.option("--tempo", type=int, default=90, show_default=True, help="Quarter BPM.")
+@click.option(
+    "--staves",
+    "staves_arg",
+    default=None,
+    help="Comma-separated stave slots to play (0-based, top-down; e.g. '0,1'). "
+    "Default: all staves.",
+)
 @click.option("--play", is_flag=True, default=False, help="Play the result aloud.")
 @click.option(
     "--wav",
@@ -179,6 +200,7 @@ def cli(
     model: str,
     output: Path | None,
     tempo: int,
+    staves_arg: str | None,
     play: bool,
     wav: Path | None,
     soundfont: Path,
@@ -193,6 +215,15 @@ def cli(
     log_uncaught_exceptions()
     logging.basicConfig(level=getattr(logging, log_level.upper()))
     torch.set_float32_matmul_precision("high")
+
+    staves: tuple[int, ...] | None = None
+    if staves_arg is not None:
+        try:
+            staves = tuple(int(s) for s in staves_arg.split(","))
+        except ValueError:
+            raise click.ClickException(f"Invalid --staves value: {staves_arg!r}")
+        if any(s < 0 for s in staves):
+            raise click.ClickException("--staves slots must be non-negative.")
 
     # Imported here so `--help` stays fast (avoids loading torch-heavy scorer stack).
     from cli.scorer import _load_for_inference
@@ -222,6 +253,14 @@ def cli(
 
     if not systems:
         raise click.ClickException("No staves detected — nothing to play.")
+    if staves is not None:
+        widest = max(len(s) for s in systems)
+        systems = select_staves(systems, staves)
+        if not any(systems):
+            raise click.ClickException(
+                f"--staves {staves_arg} selected no staves "
+                f"(systems have at most {widest})."
+            )
     parts = render_systems(systems, TICKS_PER_QUARTER, Dynamics())
     write_midi(parts, midi_path, tempo=tempo)
     click.echo(f"Wrote MIDI: {midi_path} ({len(parts)} parts)")
