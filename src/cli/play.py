@@ -121,19 +121,32 @@ def select_staves(
     return [[row[i] for i in staves if i < len(row)] for row in systems]
 
 
-def play_or_render(midi: Path, soundfont: Path, wav: Path | None, play: bool) -> None:
+def play_or_render(
+    midi: Path, soundfont: Path, wav: Path | None, play: bool, gain: float
+) -> None:
     """Render the MIDI to ``wav`` and/or play it through ``fluidsynth``."""
     if not soundfont.is_file():
         raise click.ClickException(f"Soundfont not found: {soundfont}")
+    gain_args = ["-g", str(gain)]
     if wav is not None:
         subprocess.run(
-            ["fluidsynth", "-ni", "-F", str(wav), str(soundfont), str(midi)],
+            [
+                "fluidsynth",
+                "-ni",
+                *gain_args,
+                "-F",
+                str(wav),
+                str(soundfont),
+                str(midi),
+            ],
             check=True,
         )
         click.echo(f"Rendered audio: {wav}")
     if play:
         # -i (no shell) makes fluidsynth play the file and exit rather than idle.
-        subprocess.run(["fluidsynth", "-ni", str(soundfont), str(midi)], check=True)
+        subprocess.run(
+            ["fluidsynth", "-ni", *gain_args, str(soundfont), str(midi)], check=True
+        )
 
 
 @click.command()
@@ -174,6 +187,13 @@ def play_or_render(midi: Path, soundfont: Path, wav: Path | None, play: bool) ->
     help="SoundFont for fluidsynth playback/rendering.",
 )
 @click.option(
+    "--gain",
+    type=click.FloatRange(0.0, 10.0),
+    default=2.0,
+    show_default=True,
+    help="fluidsynth output gain (0.0-10.0); scales playback/render volume.",
+)
+@click.option(
     "--kern-home",
     # Not exists-validated: it is only consulted for the default vocab, so --vocab
     # alone must work on a machine without the corpus.
@@ -202,6 +222,7 @@ def cli(
     play: bool,
     wav: Path | None,
     soundfont: Path,
+    gain: float,
     kern_home: Path,
     vocab_path: Path | None,
     log_level: str,
@@ -264,7 +285,7 @@ def cli(
     click.echo(f"Wrote MIDI: {midi_path} ({len(parts)} parts)")
 
     if play or wav is not None:
-        play_or_render(midi_path, soundfont, wav, play)
+        play_or_render(midi_path, soundfont, wav, play, gain)
 
 
 def main() -> None:
