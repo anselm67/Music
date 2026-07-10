@@ -34,7 +34,7 @@ from utils import log_uncaught_exceptions
 if TYPE_CHECKING:
     from scorer import ScorerModule
 
-HOME = Path("/home/anselm/datasets/PDMX")
+KERN_HOME = Path("/home/anselm/datasets/KernSheet")
 DEFAULT_SOUNDFONT = Path("/usr/share/sounds/sf2/default-GM.sf2")
 TICKS_PER_QUARTER = 480
 # Rasterise PDFs at the corpus DPI (kernsheet.RENDER_DPI) so play renders at the exact
@@ -143,9 +143,7 @@ def play_or_render(midi: Path, soundfont: Path, wav: Path | None, play: bool) ->
     required=True,
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
 )
-@click.option(
-    "--model", default="tatum-arc-e30", show_default=True, help="Scorer name."
-)
+@click.option("--model", default="stravinsky", show_default=True, help="Scorer name.")
 @click.option(
     "--output",
     "-o",
@@ -176,19 +174,19 @@ def play_or_render(midi: Path, soundfont: Path, wav: Path | None, play: bool) ->
     help="SoundFont for fluidsynth playback/rendering.",
 )
 @click.option(
-    "--pdmx-home",
+    "--kern-home",
     # Not exists-validated: it is only consulted for the default vocab, so --vocab
-    # alone must work on a machine without PDMX.
+    # alone must work on a machine without the corpus.
     type=click.Path(dir_okay=True, file_okay=False, path_type=Path),
-    default=HOME,
-    help="Corpus root holding build/vocab.json (default: PDMX).",
+    default=KERN_HOME,
+    help="Corpus root holding build/vocab.json (default: KernSheet).",
 )
 @click.option(
     "--vocab",
     "vocab_path",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     default=None,
-    help="Vocab JSON (default: <pdmx-home>/build/vocab.json).",
+    help="Vocab JSON (default: <kern-home>/build/vocab.json).",
 )
 @click.option(
     "--log-level",
@@ -204,7 +202,7 @@ def cli(
     play: bool,
     wav: Path | None,
     soundfont: Path,
-    pdmx_home: Path,
+    kern_home: Path,
     vocab_path: Path | None,
     log_level: str,
 ) -> None:
@@ -229,10 +227,10 @@ def cli(
     from cli.scorer import _load_for_inference
 
     config, module = _load_for_inference(model)
-    vocab_file = vocab_path or pdmx_home / "build" / "vocab.json"
+    vocab_file = vocab_path or kern_home / "build" / "vocab.json"
     if not vocab_file.is_file():
         raise click.ClickException(
-            f"Vocab not found: {vocab_file} (pass --vocab or --pdmx-home)."
+            f"Vocab not found: {vocab_file} (pass --vocab or --kern-home)."
         )
     vocab = Vocab.load(vocab_file)
     transform = page_transform(
