@@ -634,8 +634,18 @@ def unbox(size: tuple[int, int], t: Tensor) -> Box:
     nargs=-1,
     type=click.Path(file_okay=True, exists=True, readable=True, path_type=Path),
 )
+@click.option(
+    "--scale",
+    type=click.FloatRange(min=0, min_open=True),
+    default=1.0,
+    show_default=True,
+    help="Resize the annotated page by this factor before display (e.g. 0.5 to "
+    "fit a tall 2x-resolution page on screen). Does not affect the model input.",
+)
 @click.pass_obj
-def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
+def predict(
+    ctx: ClickContext, name: str, img_paths: tuple[Path, ...], scale: float
+) -> None:
     """Predicts bounding boxes for system and staves for a list of images.
 
     NAME: The model version to use to make the predictions.
@@ -713,6 +723,8 @@ def predict(ctx: ClickContext, name: str, img_paths: tuple[Path, ...]) -> None:
                 left, right = pred_sys_lr[sys_idx]
                 box = unbox(width_height, torch.stack([left, top, right, bot]))
                 cv2.rectangle(img, box.top_left, box.bot_right, (0, 255, 0), 1)
+        if scale != 1.0:
+            img = cv2.resize(img, None, fx=scale, fy=scale)
         cv2.imshow("Page", img)
 
         if cv2.waitKey(0) == ord("q"):

@@ -754,6 +754,7 @@ def predict_from_images(
     module: ScorerModule,
     dataset: ScorerDataset,
     img_paths: tuple[Path, ...],
+    scale: float,
 ) -> None:
     for path in img_paths:
         image = dataset.transform(decode_image(path.as_posix())).to(module.device)
@@ -772,6 +773,8 @@ def predict_from_images(
             ]
             print(f"\n── system[{sys_id}] ──")
             print(_format_system([], pred_seqs, pred_art_seqs=pred_art_seqs))
+        if scale != 1.0:
+            img = cv2.resize(img, None, fx=scale, fy=scale)
         cv2.imshow("Page", img)
         if cv2.waitKey(0) == ord("q"):
             break
@@ -780,6 +783,7 @@ def predict_from_images(
 def predict_from_dataset(
     module: ScorerModule,
     dataset: ScorerDataset,
+    scale: float,
 ) -> None:
     indices = list(range(len(dataset)))
     random.shuffle(indices)
@@ -821,6 +825,8 @@ def predict_from_dataset(
             ]
             print(f"\n── system[{sys_id}] ──")
             print(_format_system(gt_seqs, pred_seqs, gt_art_seqs, pred_art_seqs))
+        if scale != 1.0:
+            img = cv2.resize(img, None, fx=scale, fy=scale)
         cv2.imshow("Page", img)
         if cv2.waitKey(0) == ord("q"):
             break
@@ -842,9 +848,21 @@ def predict_from_dataset(
     "model's training vocab when it differs from the corpus default — e.g. the "
     "KernSheet vocab (a prefix-superset, ids preserved) for a KS-vocab model.",
 )
+@click.option(
+    "--scale",
+    type=click.FloatRange(min=0, min_open=True),
+    default=1.0,
+    show_default=True,
+    help="Resize the annotated page by this factor before display (e.g. 0.5 to "
+    "fit a tall 2x-resolution page on screen). Does not affect the model input.",
+)
 @click.pass_obj
 def predict(
-    ctx: ClickContext, name: str, img_paths: tuple[Path, ...], vocab_path: Path | None
+    ctx: ClickContext,
+    name: str,
+    img_paths: tuple[Path, ...],
+    vocab_path: Path | None,
+    scale: float,
 ) -> None:
     """Detects, crops, and transcribes staves on a list of images or random pages.
 
@@ -857,9 +875,9 @@ def predict(
     dataset = ScorerDataset(config, ctx.source, vocab)
     cv2.namedWindow("Page")
     if img_paths:
-        predict_from_images(module, dataset, img_paths)
+        predict_from_images(module, dataset, img_paths, scale)
     else:
-        predict_from_dataset(module, dataset)
+        predict_from_dataset(module, dataset, scale)
     cv2.destroyAllWindows()
 
 
