@@ -308,6 +308,12 @@
         <td><strong>From-scratch reproduction</strong> of <span class="tag">mahler</span> (same recipe, new shuffle seed) — staffer half of <a href="scorer-training.html#run-bartok"><span class="tag">scorer</span>/bartok</a>; reproduces it within seed noise</td>
         <td><span class="badge badge-slate">PDMX base · reproduction</span></td>
       </tr>
+      <tr>
+        <td><a class="run-link" href="#run-stravinsky"><span class="tag">stravinsky</span></a> / <span class="tag">stravinsky-mixed</span></td><td>2026-07-10</td><td>256</td><td>16</td>
+        <td>0.065 / 0.297*</td><td>0.978 / 0.923*</td><td>eval PDMX ≈1.0 · KS ≈3.3 px<sup>※</sup></td>
+        <td><strong>2× resolution co-scale, from scratch</strong> — canvas 1920×1376, patch 32, N=2580 held; feeds the <a href="scorer-training.html#run-stravinsky"><span class="tag">stravinsky</span></a> scorer. <sup>※</sup>stave-err in the 2× canvas — halve to compare to the 1× rows</td>
+        <td><span class="badge badge-green">2× res base + KS FT</span></td>
+      </tr>
     </tbody>
   </table>
   <p style="font-size:0.82rem;color:var(--muted)">∥ <span class="tag">debussy-mixed</span> validates on the <em>mixed</em> stream (~67% KernSheet + 33% PDMX), so its <code>val/loss</code> 0.293 and <code>sys IoU</code> 0.934 sit between pure-PDMX (<span class="tag">debussy</span> 0.982) and pure-KernSheet (<span class="tag">debussy-kernsheet</span> 0.918) and are not comparable to either single-domain row — the per-domain eval table in its card is the meaningful read. The same caveat applies to <span class="tag">mahler-mixed</span> (mixed-stream <code>val/loss</code> 0.283, <code>sys IoU</code> 0.873).</p>
@@ -1469,6 +1475,25 @@
     </table>
     <p style="font-size:0.78rem;color:var(--muted)">n-weighted mean (bins 0–14) top ≈ <strong>0.69&nbsp;px</strong> / bot ≈ <strong>0.81&nbsp;px</strong> (mean ≈ 0.75&nbsp;px); clean <code>val/stave_err_px</code> at the final epoch <strong>0.55&nbsp;px</strong>, final <code>sys IoU</code> <strong>0.981</strong>. Sub-px through the densely-populated top half, then a gentle controlled rise toward the sparse page bottom — no drift. (Odd bins omitted for length; regenerate the full table with the command above.)</p>
     <div class="result-box neutral"><strong>Reproduces <span class="tag">mahler</span>'s detector — dead-even within seed noise.</strong> Final <code>sys IoU</code> 0.981 vs <span class="tag">mahler</span>'s 0.983 and clean stave-err 0.55 vs 0.48&nbsp;px — both sub-pixel, both within run-to-run shuffle variance on a byte-identical model. <span class="tag">bartok</span> runs a uniform hair behind through the mid-page bins (no structural failure at any vertical position), which is the same small gap that surfaces as the +2/+4 end-to-end miscount in <a href="scorer-training.html#run-bartok"><span class="tag">scorer</span>/bartok</a>. Carries forward into the <span class="tag">bartok-mixed</span> rehearsal fine-tune and the scorer merge.</div>
+  </div>
+
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-stravinsky"><span class="tag">stravinsky</span> / <span id="run-stravinsky-mixed" class="tag">stravinsky-mixed</span> — 2× resolution co-scale</h2>
+      <span class="session-meta">2026-07-10 · tag <code>train/stravinsky</code> · base 7 ep / KS-mixed FT 30 ep · D=256 · canvas <strong>1920×1376</strong>, patch <strong>32</strong> (N=2580 held) · from scratch</span>
+      <span class="badge badge-green">2× res base + KS FT</span>
+    </div>
+    <p><strong>The detector half of the <a href="scorer-training.html#run-stravinsky"><span class="tag">scorer</span>/stravinsky</a> pipeline, at 2× input resolution.</strong> The canvas doubles (max 2048×2898, patch 16&rarr;32) so the attention patch count N=2580 is held while thin staff lines survive the rasterise — the point being crop fidelity for the downstream noter, not finer localization. Trained from scratch (the 2× patch-embed kernel can't warm-start), then the standard 0.67-KS rehearsal FT (<span class="tag">stravinsky-mixed</span>). <strong>All pixel errors below are in the 2× canvas — halve to compare to the 1× runs above.</strong></p>
+    <h3>Stave coordinate error by vertical position (<span class="tag">stravinsky-mixed</span>, <code>eval --size 500</code>, H=1920 px)</h3>
+    <table class="eval-table">
+      <thead><tr><th>Corpus</th><th>top mean (÷2)</th><th>bot mean (÷2)</th><th>note</th></tr></thead>
+      <tbody>
+        <tr><td><strong>PDMX</strong></td><td>2.00 px (1.00)</td><td>2.07 px (1.04)</td><td>sub-px halved through the dense top half; gentle rise to the sparse bottom</td></tr>
+        <tr><td><strong>KernSheet</strong></td><td>6.54 px (3.27)</td><td>6.78 px (3.39)</td><td>the real-scan domain gap — ≈3.3 px halved, in line with prior KS staffer FT (~3.1 px)</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)">Base <span class="tag">stravinsky</span> converged to clean <code>val/stave_err_px</code> 1.14 px (÷2 ≈ <strong>0.57 px</strong>) / <code>sys IoU</code> <strong>0.978</strong> — on par with <span class="tag">bartok</span> (0.55 px / 0.981) once the 2× scale is removed. <span class="tag">stravinsky-mixed</span>: blended <code>sys IoU</code> 0.923 / stave-err 6.01 px (÷2 3.00).</p>
+    <div class="result-box neutral"><strong>2× resolution is scale-neutral on detector geometry — halved, the errors match the 1× <span class="tag">bartok</span> lineage on both domains (PDMX ~1.0 px, KS ~3.3 px).</strong> The co-scale doesn't move stave localization (as intended — same patch count, same effective receptive field); its payoff is downstream, in the sharper crops the bridge hands the noter (see the <a href="scorer-training.html#run-stravinsky"><span class="tag">scorer</span>/stravinsky</a> KS articulation win). Feeds the multi-staff scorer merge.</div>
   </div>
 
 </main>

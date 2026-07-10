@@ -360,6 +360,12 @@
         <td><strong>Same FT as <span class="tag">tatum-arc-mixed</span> but the epoch cap 12&rarr;30 &mdash; early-stopping (patience 10 on val/loss) halted it at <strong>epoch 21</strong>, so 12 was under-training.</strong> Strict win over the 12-ep FT on <em>both</em> corpora: <strong>KS micro-F1 68.9&rarr;73.2</strong> (recall +7.7pp), <strong>token 95.2&rarr;97.0</strong> (+1.8pp); PDMX micro-F1 81.5&rarr;84.0, token 97.7&rarr;98.2. The e12 blemish recovers &mdash; <strong>accent F1 KS 24.4&rarr;41.5 / PDMX 33.3&rarr;47.2</strong> (recall roughly doubles both). <strong>Domain gap NARROWS</strong> (micro recall &minus;16.3&rarr;&minus;10.6pp) &mdash; the longer FT lifts KS more than PDMX. <strong>New noter articulation base.</strong> *early-stopped &dagger;blended val @ep21</td>
         <td><span class="badge badge-green">FT · best articulation base</span></td>
       </tr>
+      <tr>
+        <td><a class="run-link" href="#run-stravinsky"><span class="tag">stravinsky</span></a> / <span class="tag">stravinsky-mixed</span></td><td>2026-07-10</td><td>~19 / 29</td>
+        <td>99.76% / 99.28%*</td><td>0.0104 / 0.0362*</td>
+        <td><strong>2× resolution co-scale + multi-staff (<code>max_staves=4</code>).</strong> Crop 128×1536, patch 8×8 (3072-patch grid held), <code>System4</code> vocab 6857. Beats <span class="tag">tatum-arc-mixed-e30</span> on <em>every</em> KS flag (micro-F1 73.2&rarr;<strong>78.0</strong>, +4.8pp) at equal token sim — the crisper crop helps small edge-glyphs; PDMX evals on System4, not comparable. *blended val</td>
+        <td><span class="badge badge-green">2× res + multi-staff · KS best</span></td>
+      </tr>
     </tbody>
   </table>
 
@@ -1190,6 +1196,29 @@
       </tbody>
     </table>
     <div class="result-box"><strong>12 epochs under-trained the FT &mdash; a 30-ep cap (early-stopped @21) is a strict win on both corpora, and it narrows the domain gap.</strong> Micro-F1 rises PDMX 81.5&rarr;<strong>84.0</strong> and <strong>KS 68.9&rarr;73.2</strong> (recall +7.7pp); token similarity climbs on both, the <strong>KS +1.8pp</strong> (95.2&rarr;97.0) being a big real-scan move. The e12 blemish reverses: <strong>accent F1 recovers KS 24.4&rarr;41.5 and PDMX 33.3&rarr;47.2</strong> (recall roughly doubles on each), so the earlier PDMX-accent regression was a symptom of under-training, not the arc-merge. <strong>The PDMX&rarr;KS domain gap narrows from &minus;16.3 to &minus;10.6pp</strong> (micro recall) &mdash; the longer FT lifts real scans more than synthetic, exactly the transfer we want. Only fermata is noisy (n&asymp;22, flips to over-firing on PDMX). <strong>Lesson: the FT recipe should cap high and let early-stopping converge, not hardcode 12.</strong> <span class="tag">tatum-arc-mixed-e30</span> is the <strong>new noter articulation base</strong>; the scorer arc retrain inits from it.</div>
+  </div>
+
+  <div class="session">
+    <div class="session-header">
+      <h2 id="run-stravinsky"><span class="tag">stravinsky</span> / <span id="run-stravinsky-mixed" class="tag">stravinsky-mixed</span> &mdash; 2× resolution + multi-staff</h2>
+      <span class="session-meta">2026-07-10 · tags <code>train/stravinsky</code>, base 16 nominal ep (step-budget, ~19 real) / FT 30-cap (early-stop @29) · input <strong>128×1536</strong>, patch <strong>8×8</strong> (2× co-scale), <code>max_staves=4</code>, vocab 6857, <code>System4</code></span>
+      <span class="badge badge-green">2× res + multi-staff · KS articulation win</span>
+    </div>
+    <p>Two landed changes at once, from scratch: (1)&nbsp;<strong>2× input-resolution co-scale</strong> &mdash; the crop doubles to 128×1536 and the patch to 8×8, so the 3072-patch attention grid is held while thin features (staff lines, small glyphs) survive; and (2)&nbsp;<strong>multi-staff <code>max_staves=4</code></strong> via Humdrum <code>*staff</code> routing, trained on <code>System4</code> (3–4-staff systems, vocab grown 5496&rarr;6857). Base is step-budget-driven, so the epoch counter overshoots the nominal 16 (bucketed batches pack low-staff systems denser &rarr; ~19 real passes). Everything else matches the arc recipe. <strong>Comparator: <span class="tag">tatum-arc-mixed-e30</span>, the production noter.</strong> KS is all 2-staff so directly comparable; PDMX now evals on System4 (multi-staff) and is <em>not</em>.</p>
+    <table class="summary-table">
+      <thead><tr><th>Free-running prec / rec / F1 (<code>eval --size 500</code>)</th><th><span class="tag">stravinsky-mixed</span> KS</th><th style="color:var(--muted)"><span class="tag">arc-e30</span> KS</th><th><span class="tag">stravinsky-mixed</span> PDMX<sup>†</sup></th><th style="color:var(--muted)"><span class="tag">arc-e30</span> PDMX</th></tr></thead>
+      <tbody>
+        <tr><td>token similarity (avg)</td><td>97.4%</td><td style="color:var(--muted)">97.0%</td><td>96.8%</td><td style="color:var(--muted)">98.2%</td></tr>
+        <tr><td><code>&lt;</code> arc-start</td><td>79.2 / 72.5 / <strong>75.7</strong></td><td style="color:var(--muted)">75.0 / 69.6 / 72.2</td><td>84.5 / 78.9 / 81.6</td><td style="color:var(--muted)">90.3 / 82.7 / 86.3</td></tr>
+        <tr><td><code>&gt;</code> arc-end</td><td>80.6 / 74.9 / <strong>77.7</strong></td><td style="color:var(--muted)">77.4 / 71.1 / 74.1</td><td>85.1 / 78.9 / 81.9</td><td style="color:var(--muted)">90.3 / 79.4 / 84.5</td></tr>
+        <tr><td><code>s</code> staccato</td><td>83.7 / 83.2 / <strong>83.4</strong></td><td style="color:var(--muted)">83.1 / 73.9 / 78.2</td><td>56.7 / 86.4 / 68.5</td><td style="color:var(--muted)">88.5 / 80.1 / 84.1</td></tr>
+        <tr><td><code>f</code> fermata <span style="color:var(--muted)">(n≈44/26)</span></td><td>94.7 / 81.8 / <strong>87.8</strong></td><td style="color:var(--muted)">94.3 / 66.0 / 77.6</td><td>84.2 / 61.5 / 71.1</td><td style="color:var(--muted)">55.3 / 95.5 / 70.0</td></tr>
+        <tr><td><code>a</code> accent</td><td>72.6 / 41.9 / <strong>53.1</strong></td><td style="color:var(--muted)">67.7 / 29.9 / 41.5</td><td>74.2 / 37.7 / 50.0</td><td style="color:var(--muted)">63.6 / 37.5 / 47.2</td></tr>
+        <tr><td>micro avg</td><td>81.0 / 75.2 / <strong>78.0</strong></td><td style="color:var(--muted)">77.7 / 69.1 / 73.2</td><td>80.6 / 78.2 / 79.4</td><td style="color:var(--muted)">88.6 / 79.7 / 84.0</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:0.78rem;color:var(--muted)"><sup>†</sup> <span class="tag">stravinsky-mixed</span> PDMX evals on <code>System4</code> (multi-staff), <span class="tag">arc-e30</span> on <code>System2</code> &mdash; not comparable. Base <span class="tag">stravinsky</span> converged to 99.76% val acc / 0.0104 loss / art-recall 0.950 (parity with arc-e30's base); mixed to 99.28% blended acc / art-recall 0.827.</p>
+    <div class="result-box positive"><strong>The 2× resolution buys a real articulation win on real scans: <span class="tag">stravinsky-mixed</span> beats the production <span class="tag">tatum-arc-mixed-e30</span> on <em>every</em> KS flag</strong> &mdash; micro-F1 <strong>73.2&rarr;78.0</strong> (+4.8pp), arc bits +3.5/+3.6, staccato +5.2, fermata +10.2, accent +11.6 &mdash; at equal token similarity (97.0&rarr;97.4). The crisper crop is exactly what the small edge-glyphs (staccato dots, accents) need. On PDMX the numbers drop, but that's the System4 multi-staff eval, not a regression &mdash; a System2 draw is needed to confirm. <strong>New KS-articulation-best noter</strong>; feeds the <a href="scorer-training.html#run-stravinsky"><span class="tag">stravinsky</span></a> scorer, where ~half the win survives the crop bridge (KS scorer micro-F1 71.3).</div>
   </div>
 
 </main>
