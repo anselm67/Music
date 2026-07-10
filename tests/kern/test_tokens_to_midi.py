@@ -121,3 +121,11 @@ def test_tie_chain_middle_note() -> None:
     events = part_to_events(part("C/4@<", "C/4@<>", "C/4@>"), TPQ, DYN)
     assert len(events) == 1
     assert events[0].duration == 3 * TPQ
+
+
+def test_zero_duration_rest_takes_no_time() -> None:
+    # Model noise: "rest/0" would hit 4*TPQ//0 in duration_to_ticks and crash. It
+    # degrades to a 0-duration structural token (no time consumed), like a barline.
+    events = part_to_events(part("C/4", "rest/0", "D/4"), TPQ, DYN)
+    assert len(events) == 2
+    assert [e.onset for e in events] == [0, TPQ]  # rest/0 advanced the clock by 0
