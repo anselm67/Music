@@ -173,8 +173,16 @@ def check() -> None:
 
 
 @click.command()
+@click.option(
+    "--scale",
+    type=click.FloatRange(min=0, min_open=True),
+    default=1.0,
+    show_default=True,
+    help="Resize the annotated page by this factor before display (e.g. 0.5 to "
+    "fit a tall 2x-resolution page on screen).",
+)
 @click.pass_obj
-def show(ctx: ClickContext) -> None:
+def show(ctx: ClickContext, scale: float) -> None:
     """Displays random samples from the dataset."""
     dataset = StafferDataset(ctx.config, ctx.source)
     cv2.namedWindow("Page")
@@ -196,6 +204,8 @@ def show(ctx: ClickContext) -> None:
         print(ctx.source.image_path(score_id, page_number))
         print(f"Image size: {img.shape}")
         print(f"    Assign: {assign}")
+        if scale != 1.0:
+            img = cv2.resize(img, None, fx=scale, fy=scale)
         cv2.imshow("Page", img)
 
         if cv2.waitKey(0) == ord("q"):
