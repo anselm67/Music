@@ -62,6 +62,10 @@ NOTER_FT_EPOCHS=30   # cap, not a fixed count: stage 4 runs `-s 2.0` early-stopp
                      # 12 under-trained the FT (tatum-arc-mixed-e30 stopped at 21,
                      # a strict win: KS art micro-F1 68.9->73.2, gap -16.3->-10.6pp).
 SCORER_EPOCHS=20
+SCORER_BATCH="${SCORER_BATCH:-2}"   # joint batch size (stage 5). 2 fits a 16GB card at
+                     # 2x resolution + multi-staff (max_staves=4); the old batch 4 was
+                     # tuned for the 2-staff / 1x-res regime and OOMs here. Override up
+                     # if you have more VRAM or a lighter (1x, 2-staff) recipe.
 
 # Per-stage fine-tune LR / warmup. The staffer FT ran 10x lower than the noter FT;
 # the scorer rides the ScorerConfig defaults (lr 1e-4, warmup 500, freeze 500) — it
@@ -174,14 +178,16 @@ else
   # to the PDMX vocab (4785), but the mixed branches carry the extended KernSheet
   # vocab (5492) — without it the noter state_dict mismatches and load crashes.
   # LR/warmup/freeze ride the ScorerConfig defaults, as the ravel run did.
-  # --batch-size 4: the default 4x4 noter (3072 encoder patches) overflows a 16GB
-  # GPU at the default batch 8. And expandable_segments reclaims the ~3GB CUDA
-  # reserved-but-unallocated fragmentation that OOMs batch 4 too (tatum-arc-e30).
+  # --batch-size (SCORER_BATCH): the default batch 8 overflows a 16GB GPU; batch 4
+  # fit the 2-staff / 1x-res noter (tatum-arc-e30), but 2x resolution + multi-staff
+  # (max_staves=4) makes each crop ~4x the pixels and groups up to 4 staves/system,
+  # so batch 4 OOMs (~0.4GB over) and stage 5 runs at 2. expandable_segments also
+  # reclaims the ~3GB CUDA reserved-but-unallocated fragmentation.
   PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
   run scorer --log-file "logs/scorer/$SCORER_NAME.log" \
     train --staffer "$NAME-mixed" --noter "$NAME-mixed" \
     --kern-sheet "$KS" "$MIX" --vocab "$VOCAB" \
-    --batch-size 4 \
+    --batch-size "$SCORER_BATCH" \
     --train-len "$SCORER_FT_TRAIN" --valid-len "$SCORER_FT_VALID" \
     -e "$SCORER_EPOCHS" \
     "$SCORER_NAME"
