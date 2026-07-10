@@ -44,7 +44,9 @@ TICKS_PER_QUARTER = 480
 # antialias, so it must be retrained under antialias=True to be played reliably.
 
 
-def load_pages(inputs: tuple[Path, ...]) -> list[tuple[str, torch.Tensor]]:
+def load_pages(
+    inputs: tuple[Path, ...], page: int | None = None
+) -> list[tuple[str, torch.Tensor]]:
     """Expand the CLI inputs into ordered ``(name, RGB CHW uint8 tensor)`` pairs.
 
     Image files are read with ``decode_image`` — the same call the dataset uses to load
@@ -53,12 +55,22 @@ def load_pages(inputs: tuple[Path, ...]) -> list[tuple[str, torch.Tensor]]:
     :data:`RENDER_DPI`, each page converted to the same tensor form. The transform's
     antialiased letterbox resize downscales any size to the model canvas, so nothing
     needs resizing here.
+
+    ``page`` (1-based) restricts a PDF to a single page, rendering only that page rather
+    than the whole document; it is validated by the caller to a single PDF input.
     """
     pages: list[tuple[str, torch.Tensor]] = []
     for item in inputs:
         if item.suffix.lower() == ".pdf":
-            for i, page in enumerate(convert_from_path(str(item), dpi=RENDER_DPI), 1):
-                pages.append((f"{item.stem}-{i}", v2.functional.pil_to_tensor(page)))
+            rendered = (
+                convert_from_path(str(item), dpi=RENDER_DPI)
+                if page is None
+                else convert_from_path(
+                    str(item), dpi=RENDER_DPI, first_page=page, last_page=page
+                )
+            )
+            for i, image in enumerate(rendered, page or 1):
+                pages.append((f"{item.stem}-{i}", v2.functional.pil_to_tensor(image)))
         else:
             pages.append((item.name, decode_image(item.as_posix())))
     return pages
@@ -166,6 +178,12 @@ def play_or_render(
 )
 @click.option("--tempo", type=int, default=90, show_default=True, help="Quarter BPM.")
 @click.option(
+    "--page",
+    type=click.IntRange(1, None),
+    default=None,
+    help="Play only this page (1-based) from a single-PDF input.",
+)
+@click.option(
     "--staves",
     "staves_arg",
     default=None,
@@ -218,6 +236,7 @@ def cli(
     model: str,
     output: Path | None,
     tempo: int,
+    page: int | None,
     staves_arg: str | None,
     play: bool,
     wav: Path | None,
@@ -244,6 +263,9 @@ def cli(
         if any(s < 0 for s in staves):
             raise click.ClickException("--staves slots must be non-negative.")
 
+    if page is not None and (len(inputs) != 1 or inputs[0].suffix.lower() != ".pdf"):
+        raise click.ClickException("--page requires a single PDF input.")
+
     # Imported here so `--help` stays fast (avoids loading torch-heavy scorer stack).
     from cli.scorer import _load_for_inference
 
@@ -261,11 +283,15 @@ def cli(
     )
 
     midi_path = output or inputs[0].with_suffix(".mid")
-    pages = load_pages(inputs)
+    pages = load_pages(inputs, page)
+    if page is not None and not pages:
+        raise click.ClickException(
+            f"--page {page} is out of range for {inputs[0].name}."
+        )
     click.echo(f"Transcribing {len(pages)} page(s) with '{model}' ...")
     systems: list[list[Part]] = []
-    for name, page in pages:
-        image = transform(page).to(module.device)
+    for name, page_image in pages:
+        image = transform(page_image).to(module.device)
         page_systems = transcribe_page(module, vocab, image)
         systems.extend(page_systems)
         click.echo(f"  {name}: {sum(len(s) for s in page_systems)} staves")
