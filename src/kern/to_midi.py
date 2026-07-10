@@ -24,6 +24,8 @@ TO_TWELVE = {
 
 
 def duration_to_ticks(duration: Duration, ticks_per_quarter: int) -> int:
+    if duration.duration <= 0:
+        raise ValueError(f"non-positive duration: {duration.duration}")
     ticks = 4 * ticks_per_quarter // duration.duration
     if duration.dots > 0:
         for _ in range(duration.dots):

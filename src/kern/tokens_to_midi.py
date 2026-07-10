@@ -110,7 +110,12 @@ def _parse_note(base: str, ticks_per_quarter: int) -> tuple[MidiPitch, int] | No
 def _rest_ticks(base: str, ticks_per_quarter: int) -> int | None:
     if not base.startswith("rest/"):
         return None
-    return duration_to_ticks(_parse_duration(base[len("rest/") :]), ticks_per_quarter)
+    try:
+        return duration_to_ticks(
+            _parse_duration(base[len("rest/") :]), ticks_per_quarter
+        )
+    except ValueError:
+        return None  # model noise, e.g. "rest/0" or "rest/x"
 
 
 def _gate(ticks: int, flags: Flags, dyn: Dynamics) -> int:
