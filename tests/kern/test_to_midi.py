@@ -75,6 +75,19 @@ class TestToMidi(unittest.TestCase):
         mock_midi_output.return_value.assert_has_calls(expected_calls, any_order=False)
 
     @patch("kern.to_midi.MidiOutput")
+    def test_bare_rest_consumes_no_time(self, mock_midi_output: MagicMock) -> None:
+        handler = MidiHandler(480, 120)
+        # A bare rest `r` parses to Duration(0); duration_to_ticks would divide by
+        # zero. It degrades to 0 ticks, so the following D still onsets at delta 0.
+        parser = Parser.from_text("**kern\n4c\nr\n4d\n*-", handler)
+        parser.parse()
+        expected_calls = [
+            call.note_off(Channel.Chan0, MidiPitch.C4, Velocity.Forte, 480),
+            call.note_on(Channel.Chan0, MidiPitch.D4, Velocity.Forte, 0),
+        ]
+        mock_midi_output.return_value.assert_has_calls(expected_calls, any_order=False)
+
+    @patch("kern.to_midi.MidiOutput")
     def test_chord_conversion(self, mock_midi_output: MagicMock) -> None:
         handler = MidiHandler(480, 120)
         # Chord C E G

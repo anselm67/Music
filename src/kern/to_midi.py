@@ -102,7 +102,10 @@ class MidiSpine(Spine):
         return self.track
 
     def duration_to_ticks(self, duration: Duration) -> int:
-        return duration_to_ticks(duration, self.ticks_per_quarter)
+        try:
+            return duration_to_ticks(duration, self.ticks_per_quarter)
+        except ValueError:
+            return 0  # a malformed zero/negative duration consumes no time
 
     def note_duration_to_ticks(self, note: Note) -> int:
         if note.is_gracenote:
